@@ -2,18 +2,19 @@
 
 //--------------------------------------------------------------
 void ofApp::setup(){
-    madOscQuery.setup("127.0.0.1", 8012, 8011);
-    madOscQuery.receive();
-
-//    platformM.setupFromFile("platformM.json");
-//    platformM.setupFromFile("platformM.json");
-
-    //    ofxMidiIn::listPorts();
-    //    platformM.setup("Platform M+ V1.06");
-//    for(int i = 0; i < madOscQuery.mixer.parameters.size(); i++){
-//        platformM.addFader(madOscQuery.mixer.parameters.at(i), i+1);
-//
-//    }
+	madOscQuery.setup("127.0.0.1", 8012, 8011);
+	madOscQuery.receive();
+	
+	//    platformM.setupFromFile("platformM.json");
+	//    platformM.setupFromFile("");
+	platformM.setup("Platform M+ V1.07");
+	
+	//    ofxMidiIn::listPorts();
+	//    platformM.setup("Platform M+ V1.06");
+	//    for(int i = 0; i < madOscQuery.mixer.parameters.size(); i++){
+	//        platformM.addFader(madOscQuery.mixer.parameters.at(i), i+1);
+	//
+	//    }
 	
 	// for each ?
 	
@@ -23,6 +24,7 @@ void ofApp::setup(){
 	ofJson madmapperJson = ofLoadJson(jsonFile);
 	
 	createOpacityPages(madmapperJson);
+	//	std::cout << pages.begin()->parameters.size() << endl;
 	
 	// One for each Surface
 	std::vector<string> fx = {};
@@ -30,49 +32,70 @@ void ofApp::setup(){
 	
 	// One for each Media
 	
-    
+	
+	// Set initial page
+	currentPage = pages.begin();
+	setActivePage(&(*currentPage));
+	
 }
 
 //--------------------------------------------------------------
 void ofApp::update(){
-    //cout << surfaces.size() << endl;
-    madOscQuery.update();
-    platformM.update();
+	//cout << surfaces.size() << endl;
+	madOscQuery.update();
+	platformM.update();
+	
+	//	platformM.midiComponents["fader_1"].value = pages.begin()->parameters.begin()->getParameterValue();
 }
 
 //--------------------------------------------------------------
 void ofApp::draw(){
-//    std::stringstream ss;
-//    for(auto & s : madOscQuery.surfaces){
-//        ss << s.second.description << endl;
-//        ss << " -> "<< s.second.connectedMedia << endl;
-//        for(auto & p : madOscQuery.medias[s.second.connectedMedia].parameters){
-//            ss << "    -> " << p.getName() << endl;
-//        }
-//
-//
-//    }
-//    ofDrawBitmapString(ss.str(), 20, 20);
-//    ss.str("");
-
-//    madOscQuery.draw();
+	//    std::stringstream ss;
+	//    for(auto & s : madOscQuery.surfaces){
+	//        ss << s.second.description << endl;
+	//        ss << " -> "<< s.second.connectedMedia << endl;
+	//        for(auto & p : madOscQuery.medias[s.second.connectedMedia].parameters){
+	//            ss << "    -> " << p.getName() << endl;
+	//        }
+	//
+	//
+	//    }
+	//    ofDrawBitmapString(ss.str(), 20, 20);
+	//    ss.str("");
 	
-//    platformM.drawRawInput();
-//    platformM.gui.setPosition(230,10);
-//    platformM.gui.draw();
+	//    madOscQuery.draw();
 	
-    
+	//    platformM.drawRawInput();
+	platformM.gui.setPosition(230,10);
+	platformM.gui.draw();
+	
+	
 }
 
 //--------------------------------------------------------------
 void ofApp::keyPressed(int key){
-    if(key == 's'){
-        platformM.saveDeviceComponentsToFile("platformM.json");
-    }
-    
-    if(key == 'l'){
-        platformM.setupFromFile("platformM.json");
-    }
+	if(key == 's'){
+		//		platformM.saveMidiComponentsToFile("platformM.json");
+	}
+	
+	if(key == 'l'){
+		platformM.setupFromFile("platformM.json");
+	}
+	
+	if(key == 'o'){
+		for(auto& p : *(*currentPage).getParameters()){
+			std::cout << p.getParameterValue() << endl;
+		}
+	}
+	
+	if(key == OF_KEY_UP){
+		currentPage++;
+		setActivePage(&(*currentPage));
+	}
+	if(key == OF_KEY_DOWN){
+		currentPage--;
+		setActivePage(&(*currentPage));
+	}
 }
 
 //--------------------------------------------------------------
@@ -91,7 +114,7 @@ void ofApp::createOpacityPages(ofJson json){
 		// Max 8 params per page
 		if(page.isFull()){
 			pages.push_back(page);
-    		page = Page(keyword);
+			page = Page(keyword);
 		}
 	}
 	
@@ -104,19 +127,16 @@ void ofApp::createOpacityPages(ofJson json){
 void ofApp::createSurfacePages(ofJson json, std::vector<string> fx){
 	auto keyword = "surface";
 	for(auto & element : json["CONTENTS"]["surfaces"]["CONTENTS"]){
-    	Page page = Page(keyword);
+		Page page = Page(keyword);
 		
 		// Add parameters
 		for(auto& color : element["CONTENTS"]["color"]["CONTENTS"]){
 			// Add rgb
 			if(color["DESCRIPTION"] == "Red" || color["DESCRIPTION"] == "Green" || color["DESCRIPTION"] == "Blue"){
-        		page.addParameter(MadParameter(color));
+				page.addParameter(MadParameter(color));
 			}
 			
-			// if fx type is not default
-			
-			if(color["DESCRIPTION"] == ")
-			
+			// TODO: Add FX
 			
 			
 			// Max 8 params per page
@@ -135,54 +155,63 @@ void ofApp::createSurfacePages(ofJson json, std::vector<string> fx){
 		// Add remaining parameters
 	}
 }
+//--------------------------------------------------------------
+void ofApp::setActivePage(Page* page){
+	// Update fader control to fit input page
+	auto parameter = page->getParameters()->begin();
+	for(int i = 1; i < 9 && (parameter != page->getParameters()->end()); i++){
+		platformM.midiComponents["fader_" + ofToString(i)].value = parameter->getParameterValue();
+		parameter++;
+	}
+}
 
 //--------------------------------------------------------------
 void ofApp::keyReleased(int key){
-    
+	
 }
 
 //--------------------------------------------------------------
 void ofApp::mouseMoved(int x, int y ){
-    
+	
 }
 
 //--------------------------------------------------------------
 void ofApp::mouseDragged(int x, int y, int button){
-    
+	
 }
 
 //--------------------------------------------------------------
 void ofApp::mousePressed(int x, int y, int button){
-    
+	
 }
 
 //--------------------------------------------------------------
 void ofApp::mouseReleased(int x, int y, int button){
-    
+	
 }
 
 //--------------------------------------------------------------
 void ofApp::mouseEntered(int x, int y){
-    
+	
 }
 
 //--------------------------------------------------------------
 void ofApp::mouseExited(int x, int y){
-    
+	
 }
 
 //--------------------------------------------------------------
 void ofApp::windowResized(int w, int h){
-    
+	
 }
 
 //--------------------------------------------------------------
 void ofApp::gotMessage(ofMessage msg){
-    
+	
 }
 
 //--------------------------------------------------------------
 void ofApp::dragEvent(ofDragInfo dragInfo){
-    
+	
 }
 

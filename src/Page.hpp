@@ -30,8 +30,11 @@ public:
 		return this->name;
 	}
 	
+	std::list<MadParameter>* getParameters(){
+		return &this->parameters;
+	}
 
-//private:
+private:
 	std::list<MadParameter> parameters;
 	std::string name = "";
 };

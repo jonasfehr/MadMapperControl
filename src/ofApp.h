@@ -34,4 +34,7 @@ public:
 	void createOpacityPages(ofJson json);
 	void createSurfacePages(ofJson json, std::vector<string> fx);
 	void createMediaPages(ofJson json);
+	
+	void setActivePage(Page* page);
+	
 };
