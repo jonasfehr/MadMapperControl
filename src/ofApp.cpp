@@ -18,22 +18,15 @@ void ofApp::setup(){
 	// for each ?
 	
 	// All Opacities
-	auto fileName = "madMapperExample.json";
+	auto fileName = "madMapperExampleFX.json";
 	ofFile jsonFile(fileName);
 	ofJson madmapperJson = ofLoadJson(jsonFile);
 	
-	auto keyword = "opacity";
-	createPages(keyword, madmapperJson);
+	createOpacityPages(madmapperJson);
 	
-	for(auto& page : pages){
-		for(auto& par : page.parameters){
-			std::cout << par.oscAddress << endl;
-		}
-	}
-
-
-
 	// One for each Surface
+	std::vector<string> fx = {};
+	createSurfacePages(madmapperJson, fx);
 	
 	// One for each Media
 	
@@ -83,7 +76,9 @@ void ofApp::keyPressed(int key){
 }
 
 //--------------------------------------------------------------
-void ofApp::createPages(std::string keyword, ofJson json){
+void ofApp::createOpacityPages(ofJson json){
+	// Create pages for opacity value for each surface
+	auto keyword = "opacity";
 	Page page = Page(keyword);
 	for(auto & element : json["CONTENTS"]["surfaces"]["CONTENTS"]){
 		if(element["DESCRIPTION"] == "selected"){
@@ -102,6 +97,42 @@ void ofApp::createPages(std::string keyword, ofJson json){
 	
 	if(!page.isEmpty()){
 		pages.push_back(page);
+	}
+}
+
+//--------------------------------------------------------------
+void ofApp::createSurfacePages(ofJson json, std::vector<string> fx){
+	auto keyword = "surface";
+	for(auto & element : json["CONTENTS"]["surfaces"]["CONTENTS"]){
+    	Page page = Page(keyword);
+		
+		// Add parameters
+		for(auto& color : element["CONTENTS"]["color"]["CONTENTS"]){
+			// Add rgb
+			if(color["DESCRIPTION"] == "Red" || color["DESCRIPTION"] == "Green" || color["DESCRIPTION"] == "Blue"){
+        		page.addParameter(MadParameter(color));
+			}
+			
+			// if fx type is not default
+			
+			if(color["DESCRIPTION"] == ")
+			
+			
+			
+			// Max 8 params per page
+			if(page.isFull()){
+				pages.push_back(page);
+				page = Page(keyword);
+			}
+			
+		}
+		if(!page.isEmpty()){
+			pages.push_back(page);
+		}
+	}
+	
+	if(fx.size() > 0){
+		// Add remaining parameters
 	}
 }
 

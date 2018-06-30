@@ -10,7 +10,7 @@ public:
 	};
 	
 	void addParameter(MadParameter parameter){
-		if(parameters.size() >= 8){
+		if(parameters.size() > 8){
 			throw std::invalid_argument("A page cannot contain this many parameters!!");
 		}
 		parameters.push_back(parameter);

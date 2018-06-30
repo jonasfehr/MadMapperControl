@@ -31,5 +31,7 @@ public:
 	MadOscQuery madOscQuery;
 	ofxMidiDevice platformM;
 	
-	void createPages(std::string keyword, ofJson json);
+	void createOpacityPages(ofJson json);
+	void createSurfacePages(ofJson json, std::vector<string> fx);
+	void createMediaPages(ofJson json);
 };
