@@ -46,6 +46,8 @@ void ofApp::update(){
 	platformM.update();
 	
 	//	platformM.midiComponents["fader_1"].value = pages.begin()->parameters.begin()->getParameterValue();
+	
+	ofSetWindowTitle((*currentPage).getName());
 }
 
 //--------------------------------------------------------------
@@ -89,7 +91,7 @@ void ofApp::keyPressed(int key){
 	}
 	
 	if(key == OF_KEY_UP){
-		if(currentPage != pages.end()){
+		if(next(currentPage) != pages.end()){
 			currentPage++;
 			setActivePage(&(*currentPage));
 		}
@@ -167,6 +169,7 @@ void ofApp::setActivePage(Page* page){
 		parameter->set(platformM.midiComponents["fader_" + ofToString(i)].value);
 		parameter++;
 	}
+	ofLog() << "Active page set to " << (*currentPage).getName() << endl;
 }
 
 //--------------------------------------------------------------
