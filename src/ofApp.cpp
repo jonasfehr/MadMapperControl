@@ -131,8 +131,10 @@ void ofApp::createOpacityPages(ofJson json){
 
 //--------------------------------------------------------------
 void ofApp::createSurfacePages(ofJson json, std::vector<string> fx){
-	auto keyword = "surface";
+	std::string name = "surface";
+	int idx = 0;
 	for(auto & element : json["CONTENTS"]["surfaces"]["CONTENTS"]){
+		auto keyword = name + "_" + ofToString(idx);
 		Page page = Page(keyword);
 		
 		// Add parameters
@@ -144,16 +146,16 @@ void ofApp::createSurfacePages(ofJson json, std::vector<string> fx){
 			
 			// TODO: Add FX
 			
-			
 			// Max 8 params per page
 			if(page.isFull()){
 				pages.push_back(page);
+				idx++;
 				page = Page(keyword);
 			}
-			
 		}
 		if(!page.isEmpty()){
 			pages.push_back(page);
+			idx++;
 		}
 	}
 	
