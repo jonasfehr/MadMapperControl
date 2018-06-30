@@ -4,9 +4,8 @@
 void ofApp::setup(){
     madOscQuery.setup("127.0.0.1", 8012, 8011);
     madOscQuery.receive();
-    
 
-    platformM.setupFromFile("platformM.json");
+//    platformM.setupFromFile("platformM.json");
 //    platformM.setupFromFile("platformM.json");
 
     //    ofxMidiIn::listPorts();
@@ -15,6 +14,29 @@ void ofApp::setup(){
 //        platformM.addFader(madOscQuery.mixer.parameters.at(i), i+1);
 //
 //    }
+	
+	// for each ?
+	
+	// All Opacities
+	auto fileName = "madMapperExample.json";
+	ofFile jsonFile(fileName);
+	ofJson madmapperJson = ofLoadJson(jsonFile);
+	
+	auto keyword = "opacity";
+	createPages(keyword, madmapperJson);
+	
+	for(auto& page : pages){
+		for(auto& par : page.parameters){
+			std::cout << par.oscAddress << endl;
+		}
+	}
+
+
+
+	// One for each Surface
+	
+	// One for each Media
+	
     
 }
 
@@ -40,13 +62,12 @@ void ofApp::draw(){
 //    ofDrawBitmapString(ss.str(), 20, 20);
 //    ss.str("");
 
-    madOscQuery.draw();
-    
+//    madOscQuery.draw();
+	
 //    platformM.drawRawInput();
-    platformM.gui.setPosition(230,10);
-
-    platformM.gui.draw();
-    
+//    platformM.gui.setPosition(230,10);
+//    platformM.gui.draw();
+	
     
 }
 
@@ -59,6 +80,29 @@ void ofApp::keyPressed(int key){
     if(key == 'l'){
         platformM.setupFromFile("platformM.json");
     }
+}
+
+//--------------------------------------------------------------
+void ofApp::createPages(std::string keyword, ofJson json){
+	Page page = Page(keyword);
+	for(auto & element : json["CONTENTS"]["surfaces"]["CONTENTS"]){
+		if(element["DESCRIPTION"] == "selected"){
+			// Skip this one
+			continue;
+		}
+		// Add element
+		page.addParameter(MadParameter(element["CONTENTS"][keyword]));
+		
+		// Max 8 params per page
+		if(page.isFull()){
+			pages.push_back(page);
+    		page = Page(keyword);
+		}
+	}
+	
+	if(!page.isEmpty()){
+		pages.push_back(page);
+	}
 }
 
 //--------------------------------------------------------------
