@@ -1,0 +1,496 @@
+{
+    "deviceComponents": {
+        "component_0": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 4,
+            "doFeedback": true,
+            "interfaceType": 0,
+            "name": "Fader_1",
+            "pitch": 0,
+            "value": 0.0
+        },
+        "component_1": {
+            "channel": 2,
+            "control": 0,
+            "controlMessageType": 4,
+            "doFeedback": true,
+            "interfaceType": 0,
+            "name": "Fader_2",
+            "pitch": 0,
+            "value": 0.0
+        },
+        "component_10": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 8,
+            "value": 0.0
+        },
+        "component_11": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 9,
+            "value": 0.0
+        },
+        "component_12": {
+            "channel": 1,
+            "control": 17,
+            "controlMessageType": 3,
+            "doFeedback": false,
+            "interfaceType": 1,
+            "name": "Knob_2",
+            "pitch": 0,
+            "value": 0.0
+        },
+        "component_13": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 10,
+            "value": 0.0
+        },
+        "component_14": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 11,
+            "value": 0.0
+        },
+        "component_15": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 12,
+            "value": 0.0
+        },
+        "component_16": {
+            "channel": 4,
+            "control": 0,
+            "controlMessageType": 4,
+            "doFeedback": true,
+            "interfaceType": 0,
+            "name": "Fader_4",
+            "pitch": 0,
+            "value": 0.0
+        },
+        "component_17": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 13,
+            "value": 0.0
+        },
+        "component_18": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 14,
+            "value": 0.0
+        },
+        "component_19": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 15,
+            "value": 0.0
+        },
+        "component_2": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 1,
+            "value": 0.0
+        },
+        "component_20": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 16,
+            "value": 0.0
+        },
+        "component_21": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 17,
+            "value": 0.0
+        },
+        "component_22": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 18,
+            "value": 0.0
+        },
+        "component_23": {
+            "channel": 1,
+            "control": 18,
+            "controlMessageType": 3,
+            "doFeedback": false,
+            "interfaceType": 1,
+            "name": "Knob_3",
+            "pitch": 0,
+            "value": 0.0
+        },
+        "component_24": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 19,
+            "value": 0.0
+        },
+        "component_25": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 20,
+            "value": 0.0
+        },
+        "component_26": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 21,
+            "value": 0.0
+        },
+        "component_27": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 22,
+            "value": 0.0
+        },
+        "component_28": {
+            "channel": 5,
+            "control": 0,
+            "controlMessageType": 4,
+            "doFeedback": true,
+            "interfaceType": 0,
+            "name": "Fader_5",
+            "pitch": 0,
+            "value": 0.0
+        },
+        "component_29": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 23,
+            "value": 0.0
+        },
+        "component_3": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 2,
+            "value": 0.0
+        },
+        "component_30": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 24,
+            "value": 0.0
+        },
+        "component_31": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 25,
+            "value": 0.0
+        },
+        "component_32": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 26,
+            "value": 0.0
+        },
+        "component_33": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 27,
+            "value": 0.0
+        },
+        "component_34": {
+            "channel": 1,
+            "control": 19,
+            "controlMessageType": 3,
+            "doFeedback": false,
+            "interfaceType": 1,
+            "name": "Knob_4",
+            "pitch": 0,
+            "value": 0.0
+        },
+        "component_35": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 28,
+            "value": 0.0
+        },
+        "component_36": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 29,
+            "value": 0.0
+        },
+        "component_37": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 30,
+            "value": 0.0
+        },
+        "component_38": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 31,
+            "value": 0.0
+        },
+        "component_39": {
+            "channel": 6,
+            "control": 0,
+            "controlMessageType": 4,
+            "doFeedback": true,
+            "interfaceType": 0,
+            "name": "Fader_6",
+            "pitch": 0,
+            "value": 0.0
+        },
+        "component_4": {
+            "channel": 3,
+            "control": 0,
+            "controlMessageType": 4,
+            "doFeedback": true,
+            "interfaceType": 0,
+            "name": "Fader_3",
+            "pitch": 0,
+            "value": 0.0
+        },
+        "component_40": {
+            "channel": 7,
+            "control": 0,
+            "controlMessageType": 4,
+            "doFeedback": true,
+            "interfaceType": 0,
+            "name": "Fader_7",
+            "pitch": 0,
+            "value": 0.0
+        },
+        "component_41": {
+            "channel": 8,
+            "control": 0,
+            "controlMessageType": 4,
+            "doFeedback": true,
+            "interfaceType": 0,
+            "name": "Fader_8",
+            "pitch": 0,
+            "value": 0.0
+        },
+        "component_42": {
+            "channel": 9,
+            "control": 0,
+            "controlMessageType": 4,
+            "doFeedback": true,
+            "interfaceType": 0,
+            "name": "Fader_M",
+            "pitch": 0,
+            "value": 0.0
+        },
+        "component_43": {
+            "channel": 1,
+            "control": 16,
+            "controlMessageType": 3,
+            "doFeedback": false,
+            "interfaceType": 1,
+            "name": "Knob_1",
+            "pitch": 0,
+            "value": 0.0
+        },
+        "component_44": {
+            "channel": 1,
+            "control": 20,
+            "controlMessageType": 3,
+            "doFeedback": false,
+            "interfaceType": 1,
+            "name": "Knob_5",
+            "pitch": 0,
+            "value": 0.0
+        },
+        "component_45": {
+            "channel": 1,
+            "control": 21,
+            "controlMessageType": 3,
+            "doFeedback": false,
+            "interfaceType": 1,
+            "name": "Knob_6",
+            "pitch": 0,
+            "value": 0.0
+        },
+        "component_46": {
+            "channel": 1,
+            "control": 22,
+            "controlMessageType": 3,
+            "doFeedback": false,
+            "interfaceType": 1,
+            "name": "Knob_7",
+            "pitch": 0,
+            "value": 0.0
+        },
+        "component_47": {
+            "channel": 1,
+            "control": 23,
+            "controlMessageType": 3,
+            "doFeedback": false,
+            "interfaceType": 1,
+            "name": "Knob_8",
+            "pitch": 0,
+            "value": 0.0
+        },
+        "component_48": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 0,
+            "value": 0.0
+        },
+        "component_5": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 3,
+            "value": 0.0
+        },
+        "component_6": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 4,
+            "value": 0.0
+        },
+        "component_7": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 5,
+            "value": 0.0
+        },
+        "component_8": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 6,
+            "value": 0.0
+        },
+        "component_9": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "Button",
+            "pitch": 7,
+            "value": 0.0
+        }
+    },
+    "midiIn": "Platform M+ V1.06",
+    "midiOut": "Platform M+ V1.06"
+}
