@@ -89,12 +89,16 @@ void ofApp::keyPressed(int key){
 	}
 	
 	if(key == OF_KEY_UP){
-		currentPage++;
-		setActivePage(&(*currentPage));
+		if(currentPage != pages.end()){
+			currentPage++;
+			setActivePage(&(*currentPage));
+		}
 	}
 	if(key == OF_KEY_DOWN){
-		currentPage--;
-		setActivePage(&(*currentPage));
+		if(currentPage != pages.begin()){
+			currentPage--;
+			setActivePage(&(*currentPage));
+		}
 	}
 }
 
@@ -160,7 +164,7 @@ void ofApp::setActivePage(Page* page){
 	// Update fader control to fit input page
 	auto parameter = page->getParameters()->begin();
 	for(int i = 1; i < 9 && (parameter != page->getParameters()->end()); i++){
-		platformM.midiComponents["fader_" + ofToString(i)].value = parameter->getParameterValue();
+		parameter->set(platformM.midiComponents["fader_" + ofToString(i)].value);
 		parameter++;
 	}
 }
