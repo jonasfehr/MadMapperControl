@@ -3,7 +3,7 @@
 #include "ofMain.h"
 #include "ofxMadOscQuery.h"
 #include "ofxMidiDevice.h"
-
+#include "MadEvent.hpp"
 #include "Page.hpp"
 
 class ofApp : public ofBaseApp{

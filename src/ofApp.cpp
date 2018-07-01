@@ -40,7 +40,6 @@ void ofApp::setup(){
         for (auto & parameter : *page.getParameters()) {
             ofAddListener(parameter.oscSendEvent, this, &ofApp::oscSendToMadMapper);
         }
-        
     }
 }
 
@@ -48,8 +47,6 @@ void ofApp::setup(){
 void ofApp::update(){
     //cout << surfaces.size() << endl;
     madOscQuery.update();
-    platformM.update();
-    
     // for each midi parameter
     //    for(auto& mp : platformM.)
     // if updated
