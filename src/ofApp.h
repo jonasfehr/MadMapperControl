@@ -30,8 +30,9 @@ public:
 	std::list<Page>::iterator currentPage;
 	
 	MadOscQuery madOscQuery;
-	ofxMidiDevice platformM;
-	
+    ofxMidiDevice platformM;
+    ofxMidiDevice launchpad;
+
 	void createOpacityPages(ofJson json);
 	void createSurfacePages(ofJson json, std::vector<string> fx);
 	void createMediaPages(ofJson json);
