@@ -202,15 +202,8 @@ void ofApp::setActivePage(Page* page, Page* prevPage){
     if(prevPage != nullptr){
     	prevPage->unlinkDevice();
     }
-
-    // Update fader control to fit input page
-    // Add new listeners
-    auto parameter = page->getParameters()->begin();
-    for(int i = 1; i < 9 && (parameter != page->getParameters()->end()); i++){
-        parameter->linkMidiComponent(platformM.midiComponents["fader_" + ofToString(i)]);
-        parameter++;
-    }
-    
+	
+	page->linkDevice();
     ofLog() << "Active page set to " << (*currentPage).getName() << endl;
 }
 

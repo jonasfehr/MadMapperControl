@@ -54,7 +54,11 @@ public:
 	}
 	
 	void linkDevice(){
-		
+		auto parameter = parameters.begin();
+		for(int i = 1; i < 9 && (parameter != parameters.end()); i++){
+			parameter->linkMidiComponent(midiDevice->midiComponents["fader_" + ofToString(i)]);
+			parameter++;
+		}
 	}
 	
 	void unlinkDevice(){
