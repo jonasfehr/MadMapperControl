@@ -1,0 +1,646 @@
+{
+    "midiComponents": {
+        "button_r_0_c_0": {
+            "channel": 1,
+            "control": 0,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_0_c_0",
+            "pitch": 0,
+            "value": 0.0
+        },
+        "button_r_0_c_1": {
+            "channel": 1,
+            "control": 1,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_0_c_1",
+            "pitch": 1,
+            "value": 0.0
+        },
+        "button_r_0_c_2": {
+            "channel": 1,
+            "control": 2,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_0_c_2",
+            "pitch": 2,
+            "value": 0.0
+        },
+        "button_r_0_c_3": {
+            "channel": 1,
+            "control": 3,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_0_c_3",
+            "pitch": 3,
+            "value": 0.0
+        },
+        "button_r_0_c_4": {
+            "channel": 1,
+            "control": 4,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_0_c_4",
+            "pitch": 4,
+            "value": 0.0
+        },
+        "button_r_0_c_5": {
+            "channel": 1,
+            "control": 5,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_0_c_5",
+            "pitch": 5,
+            "value": -0.0
+        },
+        "button_r_0_c_6": {
+            "channel": 1,
+            "control": 6,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_0_c_6",
+            "pitch": 6,
+            "value": -0.0
+        },
+        "button_r_0_c_7": {
+            "channel": 1,
+            "control": 7,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_0_c_7",
+            "pitch": 7,
+            "value": -0.0
+        },
+        "button_r_1_c_0": {
+            "channel": 1,
+            "control": 16,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_1_c_0",
+            "pitch": 16,
+            "value": -0.0
+        },
+        "button_r_1_c_1": {
+            "channel": 1,
+            "control": 17,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_1_c_1",
+            "pitch": 17,
+            "value": -0.0
+        },
+        "button_r_1_c_2": {
+            "channel": 1,
+            "control": 18,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_1_c_2",
+            "pitch": 18,
+            "value": -0.0
+        },
+        "button_r_1_c_3": {
+            "channel": 1,
+            "control": 19,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_1_c_3",
+            "pitch": 19,
+            "value": -0.0
+        },
+        "button_r_1_c_4": {
+            "channel": 1,
+            "control": 20,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_1_c_4",
+            "pitch": 20,
+            "value": -0.0
+        },
+        "button_r_1_c_5": {
+            "channel": 1,
+            "control": 21,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_1_c_5",
+            "pitch": 21,
+            "value": -0.0
+        },
+        "button_r_1_c_6": {
+            "channel": 1,
+            "control": 22,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_1_c_6",
+            "pitch": 22,
+            "value": -0.0
+        },
+        "button_r_1_c_7": {
+            "channel": 1,
+            "control": 23,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_1_c_7",
+            "pitch": 23,
+            "value": -0.0
+        },
+        "button_r_2_c_0": {
+            "channel": 1,
+            "control": 32,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_2_c_0",
+            "pitch": 32,
+            "value": -0.0
+        },
+        "button_r_2_c_1": {
+            "channel": 1,
+            "control": 33,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_2_c_1",
+            "pitch": 33,
+            "value": -0.0
+        },
+        "button_r_2_c_2": {
+            "channel": 1,
+            "control": 34,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_2_c_2",
+            "pitch": 34,
+            "value": -0.0
+        },
+        "button_r_2_c_3": {
+            "channel": 1,
+            "control": 35,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_2_c_3",
+            "pitch": 35,
+            "value": -0.0
+        },
+        "button_r_2_c_4": {
+            "channel": 1,
+            "control": 36,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_2_c_4",
+            "pitch": 36,
+            "value": -0.0
+        },
+        "button_r_2_c_5": {
+            "channel": 1,
+            "control": 37,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_2_c_5",
+            "pitch": 37,
+            "value": -0.0
+        },
+        "button_r_2_c_6": {
+            "channel": 1,
+            "control": 38,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_2_c_6",
+            "pitch": 38,
+            "value": -0.0
+        },
+        "button_r_2_c_7": {
+            "channel": 1,
+            "control": 39,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_2_c_7",
+            "pitch": 39,
+            "value": -0.0
+        },
+        "button_r_3_c_0": {
+            "channel": 1,
+            "control": 48,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_3_c_0",
+            "pitch": 48,
+            "value": -0.0
+        },
+        "button_r_3_c_1": {
+            "channel": 1,
+            "control": 49,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_3_c_1",
+            "pitch": 49,
+            "value": -0.0
+        },
+        "button_r_3_c_2": {
+            "channel": 1,
+            "control": 50,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_3_c_2",
+            "pitch": 50,
+            "value": -0.0
+        },
+        "button_r_3_c_3": {
+            "channel": 1,
+            "control": 51,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_3_c_3",
+            "pitch": 51,
+            "value": -0.0
+        },
+        "button_r_3_c_4": {
+            "channel": 1,
+            "control": 52,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_3_c_4",
+            "pitch": 52,
+            "value": -0.0
+        },
+        "button_r_3_c_5": {
+            "channel": 1,
+            "control": 53,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_3_c_5",
+            "pitch": 53,
+            "value": -0.0
+        },
+        "button_r_3_c_6": {
+            "channel": 1,
+            "control": 54,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_3_c_6",
+            "pitch": 54,
+            "value": -0.0
+        },
+        "button_r_3_c_7": {
+            "channel": 1,
+            "control": 55,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_3_c_7",
+            "pitch": 55,
+            "value": -0.0
+        },
+        "button_r_4_c_0": {
+            "channel": 1,
+            "control": 64,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_4_c_0",
+            "pitch": 64,
+            "value": -0.0
+        },
+        "button_r_4_c_1": {
+            "channel": 1,
+            "control": 65,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_4_c_1",
+            "pitch": 65,
+            "value": -0.0
+        },
+        "button_r_4_c_2": {
+            "channel": 1,
+            "control": 66,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_4_c_2",
+            "pitch": 66,
+            "value": -0.0
+        },
+        "button_r_4_c_3": {
+            "channel": 1,
+            "control": 67,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_4_c_3",
+            "pitch": 67,
+            "value": -0.0
+        },
+        "button_r_4_c_4": {
+            "channel": 1,
+            "control": 68,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_4_c_4",
+            "pitch": 68,
+            "value": -0.0
+        },
+        "button_r_4_c_5": {
+            "channel": 1,
+            "control": 69,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_4_c_5",
+            "pitch": 69,
+            "value": -0.0
+        },
+        "button_r_4_c_6": {
+            "channel": 1,
+            "control": 70,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_4_c_6",
+            "pitch": 70,
+            "value": -0.0
+        },
+        "button_r_4_c_7": {
+            "channel": 1,
+            "control": 71,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_4_c_7",
+            "pitch": 71,
+            "value": -0.0
+        },
+        "button_r_5_c_0": {
+            "channel": 1,
+            "control": 80,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_5_c_0",
+            "pitch": 80,
+            "value": -0.0
+        },
+        "button_r_5_c_1": {
+            "channel": 1,
+            "control": 81,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_5_c_1",
+            "pitch": 81,
+            "value": -0.0
+        },
+        "button_r_5_c_2": {
+            "channel": 1,
+            "control": 82,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_5_c_2",
+            "pitch": 82,
+            "value": -0.0
+        },
+        "button_r_5_c_3": {
+            "channel": 1,
+            "control": 83,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_5_c_3",
+            "pitch": 83,
+            "value": -0.0
+        },
+        "button_r_5_c_4": {
+            "channel": 1,
+            "control": 84,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_5_c_4",
+            "pitch": 84,
+            "value": -0.0
+        },
+        "button_r_5_c_5": {
+            "channel": 1,
+            "control": 85,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_5_c_5",
+            "pitch": 85,
+            "value": -0.0
+        },
+        "button_r_5_c_6": {
+            "channel": 1,
+            "control": 86,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_5_c_6",
+            "pitch": 86,
+            "value": -0.0
+        },
+        "button_r_5_c_7": {
+            "channel": 1,
+            "control": 87,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_5_c_7",
+            "pitch": 87,
+            "value": -0.0
+        },
+        "button_r_6_c_0": {
+            "channel": 1,
+            "control": 96,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_6_c_0",
+            "pitch": 96,
+            "value": -0.0
+        },
+        "button_r_6_c_1": {
+            "channel": 1,
+            "control": 97,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_6_c_1",
+            "pitch": 97,
+            "value": -0.0
+        },
+        "button_r_6_c_2": {
+            "channel": 1,
+            "control": 98,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_6_c_2",
+            "pitch": 98,
+            "value": -0.0
+        },
+        "button_r_6_c_3": {
+            "channel": 1,
+            "control": 99,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_6_c_3",
+            "pitch": 99,
+            "value": -0.0
+        },
+        "button_r_6_c_4": {
+            "channel": 1,
+            "control": 100,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_6_c_4",
+            "pitch": 100,
+            "value": -0.0
+        },
+        "button_r_6_c_5": {
+            "channel": 1,
+            "control": 101,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_6_c_5",
+            "pitch": 101,
+            "value": -0.0
+        },
+        "button_r_6_c_6": {
+            "channel": 1,
+            "control": 102,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_6_c_6",
+            "pitch": 102,
+            "value": -0.0
+        },
+        "button_r_6_c_7": {
+            "channel": 1,
+            "control": 103,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_6_c_7",
+            "pitch": 103,
+            "value": -0.0
+        },
+        "button_r_7_c_0": {
+            "channel": 1,
+            "control": 112,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_7_c_0",
+            "pitch": 112,
+            "value": -0.0
+        },
+        "button_r_7_c_1": {
+            "channel": 1,
+            "control": 113,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_7_c_1",
+            "pitch": 113,
+            "value": -0.0
+        },
+        "button_r_7_c_2": {
+            "channel": 1,
+            "control": 114,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_7_c_2",
+            "pitch": 114,
+            "value": -0.0
+        },
+        "button_r_7_c_3": {
+            "channel": 1,
+            "control": 115,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_7_c_3",
+            "pitch": 115,
+            "value": -0.0
+        },
+        "button_r_7_c_4": {
+            "channel": 1,
+            "control": 116,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_7_c_4",
+            "pitch": 116,
+            "value": -0.0
+        },
+        "button_r_7_c_5": {
+            "channel": 1,
+            "control": 117,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_7_c_5",
+            "pitch": 117,
+            "value": -0.0
+        },
+        "button_r_7_c_6": {
+            "channel": 1,
+            "control": 118,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_7_c_6",
+            "pitch": 118,
+            "value": -0.0
+        },
+        "button_r_7_c_7": {
+            "channel": 1,
+            "control": 119,
+            "controlMessageType": 1,
+            "doFeedback": true,
+            "interfaceType": 2,
+            "name": "button_r_7_c_7",
+            "pitch": 119,
+            "value": -0.0
+        }
+    },
+    "midiIn": "Launchpad",
+    "midiOut": "Launchpad"
+}

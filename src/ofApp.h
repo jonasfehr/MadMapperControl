@@ -3,8 +3,7 @@
 #include "ofMain.h"
 #include "ofxMadOscQuery.h"
 #include "ofxMidiDevice.h"
-
-#include "Page.hpp"
+//#include "MadParameterPage.hpp"
 
 class ofApp : public ofBaseApp{
 	
@@ -26,23 +25,16 @@ public:
 	void dragEvent(ofDragInfo dragInfo);
 	void gotMessage(ofMessage msg);
 	
-	std::list<Page> pages;
-	std::list<Page>::iterator currentPage;
+	std::list<MadParameterPage> pages;
+	std::list<MadParameterPage>::iterator currentPage;
 	
-	MadOscQuery madOscQuery;
+	ofxMadOscQuery madOscQuery;
     ofxMidiDevice platformM;
     ofxMidiDevice launchpad;
 
-	void createOpacityPages(ofJson json);
-	void createSurfacePages(ofJson json, std::vector<string> fx);
-	void createMediaPages(ofJson json);
 	
-	void listenerFunction(ofAbstractParameter& e);
-//    void madParameterEvent(MadEvent &e);
-	
-	std::string getStatusString();
-	
-	void setActivePage(Page* page, Page* prevPage);
+	void setActivePage(MadParameterPage* page, MadParameterPage* prevPage);
+    std::string getStatusString();
     
     void oscSendToMadMapper(ofxOscMessage &m);
 
