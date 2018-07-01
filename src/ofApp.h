@@ -33,10 +33,6 @@ public:
     ofxMidiDevice platformM;
     ofxMidiDevice launchpad;
 
-	void createOpacityPages(ofJson json);
-	void createSurfacePages(ofJson json, std::vector<string> fx);
-	void createMediaPages(ofJson json);
-
 	void setActivePage(MadParameterPage* page, MadParameterPage* prevPage);
     std::string getStatusString();
     

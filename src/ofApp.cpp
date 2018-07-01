@@ -20,14 +20,9 @@ void ofApp::setup(){
     currentPage = pages.begin();
     setActivePage(&(*currentPage), nullptr);
     
+    // Setup all the specialised control.
     for(auto & page : pages) page.linkCycleControlComponents(platformM.midiComponents["chan_up"], platformM.midiComponents["chan_down"]);
     
-    // Add callback for parameter change in midi controller
-    //    ofAddListener(platformM.parameterGroup.parameterChangedE(), this, &ofApp::exit);
-    //    ofAddListener(platformM.parameterGroup.parameterChangedE(), this, &ofApp::listenerFunction);
-    //    ofAddListener(MadEvent::events, this, &ofApp::madParameterEvent);
-    
-//    ofAddListener(pages.begin()->getParameters()->begin()->oscSendEvent, this, &ofApp::oscSendToMadMapper);
 }
 
 //--------------------------------------------------------------
@@ -37,7 +32,6 @@ void ofApp::update(){
 
 //--------------------------------------------------------------
 void ofApp::draw(){
-    //    madOscQuery.draw();
     
     //    platformM.drawRawInput();
     platformM.gui.setPosition(ofGetWidth()-230,10);
@@ -92,7 +86,6 @@ void ofApp::keyPressed(int key){
 }
 //--------------------------------------------------------------
 void ofApp::setActivePage(MadParameterPage* page, MadParameterPage* prevPage){
-    // TODO: Remove previous listener
     if(prevPage != nullptr){
         prevPage->unlinkDevice();
     }
@@ -121,13 +114,9 @@ std::string ofApp::getStatusString(){
 //--------------------------------------------------------------
 void ofApp::exit(){
     for(auto & page : pages) page.unlinkCycleControlComponents(platformM.midiComponents["chan_up"], platformM.midiComponents["chan_down"]);
+    
+    currentPage->unlinkDevice();
 
-//    for(auto & page : pages){
-//        for (auto & parameter : *page.getParameters()) {
-//            ofRemoveListener(parameter.oscSendEvent, this, &ofApp::oscSendToMadMapper);
-//        }
-//        
-//    }
 }
 
 //--------------------------------------------------------------
