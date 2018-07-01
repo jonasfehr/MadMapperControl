@@ -32,11 +32,14 @@ void ofApp::setup(){
 	
 	// One for each Media
 	
-	
 	// Set initial page
 	currentPage = pages.begin();
 	setActivePage(&(*currentPage));
 	
+	
+	// Add callback for parameter change in midi controller
+//	ofAddListener(platformM.parameterGroup.parameterChangedE(), this, &ofApp::exit);
+	ofAddListener(platformM.parameterGroup.parameterChangedE(), this, &ofApp::listenerFunction);
 }
 
 //--------------------------------------------------------------
@@ -46,8 +49,14 @@ void ofApp::update(){
 	platformM.update();
 	
 	//	platformM.midiComponents["fader_1"].value = pages.begin()->parameters.begin()->getParameterValue();
-	
 	ofSetWindowTitle((*currentPage).getName());
+}
+
+//--------------------------------------------------------------
+void ofApp::listenerFunction(ofAbstractParameter& e){
+	// Must be in ofApp
+	std::cout << e << endl;
+	
 }
 
 //--------------------------------------------------------------
@@ -71,7 +80,7 @@ void ofApp::draw(){
 	platformM.gui.setPosition(230,10);
 	platformM.gui.draw();
 	
-	
+	ofDrawBitmapStringHighlight(getStatusString(), 15, 15);
 }
 
 //--------------------------------------------------------------
@@ -134,6 +143,9 @@ void ofApp::createSurfacePages(ofJson json, std::vector<string> fx){
 	std::string name = "surface";
 	int idx = 0;
 	for(auto & element : json["CONTENTS"]["surfaces"]["CONTENTS"]){
+		if(element["DESCRIPTION"] == "selected"){
+			continue; // skip this one
+		}
 		auto keyword = name + "_" + ofToString(idx);
 		Page page = Page(keyword);
 		
@@ -171,7 +183,22 @@ void ofApp::setActivePage(Page* page){
 		parameter->set(platformM.midiComponents["fader_" + ofToString(i)].value);
 		parameter++;
 	}
+
 	ofLog() << "Active page set to " << (*currentPage).getName() << endl;
+}
+
+std::string ofApp::getStatusString(){
+	std::string s = "";
+	s+= "Current page: " + (*currentPage).getName();
+	s+= "\nParameters on page:";
+	
+	int parNum = 1;
+	for(auto& p : *(*currentPage).getParameters()){
+		s+= "\n" + ofToString(parNum) + ") " + p.oscAddress + " " + ofToString(p.getParameterValue());
+		parNum++;
+	}
+
+	return s;
 }
 
 //--------------------------------------------------------------

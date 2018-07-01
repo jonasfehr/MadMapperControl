@@ -35,6 +35,10 @@ public:
 	void createSurfacePages(ofJson json, std::vector<string> fx);
 	void createMediaPages(ofJson json);
 	
+	void listenerFunction(ofAbstractParameter& e);
+	
+	std::string getStatusString();
+	
 	void setActivePage(Page* page);
 	
 };
