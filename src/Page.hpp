@@ -22,7 +22,7 @@ public:
 			upper = 8;
 		}
 		
-		range = std::make_pair(0, upper);
+		range = std::make_pair(1, upper);
 	}
 	
 	bool isEmpty(){
@@ -46,7 +46,7 @@ public:
 	}
 	
 	void cycleBackward(){
-		if(range.first > 0){
+		if(range.first > 1){
     		ofLog() << "Cycling backwards - new range: " << range.first << " to " << range.second;
 			range.first--;
 			range.second--;
