@@ -37,7 +37,7 @@ void ofApp::setup(){
 void ofApp::update(){
 	//cout << surfaces.size() << endl;
 	madOscQuery.update();
-	platformM.update();
+//	platformM.update();
 	
 	// for each midi parameter
 //	for(auto& mp : platformM.)
@@ -126,8 +126,8 @@ void ofApp::keyPressed(int key){
 //--------------------------------------------------------------
 void ofApp::createOpacityPages(ofJson json){
 	// Create pages for opacity value for each surface
-	auto keyword = "opacity";
-	Page page = Page(keyword);
+	std::string keyword = "opacity";
+	Page page = Page(keyword, &platformM);
 	for(auto & element : json["CONTENTS"]["surfaces"]["CONTENTS"]){
 		if(element["DESCRIPTION"] == "selected"){
 			// Skip this one
@@ -150,9 +150,9 @@ void ofApp::createSurfacePages(ofJson json, std::vector<string> fx){
 		if(element["DESCRIPTION"] == "selected"){
 			continue; // skip this one
 		}
-		auto keyword = name + "_" + ofToString(idx);
-		Page page = Page(keyword);
-		
+		std::string keyword = name + "_" + ofToString(idx);
+		Page page = Page(keyword, &platformM);
+
 		// Add parameters
 		for(auto& color : element["CONTENTS"]["color"]["CONTENTS"]){
 			// Add rgb
@@ -176,23 +176,11 @@ void ofApp::createSurfacePages(ofJson json, std::vector<string> fx){
 }
 //--------------------------------------------------------------
 void ofApp::setActivePage(Page* page, Page* prevPage){
-	// TODO: Remove previous listener
 	if(prevPage != nullptr){
-	auto prevParameter = prevPage->getParameters()->begin();
-    	for(int i = 1; i < 9 && (prevParameter != prevPage->getParameters()->end()); i++){
-    		prevParameter->unlinkMidiComponent(platformM.midiComponents["fader_" + ofToString(i)]);
-    		prevParameter++;
-    	}
+    	prevPage->unlinkDevice();
 	}
-
 	// Update fader control to fit input page
-	// Add new listeners
-	auto parameter = page->getParameters()->begin();
-	for(int i = 1; i < 9 && (parameter != page->getParameters()->end()); i++){
-		parameter->linkMidiComponent(platformM.midiComponents["fader_" + ofToString(i)]);
-		parameter++;
-	}
-
+	page->linkDevice(); // add new listeners
 	ofLog() << "Active page set to " << (*currentPage).getName() << endl;
 }
 
