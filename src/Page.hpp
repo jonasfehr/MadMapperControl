@@ -40,21 +40,29 @@ public:
 	void cycleForward(){
 		if(range.second < parameters.size()){
     		ofLog() << "Cycling forwards - new range: " << range.first << " to " << range.second;
+			unlinkDevice();
 			range.first++;
 			range.second++;
+			linkDevice();
 		}
 	}
 	
 	void cycleBackward(){
 		if(range.first > 1){
     		ofLog() << "Cycling backwards - new range: " << range.first << " to " << range.second;
+			unlinkDevice();
 			range.first--;
 			range.second--;
+			linkDevice();
 		}
 	}
 	
 	void linkDevice(){
 		auto parameter = parameters.begin();
+		for(int i = 1; i < range.first; i++){
+			parameter++;
+		}
+		
 		for(int i = 1; i < 9 && (parameter != parameters.end()); i++){
 			parameter->linkMidiComponent(midiDevice->midiComponents["fader_" + ofToString(i)]);
 			parameter++;
@@ -63,6 +71,10 @@ public:
 	
 	void unlinkDevice(){
 		auto prevParameter = parameters.begin();
+		for(int i = 1; i < range.first; i++){
+			prevParameter++;
+		}
+		
 		for(int i = 1; i < 9 && (prevParameter != parameters.end()); i++){
 			prevParameter->unlinkMidiComponent(midiDevice->midiComponents["fader_" + ofToString(i)]);
 			prevParameter++;
