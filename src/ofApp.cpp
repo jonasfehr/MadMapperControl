@@ -7,7 +7,7 @@ void ofApp::setup(){
 	
 	//    platformM.setupFromFile("platformM.json");
 	//    platformM.setupFromFile("");
-	platformM.setup("Platform M+ V1.07");
+	platformM.setup("Platform M+ V2.00");
 	
 	//    ofxMidiIn::listPorts();
 	//    platformM.setup("Platform M+ V1.06");
@@ -34,12 +34,15 @@ void ofApp::setup(){
 	
 	// Set initial page
 	currentPage = pages.begin();
-	setActivePage(&(*currentPage));
-	
-	
+	setActivePage(&(*currentPage), nullptr);
+
 	// Add callback for parameter change in midi controller
 //	ofAddListener(platformM.parameterGroup.parameterChangedE(), this, &ofApp::exit);
 	ofAddListener(platformM.parameterGroup.parameterChangedE(), this, &ofApp::listenerFunction);
+	
+	ofAddListener(MadEvent::events, this, &ofApp::madParameterEvent);
+	
+
 }
 
 //--------------------------------------------------------------
@@ -48,6 +51,11 @@ void ofApp::update(){
 	madOscQuery.update();
 	platformM.update();
 	
+	// for each midi parameter
+//	for(auto& mp : platformM.)
+	// if updated
+	// throw MadEvent
+
 	//	platformM.midiComponents["fader_1"].value = pages.begin()->parameters.begin()->getParameterValue();
 	ofSetWindowTitle((*currentPage).getName());
 }
@@ -55,8 +63,12 @@ void ofApp::update(){
 //--------------------------------------------------------------
 void ofApp::listenerFunction(ofAbstractParameter& e){
 	// Must be in ofApp
-	std::cout << e << endl;
-	
+	std::cout << e.getName() << endl;
+}
+
+//--------------------------------------------------------------
+void ofApp::madParameterEvent(MadEvent &e){
+	std::cout << e.oscAddress << endl;
 }
 
 //--------------------------------------------------------------
@@ -101,14 +113,16 @@ void ofApp::keyPressed(int key){
 	
 	if(key == OF_KEY_UP){
 		if(next(currentPage) != pages.end()){
+			Page* prevPage = &(*currentPage);
 			currentPage++;
-			setActivePage(&(*currentPage));
+			setActivePage(&(*currentPage), prevPage);
 		}
 	}
 	if(key == OF_KEY_DOWN){
 		if(currentPage != pages.begin()){
+			Page* prevPage = &(*currentPage);
 			currentPage--;
-			setActivePage(&(*currentPage));
+			setActivePage(&(*currentPage), prevPage);
 		}
 	}
 }
@@ -176,11 +190,21 @@ void ofApp::createSurfacePages(ofJson json, std::vector<string> fx){
 	}
 }
 //--------------------------------------------------------------
-void ofApp::setActivePage(Page* page){
+void ofApp::setActivePage(Page* page, Page* prevPage){
+	// TODO: Remove previous listener
+	if(prevPage != nullptr){
+	auto prevParameter = prevPage->getParameters()->begin();
+    	for(int i = 1; i < 9 && (prevParameter != prevPage->getParameters()->end()); i++){
+    		prevParameter->unlinkMidiComponent(platformM.midiComponents["fader_" + ofToString(i)]);
+    		prevParameter++;
+    	}
+	}
+
 	// Update fader control to fit input page
+	// Add new listeners
 	auto parameter = page->getParameters()->begin();
 	for(int i = 1; i < 9 && (parameter != page->getParameters()->end()); i++){
-		parameter->set(platformM.midiComponents["fader_" + ofToString(i)].value);
+		parameter->linkMidiComponent(platformM.midiComponents["fader_" + ofToString(i)]);
 		parameter++;
 	}
 
@@ -199,6 +223,9 @@ std::string ofApp::getStatusString(){
 	}
 
 	return s;
+}
+//--------------------------------------------------------------
+void ofApp::exit(){
 }
 
 //--------------------------------------------------------------

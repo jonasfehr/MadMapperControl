@@ -11,6 +11,8 @@
 		0BFC9C20FD7E3C8D5873AA97 /* ofxMidiIn.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3DD359247F3ED1550D8BB5C9 /* ofxMidiIn.cpp */; };
 		1A86B7721CAEBC6F1C572C45 /* ofxBaseMidi.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 94B3C3C21F92F9310CA90986 /* ofxBaseMidi.cpp */; };
 		1CD33E884D9E3358252E82A1 /* ofxToggle.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 907C5B5E104864A2D3A25745 /* ofxToggle.cpp */; };
+		2E5E578120E8C68E00F8941B /* MadEvent.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 2E5E577F20E8C68E00F8941B /* MadEvent.cpp */; };
+		2E5E578620E8D69100F8941B /* ofxMidiDevice.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 2E5E578320E8D69100F8941B /* ofxMidiDevice.cpp */; };
 		3AEFE4FA8AD5C72671AD07F8 /* ofxRtMidiOut.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 712B183BC00EBFFB1EEA5AB8 /* ofxRtMidiOut.cpp */; };
 		483908258D00B98B4BE69F07 /* ofxLabel.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 78D67A00EB899FAC09430597 /* ofxLabel.cpp */; };
 		4ADB88E2FB52E76A471065DE /* ofxOscParameterSync.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0AED834CE4DEC5260AF302A2 /* ofxOscParameterSync.cpp */; };
@@ -91,6 +93,12 @@
 		23640F57DF6C4BB6BFC5DA4C /* PacketListener.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.c.h; fileEncoding = 30; name = PacketListener.h; path = ../../../addons/ofxOsc/libs/oscpack/src/ip/PacketListener.h; sourceTree = SOURCE_ROOT; };
 		2834D88A62CD23F3DE2C47D1 /* ofxButton.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.c.h; fileEncoding = 30; name = ofxButton.h; path = ../../../addons/ofxGui/src/ofxButton.h; sourceTree = SOURCE_ROOT; };
 		2E5E577D20E7D29C00F8941B /* Page.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Page.hpp; sourceTree = "<group>"; };
+		2E5E577F20E8C68E00F8941B /* MadEvent.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = MadEvent.cpp; path = ../../../addons/ofxMadOscQuery/src/MadEvent.cpp; sourceTree = "<group>"; };
+		2E5E578020E8C68E00F8941B /* MadEvent.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = MadEvent.hpp; path = ../../../addons/ofxMadOscQuery/src/MadEvent.hpp; sourceTree = "<group>"; };
+		2E5E578220E8D69100F8941B /* MidiComponent.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = MidiComponent.h; path = ../../../addons/ofxMidiDevice/src/MidiComponent.h; sourceTree = "<group>"; };
+		2E5E578320E8D69100F8941B /* ofxMidiDevice.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = ofxMidiDevice.cpp; path = ../../../addons/ofxMidiDevice/src/ofxMidiDevice.cpp; sourceTree = "<group>"; };
+		2E5E578420E8D69100F8941B /* ChannelStrip.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ChannelStrip.h; path = ../../../addons/ofxMidiDevice/src/ChannelStrip.h; sourceTree = "<group>"; };
+		2E5E578520E8D69100F8941B /* MidiComponentGroup.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = MidiComponentGroup.h; path = ../../../addons/ofxMidiDevice/src/MidiComponentGroup.h; sourceTree = "<group>"; };
 		2FD4B0329909D3527F003494 /* UdpSocket.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.c.h; fileEncoding = 30; name = UdpSocket.h; path = ../../../addons/ofxOsc/libs/oscpack/src/ip/UdpSocket.h; sourceTree = SOURCE_ROOT; };
 		3B361208CD4107E479F04E7B /* NetworkingUtils.cpp */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 30; name = NetworkingUtils.cpp; path = ../../../addons/ofxOsc/libs/oscpack/src/ip/posix/NetworkingUtils.cpp; sourceTree = SOURCE_ROOT; };
 		3DD359247F3ED1550D8BB5C9 /* ofxMidiIn.cpp */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 30; name = ofxMidiIn.cpp; path = ../../../addons/ofxMidi/src/ofxMidiIn.cpp; sourceTree = SOURCE_ROOT; };
@@ -141,7 +149,6 @@
 		C70D8946940288799E82131E /* ofxSliderGroup.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.c.h; fileEncoding = 30; name = ofxSliderGroup.h; path = ../../../addons/ofxGui/src/ofxSliderGroup.h; sourceTree = SOURCE_ROOT; };
 		C88333E71C9457E441C33474 /* ofxButton.cpp */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 30; name = ofxButton.cpp; path = ../../../addons/ofxGui/src/ofxButton.cpp; sourceTree = SOURCE_ROOT; };
 		CAABA93752E6083A3E98E7FA /* ofxMidiDevice.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.c.h; fileEncoding = 30; name = ofxMidiDevice.h; path = ../../../addons/ofxMidiDevice/src/ofxMidiDevice.h; sourceTree = SOURCE_ROOT; };
-		CDB335C7C373ADC98A756E38 /* DeviceComponent.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.c.h; fileEncoding = 30; name = DeviceComponent.h; path = ../../../addons/ofxMidiDevice/src/DeviceComponent.h; sourceTree = SOURCE_ROOT; };
 		D9BFFBBF4CC43DEE890B3C3E /* OscTypes.cpp */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 30; name = OscTypes.cpp; path = ../../../addons/ofxOsc/libs/oscpack/src/osc/OscTypes.cpp; sourceTree = SOURCE_ROOT; };
 		DF49D76C45D5DB505A234880 /* ofxOscMessage.cpp */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 30; name = ofxOscMessage.cpp; path = ../../../addons/ofxOsc/src/ofxOscMessage.cpp; sourceTree = SOURCE_ROOT; };
 		E112B3AEBEA2C091BF2B40AE /* ofxPanel.cpp */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 30; name = ofxPanel.cpp; path = ../../../addons/ofxGui/src/ofxPanel.cpp; sourceTree = SOURCE_ROOT; };
@@ -190,9 +197,12 @@
 		2FD88A2B245422BE807BA8B6 /* src */ = {
 			isa = PBXGroup;
 			children = (
+				2E5E578420E8D69100F8941B /* ChannelStrip.h */,
+				2E5E578220E8D69100F8941B /* MidiComponent.h */,
+				2E5E578520E8D69100F8941B /* MidiComponentGroup.h */,
+				2E5E578320E8D69100F8941B /* ofxMidiDevice.cpp */,
 				43252BCE7BBB2384AF2F08C1 /* Defines.h */,
 				CAABA93752E6083A3E98E7FA /* ofxMidiDevice.h */,
-				CDB335C7C373ADC98A756E38 /* DeviceComponent.h */,
 			);
 			name = src;
 			sourceTree = "<group>";
@@ -279,6 +289,8 @@
 				18BA4038B060A550FEAFFEB1 /* Mixer.h */,
 				EB888A9B6CE71333CB0D563D /* MadParameter.h */,
 				17F8F005F4CEDF94794724C7 /* OscQueryEntry.h */,
+				2E5E577F20E8C68E00F8941B /* MadEvent.cpp */,
+				2E5E578020E8C68E00F8941B /* MadEvent.hpp */,
 			);
 			name = src;
 			sourceTree = "<group>";
@@ -574,6 +586,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E4B69E200A3A1BDC003C02F2 /* main.cpp in Sources */,
+				2E5E578120E8C68E00F8941B /* MadEvent.cpp in Sources */,
 				E4B69E210A3A1BDC003C02F2 /* ofApp.cpp in Sources */,
 				856AA354D08AB4B323081444 /* ofxBaseGui.cpp in Sources */,
 				853E0BA2F448076739446874 /* ofxColorPicker.cpp in Sources */,
@@ -598,6 +611,7 @@
 				72A929D3561B8232A182ABFC /* ofxOscBundle.cpp in Sources */,
 				640279EE111671BD026CB013 /* ofxOscReceiver.cpp in Sources */,
 				8F5205AEF8861EF234F0651A /* ofxOscSender.cpp in Sources */,
+				2E5E578620E8D69100F8941B /* ofxMidiDevice.cpp in Sources */,
 				62545D179C94265CA1389D4A /* OscOutboundPacketStream.cpp in Sources */,
 				879A251454401BC0B6E4F238 /* OscTypes.cpp in Sources */,
 				0546D1A38E13BD319CC9755B /* OscReceivedElements.cpp in Sources */,

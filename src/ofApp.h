@@ -12,6 +12,7 @@ public:
 	void setup();
 	void update();
 	void draw();
+	void exit();
 	
 	void keyPressed(int key);
 	void keyReleased(int key);
@@ -36,9 +37,10 @@ public:
 	void createMediaPages(ofJson json);
 	
 	void listenerFunction(ofAbstractParameter& e);
+	void madParameterEvent(MadEvent &e);
 	
 	std::string getStatusString();
 	
-	void setActivePage(Page* page);
+	void setActivePage(Page* page, Page* prevPage);
 	
 };

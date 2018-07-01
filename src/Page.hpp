@@ -33,6 +33,12 @@ public:
 	std::list<MadParameter>* getParameters(){
 		return &this->parameters;
 	}
+	
+	void removeListeners(MidiComponent &midiComponent){
+		for(auto& p : parameters){
+			p.unlinkMidiComponent(midiComponent);
+		}
+	}
 
 private:
 	std::list<MadParameter> parameters;
