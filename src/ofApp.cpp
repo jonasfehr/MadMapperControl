@@ -3,29 +3,20 @@
 //--------------------------------------------------------------
 void ofApp::setup(){
 	madOscQuery.setup("127.0.0.1", 8012, 8011);
-	madOscQuery.receive();
+	ofJson madmapperJson = madOscQuery.receive();
 	
 	//    platformM.setupFromFile("platformM.json");
 	//    platformM.setupFromFile("");
 	platformM.setup("Platform M+ V2.00");
 	
-	//    ofxMidiIn::listPorts();
-	//    platformM.setup("Platform M+ V1.06");
-	//    for(int i = 0; i < madOscQuery.mixer.parameters.size(); i++){
-	//        platformM.addFader(madOscQuery.mixer.parameters.at(i), i+1);
-	//
-	//    }
+	// JSON file
+//	auto fileName = "madMapperExampleFX.json";
+//	ofFile jsonFile(fileName);
+//	ofJson madmapperJson = ofLoadJson(jsonFile);
 	
-	// for each ?
-	
-	// All Opacities
-	auto fileName = "madMapperExampleFX.json";
-	ofFile jsonFile(fileName);
-	ofJson madmapperJson = ofLoadJson(jsonFile);
-	
+	// Create opacity pages
 	createOpacityPages(madmapperJson);
-	//	std::cout << pages.begin()->parameters.size() << endl;
-	
+
 	// One for each Surface
 	std::vector<string> fx = {};
 	createSurfacePages(madmapperJson, fx);
@@ -38,11 +29,8 @@ void ofApp::setup(){
 
 	// Add callback for parameter change in midi controller
 //	ofAddListener(platformM.parameterGroup.parameterChangedE(), this, &ofApp::exit);
-	ofAddListener(platformM.parameterGroup.parameterChangedE(), this, &ofApp::listenerFunction);
-	
-	ofAddListener(MadEvent::events, this, &ofApp::madParameterEvent);
-	
-
+//	ofAddListener(platformM.parameterGroup.parameterChangedE(), this, &ofApp::listenerFunction);
+//	ofAddListener(MadEvent::events, this, &ofApp::madParameterEvent);
 }
 
 //--------------------------------------------------------------
@@ -125,6 +113,14 @@ void ofApp::keyPressed(int key){
 			setActivePage(&(*currentPage), prevPage);
 		}
 	}
+	
+	// Cycle through current page
+	if(key == OF_KEY_LEFT){
+		(*currentPage).cycleBackward();
+	}
+	if(key == OF_KEY_RIGHT){
+		(*currentPage).cycleForward();
+	}
 }
 
 //--------------------------------------------------------------
@@ -139,12 +135,6 @@ void ofApp::createOpacityPages(ofJson json){
 		}
 		// Add element
 		page.addParameter(MadParameter(element["CONTENTS"][keyword]));
-		
-		// Max 8 params per page
-		if(page.isFull()){
-			pages.push_back(page);
-			page = Page(keyword);
-		}
 	}
 	
 	if(!page.isEmpty()){
@@ -173,11 +163,6 @@ void ofApp::createSurfacePages(ofJson json, std::vector<string> fx){
 			// TODO: Add FX
 			
 			// Max 8 params per page
-			if(page.isFull()){
-				pages.push_back(page);
-				idx++;
-				page = Page(keyword);
-			}
 		}
 		if(!page.isEmpty()){
 			pages.push_back(page);
@@ -214,6 +199,7 @@ void ofApp::setActivePage(Page* page, Page* prevPage){
 std::string ofApp::getStatusString(){
 	std::string s = "";
 	s+= "Current page: " + (*currentPage).getName();
+	s+= "\nRange: " + ofToString((*currentPage).getRange().first) + " " + ofToString((*currentPage).getRange().second);
 	s+= "\nParameters on page:";
 	
 	int parNum = 1;

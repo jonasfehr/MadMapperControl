@@ -14,15 +14,18 @@ public:
 			throw std::invalid_argument("A page cannot contain this many parameters!!");
 		}
 		parameters.push_back(parameter);
-	}
-	
-	bool isFull(){
-		// Cannot contain more parameters
-		return parameters.size() >= 8;
+		
+		// Set range
+		int upper = parameters.size();
+		
+		if(upper > 8){
+			upper = 8;
+		}
+		
+		range = std::make_pair(0, upper);
 	}
 	
 	bool isEmpty(){
-		// Contains no parameters
 		return parameters.size() == 0;
 	}
 	
@@ -34,6 +37,26 @@ public:
 		return &this->parameters;
 	}
 	
+	void cycleForward(){
+		if(range.second < parameters.size()){
+    		ofLog() << "Cycling forwards - new range: " << range.first << " to " << range.second;
+			range.first++;
+			range.second++;
+		}
+	}
+	
+	void cycleBackward(){
+		if(range.first > 0){
+    		ofLog() << "Cycling backwards - new range: " << range.first << " to " << range.second;
+			range.first--;
+			range.second--;
+		}
+	}
+	
+	std::pair<int,int> getRange(){
+		return range;
+	}
+	
 	void removeListeners(MidiComponent &midiComponent){
 		for(auto& p : parameters){
 			p.unlinkMidiComponent(midiComponent);
@@ -43,4 +66,5 @@ public:
 private:
 	std::list<MadParameter> parameters;
 	std::string name = "";
+	std::pair<int, int> range;
 };
