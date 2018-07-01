@@ -39,9 +39,9 @@ public:
 	
 	void listenerFunction(ofAbstractParameter& e);
 	void madParameterEvent(MadEvent &e);
-	
+
 	std::string getStatusString();
 	
 	void setActivePage(Page* page, Page* prevPage);
-	
+    void oscSendToMadMapper(ofxOscMessage &m);
 };

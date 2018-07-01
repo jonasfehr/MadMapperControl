@@ -27,10 +27,21 @@ void ofApp::setup(){
     currentPage = pages.begin();
     setActivePage(&(*currentPage), nullptr);
     
+    for(auto & page : pages) page.linkCycleControlComponents(platformM.midiComponents["chan_up"], platformM.midiComponents["chan_down"]);
+    
     // Add callback for parameter change in midi controller
     //    ofAddListener(platformM.parameterGroup.parameterChangedE(), this, &ofApp::exit);
     //    ofAddListener(platformM.parameterGroup.parameterChangedE(), this, &ofApp::listenerFunction);
     //    ofAddListener(MadEvent::events, this, &ofApp::madParameterEvent);
+    
+//    ofAddListener(pages.begin()->getParameters()->begin()->oscSendEvent, this, &ofApp::oscSendToMadMapper);
+    
+    for(auto & page : pages){
+        for (auto & parameter : *page.getParameters()) {
+            ofAddListener(parameter.oscSendEvent, this, &ofApp::oscSendToMadMapper);
+        }
+        
+    }
 }
 
 //--------------------------------------------------------------
@@ -55,9 +66,9 @@ void ofApp::listenerFunction(ofAbstractParameter& e){
 }
 
 //--------------------------------------------------------------
-void ofApp::madParameterEvent(MadEvent &e){
-    std::cout << e.oscAddress << endl;
-}
+//void ofApp::madParameterEvent(MadEvent &e){
+//    std::cout << e.oscAddress << endl;
+//}
 
 //--------------------------------------------------------------
 void ofApp::draw(){
@@ -119,10 +130,12 @@ void ofApp::keyPressed(int key){
     
     // Cycle through current page
     if(key == OF_KEY_LEFT){
-        (*currentPage).cycleBackward();
+        float p = 1;
+        (*currentPage).cycleBackward(p);
     }
     if(key == OF_KEY_RIGHT){
-        (*currentPage).cycleForward();
+        float p = 1;
+        (*currentPage).cycleForward(p);
     }
 }
 
@@ -223,6 +236,14 @@ std::string ofApp::getStatusString(){
 }
 //--------------------------------------------------------------
 void ofApp::exit(){
+    for(auto & page : pages) page.unlinkCycleControlComponents(platformM.midiComponents["chan_up"], platformM.midiComponents["chan_down"]);
+
+    for(auto & page : pages){
+        for (auto & parameter : *page.getParameters()) {
+            ofRemoveListener(parameter.oscSendEvent, this, &ofApp::oscSendToMadMapper);
+        }
+        
+    }
 }
 
 //--------------------------------------------------------------
@@ -275,5 +296,8 @@ void ofApp::dragEvent(ofDragInfo dragInfo){
     
 }
 
+void ofApp::oscSendToMadMapper(ofxOscMessage &m){
+    madOscQuery.oscSender.sendMessage(m, false);
+}
 
 

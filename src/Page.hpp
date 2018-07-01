@@ -1,6 +1,6 @@
 /*
-A page contains a list of MadParameters
-*/
+ A page contains a list of MadParameters
+ */
 
 #include "ofxMidiDevice.h"
 
@@ -14,10 +14,7 @@ public:
 	
 	void addParameter(MadParameter parameter){
 		parameters.push_front(parameter);
-		
-		// Set range
-		int upper = parameters.size();
-		
+		int upper = parameters.size(); // set range
 		if(upper > 8){
 			upper = 8;
 		}
@@ -37,8 +34,8 @@ public:
 		return &this->parameters;
 	}
 	
-	void cycleForward(){
-		if(range.second < parameters.size()){
+	void cycleForward(float & p){
+		if(range.second < parameters.size() && p ==1){
     		ofLog() << "Cycling forwards - new range: " << range.first << " to " << range.second;
 			unlinkDevice();
 			range.first++;
@@ -47,8 +44,8 @@ public:
 		}
 	}
 	
-	void cycleBackward(){
-		if(range.first > 1){
+	void cycleBackward(float & p){
+		if(range.first > 1 && p == 1){
     		ofLog() << "Cycling backwards - new range: " << range.first << " to " << range.second;
 			unlinkDevice();
 			range.first--;
@@ -83,6 +80,16 @@ public:
 	
 	std::pair<int,int> getRange(){
 		return range;
+	}
+
+	void linkCycleControlComponents(MidiComponent &midiComponentForward,MidiComponent &midiComponentBackward){
+		midiComponentForward.value.addListener(this, &Page::cycleForward);
+		midiComponentBackward.value.addListener(this, &Page::cycleBackward);
+	}
+	
+	void unlinkCycleControlComponents(MidiComponent &midiComponentForward,MidiComponent &midiComponentBackward){
+		midiComponentForward.value.removeListener(this, &Page::cycleForward);
+		midiComponentBackward.value.removeListener(this, &Page::cycleBackward);
 	}
 	
 private:
