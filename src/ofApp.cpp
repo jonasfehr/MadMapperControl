@@ -27,6 +27,8 @@ void ofApp::setup(){
     currentPage = pages.begin();
     setActivePage(&(*currentPage), nullptr);
     
+    for(auto & page : pages) page.linkCycleControlComponents(platformM.midiComponents["chan_up"], platformM.midiComponents["chan_down"]);
+    
     // Add callback for parameter change in midi controller
     //    ofAddListener(platformM.parameterGroup.parameterChangedE(), this, &ofApp::exit);
     //    ofAddListener(platformM.parameterGroup.parameterChangedE(), this, &ofApp::listenerFunction);
@@ -119,10 +121,12 @@ void ofApp::keyPressed(int key){
     
     // Cycle through current page
     if(key == OF_KEY_LEFT){
-        (*currentPage).cycleBackward();
+        float p = 1;
+        (*currentPage).cycleBackward(p);
     }
     if(key == OF_KEY_RIGHT){
-        (*currentPage).cycleForward();
+        float p = 1;
+        (*currentPage).cycleForward(p);
     }
 }
 
@@ -235,6 +239,8 @@ std::string ofApp::getStatusString(){
 }
 //--------------------------------------------------------------
 void ofApp::exit(){
+    for(auto & page : pages) page.unlinkCycleControlComponents(platformM.midiComponents["chan_up"], platformM.midiComponents["chan_down"]);
+
 }
 
 //--------------------------------------------------------------
