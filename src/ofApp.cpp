@@ -33,6 +33,15 @@ void ofApp::setup(){
     //    ofAddListener(platformM.parameterGroup.parameterChangedE(), this, &ofApp::exit);
     //    ofAddListener(platformM.parameterGroup.parameterChangedE(), this, &ofApp::listenerFunction);
     //    ofAddListener(MadEvent::events, this, &ofApp::madParameterEvent);
+    
+//    ofAddListener(pages.begin()->getParameters()->begin()->oscSendEvent, this, &ofApp::oscSendToMadMapper);
+    
+    for(auto & page : pages){
+        for (auto & parameter : *page.getParameters()) {
+            ofAddListener(parameter.oscSendEvent, this, &ofApp::oscSendToMadMapper);
+        }
+        
+    }
 }
 
 //--------------------------------------------------------------
@@ -57,9 +66,9 @@ void ofApp::listenerFunction(ofAbstractParameter& e){
 }
 
 //--------------------------------------------------------------
-void ofApp::madParameterEvent(MadEvent &e){
-    std::cout << e.oscAddress << endl;
-}
+//void ofApp::madParameterEvent(MadEvent &e){
+//    std::cout << e.oscAddress << endl;
+//}
 
 //--------------------------------------------------------------
 void ofApp::draw(){
@@ -241,6 +250,12 @@ std::string ofApp::getStatusString(){
 void ofApp::exit(){
     for(auto & page : pages) page.unlinkCycleControlComponents(platformM.midiComponents["chan_up"], platformM.midiComponents["chan_down"]);
 
+    for(auto & page : pages){
+        for (auto & parameter : *page.getParameters()) {
+            ofRemoveListener(parameter.oscSendEvent, this, &ofApp::oscSendToMadMapper);
+        }
+        
+    }
 }
 
 //--------------------------------------------------------------
@@ -293,5 +308,8 @@ void ofApp::dragEvent(ofDragInfo dragInfo){
     
 }
 
+void ofApp::oscSendToMadMapper(ofxOscMessage &m){
+    madOscQuery.oscSender.sendMessage(m, false);
+}
 
 

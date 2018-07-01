@@ -2,6 +2,7 @@
  A page contains a list of MadParameters
  */
 
+#include "ofApp.h"
 
 class Page{
 public:
@@ -23,6 +24,8 @@ public:
         }
         
         range = std::make_pair(0, upper);
+        
+
     }
     
     bool isEmpty(){
