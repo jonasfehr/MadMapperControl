@@ -2,17 +2,17 @@
 A page contains a list of MadParameters
 */
 
+#include "ofxMidiDevice.h"
+
 
 class Page{
 public:
-	Page(std::string name){
+	Page(std::string name, ofxMidiDevice* midiDevice){
 		this->name = name;
+		this->midiDevice = midiDevice;
 	};
 	
 	void addParameter(MadParameter parameter){
-		if(parameters.size() > 8){
-			throw std::invalid_argument("A page cannot contain this many parameters!!");
-		}
 		parameters.push_front(parameter);
 		
 		// Set range
@@ -53,18 +53,25 @@ public:
 		}
 	}
 	
+	void linkDevice(){
+		
+	}
+	
+	void unlinkDevice(){
+		auto prevParameter = parameters.begin();
+		for(int i = 1; i < 9 && (prevParameter != parameters.end()); i++){
+			prevParameter->unlinkMidiComponent(midiDevice->midiComponents["fader_" + ofToString(i)]);
+			prevParameter++;
+		}
+	}
+	
 	std::pair<int,int> getRange(){
 		return range;
 	}
 	
-	void removeListeners(MidiComponent &midiComponent){
-		for(auto& p : parameters){
-			p.unlinkMidiComponent(midiComponent);
-		}
-	}
-
 private:
 	std::list<MadParameter> parameters;
 	std::string name = "";
 	std::pair<int, int> range;
+	ofxMidiDevice* midiDevice;
 };
