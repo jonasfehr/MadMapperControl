@@ -22,18 +22,125 @@ void ofApp::setup(){
     
     // Setup all the specialised control.
     for(auto & page : pages) page.linkCycleControlComponents(platformM.midiComponents["chan_up"], platformM.midiComponents["chan_down"]);
+    platformM.midiComponents["bank_up"].value.addListener(this, &ofApp::bankForward);
+    platformM.midiComponents["bank_down"].value.addListener(this, &ofApp::bankBackward);
+    platformM.midiComponents["mixer"].value.addListener(this, &ofApp::selectMixer);
+
+    // Fixed Controlls
+//    fadeToBlack = madOscQuery.addParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["fade_toblack"]);
+//    fadeToBlack->linkMidiComponent(platformM.midiComponents["fader_M"]);
+//
+//    speed = madOscQuery.addParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["BPM"]);
+//    speed->linkMidiComponent(platformM.midiComponents["jog"]);
     
+    // Select Group.
+    selectGroup.doCheckbox = true;
+    for(int i = 1; i<9; i++){
+        selectGroup.add(platformM.midiComponents["sel_"+ofToString(i)]);
+    }
+    ofAddListener(selectGroup.lastChangedE, this, &ofApp::selectSurface);
+    ofAddListener(selectGroup.noneSelectedE, this, &ofApp::selectMixer);
 }
+
+// CALBACK FUNCTIONS
+// --------------------------------------------------------
+void ofApp::selectSurface(string & name){
+    if(currentPage->getName() == "opacity"){
+        // Find the name of the corresponding surface
+        auto result = ofSplitString(name, "_");
+        int index = ofToInt(result[1]);
+        std::list<MadParameter>::iterator parameters = currentPage->getParameters()->begin();
+        std::advance(parameters, index);
+        string surface = parameters->getName();
+        
+        std::list<MadParameterPage>::iterator pageIt;
+        for(pageIt = pages.begin(); pageIt != pages.end(); pageIt++){
+            if(pageIt->getName()==surface){
+                MadParameterPage* prevPage = &(*currentPage);
+                currentPage = pageIt;
+                setActivePage(&(*currentPage), prevPage);
+            }
+        }
+        
+        oscSelectSurface(surface);
+    }
+}
+
+void ofApp::selectMixer(float & p){
+    MadParameterPage* prevPage = &(*currentPage);
+    currentPage = pages.begin();
+    setActivePage(&(*currentPage), prevPage);
+    
+    for(auto & midiComponent : selectGroup.midiComponents){
+        midiComponent.second->value.disableEvents();
+        midiComponent.second->value = 0;
+        midiComponent.second->update();
+        midiComponent.second->value.enableEvents();
+    }
+}
+
+void ofApp::bankForward(float & p){
+    if(next(currentPage) != pages.end() && p == 1){
+        MadParameterPage* prevPage = &(*currentPage);
+        currentPage++;
+        setActivePage(&(*currentPage), prevPage);
+    }
+}
+
+void ofApp::bankBackward(float & p){
+    if(currentPage != pages.begin() && p == 1){
+        MadParameterPage* prevPage = &(*currentPage);
+        currentPage--;
+        setActivePage(&(*currentPage), prevPage);
+    }
+}
+
+void ofApp::removeListeners(){
+    for(auto & page : pages) page.unlinkCycleControlComponents(platformM.midiComponents["chan_up"], platformM.midiComponents["chan_down"]);
+    
+    currentPage->unlinkDevice();
+    
+    platformM.midiComponents["bank_up"].value.removeListener(this, &ofApp::bankForward);
+    platformM.midiComponents["bank_down"].value.removeListener(this, &ofApp::bankBackward);
+    
+//    fadeToBlack->unlinkMidiComponent(platformM.midiComponents["fader_M"]);
+//    speed->unlinkMidiComponent(platformM.midiComponents["jog"]);
+    
+    ofRemoveListener(selectGroup.lastChangedE, this, &ofApp::selectSurface);
+    ofRemoveListener(selectGroup.noneSelectedE, this, &ofApp::selectSurface);
+
+}
+
+// OSC FUNCTIONS
+// -------------------------------------------------------------
+void ofApp::oscSelectSurface(string name){
+    string oscAddress = "/surfaces/"+name+"/select";
+    ofxOscMessage m;
+    m.setAddress(oscAddress);
+    m.addFloatArg(1);
+    madOscQuery.oscSendToMadMapper(m);
+}
+
+void ofApp::oscRequestMediaName(){
+    string oscAddress = "/getControlValues?url=/medias/select_by_name";
+    ofxOscMessage m;
+    m.setAddress(oscAddress);
+    m.addFloatArg(1);
+    madOscQuery.oscSendToMadMapper(m);
+}
+
 
 //--------------------------------------------------------------
 void ofApp::update(){
     ofSetWindowTitle((*currentPage).getName());
+
 }
 
 //--------------------------------------------------------------
 void ofApp::draw(){
+
     
-    //    platformM.drawRawInput();
+//        platformM.drawRawInput();
     platformM.gui.setPosition(ofGetWidth()-230,10);
     platformM.gui.draw();
     
@@ -45,6 +152,8 @@ void ofApp::draw(){
 
 //--------------------------------------------------------------
 void ofApp::keyPressed(int key){
+    float p = 1; // for use in callback functions
+
     if(key == 's'){
         //        platformM.saveMidiComponentsToFile("platformM.json");
     }
@@ -60,30 +169,22 @@ void ofApp::keyPressed(int key){
     }
     
     if(key == OF_KEY_UP){
-        if(next(currentPage) != pages.end()){
-            MadParameterPage* prevPage = &(*currentPage);
-            currentPage++;
-            setActivePage(&(*currentPage), prevPage);
-        }
+        bankForward(p);
     }
     if(key == OF_KEY_DOWN){
-        if(currentPage != pages.begin()){
-            MadParameterPage* prevPage = &(*currentPage);
-            currentPage--;
-            setActivePage(&(*currentPage), prevPage);
-        }
+        bankBackward(p);
     }
     
     // Cycle through current page
     if(key == OF_KEY_LEFT){
-        float p = 1;
         (*currentPage).cycleBackward(p);
     }
     if(key == OF_KEY_RIGHT){
-        float p = 1;
         (*currentPage).cycleForward(p);
     }
 }
+
+
 //--------------------------------------------------------------
 void ofApp::setActivePage(MadParameterPage* page, MadParameterPage* prevPage){
     if(prevPage != nullptr){
@@ -113,10 +214,7 @@ std::string ofApp::getStatusString(){
 
 //--------------------------------------------------------------
 void ofApp::exit(){
-    for(auto & page : pages) page.unlinkCycleControlComponents(platformM.midiComponents["chan_up"], platformM.midiComponents["chan_down"]);
-    
-    currentPage->unlinkDevice();
-
+    removeListeners();
 }
 
 //--------------------------------------------------------------
