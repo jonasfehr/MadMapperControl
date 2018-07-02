@@ -13,6 +13,14 @@
     {
       "name": "ALL THE STUFF",
       "surfaces": ["*"]
+    },
+    {
+      "name": "All fixtures",
+      "fixtures": ["*"]
+    },
+    {
+      "name": "All medias",
+      "medias": ["*"]
     }
   ]
 }
