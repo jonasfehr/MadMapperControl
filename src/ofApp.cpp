@@ -31,7 +31,7 @@ void ofApp::selectSurface(string & name){
         auto oscAddress = ofSplitString((*parameters)->getOscAddress(), "/");
         string subPageName = oscAddress[2];
         
-        cout << subPageName << endl;
+        previousPage = currentPage;
         
         std::list<MadParameterPage>::iterator pageIt;
         for(pageIt = pages.begin(); pageIt != pages.end(); pageIt++){
@@ -48,7 +48,7 @@ void ofApp::selectSurface(string & name){
 
 void ofApp::selectMixer(float & p){
 	MadParameterPage* prevPage = &(*currentPage);
-	currentPage = pages.begin();
+	currentPage = previousPage;
 	setActivePage(&(*currentPage), prevPage);
 	
 	for(auto & midiComponent : selectGroup.midiComponents){
@@ -57,6 +57,14 @@ void ofApp::selectMixer(float & p){
 		midiComponent.second->update();
 		midiComponent.second->value.enableEvents();
 	}
+}
+
+void ofApp::chanForward(float & p){
+    (*currentPage).cycleForward();
+}
+
+void ofApp::chanBackward(float & p){
+    (*currentPage).cycleBackward();
 }
 
 void ofApp::bankForward(float & p){
@@ -76,10 +84,11 @@ void ofApp::bankBackward(float & p){
 }
 
 void ofApp::removeListeners(){
-	for(auto & page : pages) page.unlinkCycleControlComponents(platformM.midiComponents["chan_up"], platformM.midiComponents["chan_down"]);
 	
 	currentPage->unlinkDevice();
 	
+    platformM.midiComponents["chan_up"].value.removeListener(this, &ofApp::chanForward);
+    platformM.midiComponents["chan_down"].value.removeListener(this, &ofApp::chanBackward);
 	platformM.midiComponents["bank_up"].value.removeListener(this, &ofApp::bankForward);
 	platformM.midiComponents["bank_down"].value.removeListener(this, &ofApp::bankBackward);
     platformM.midiComponents["rep"].value.removeListener(this, &ofApp::reloadFromServer);
@@ -133,11 +142,14 @@ void ofApp::setupPages(ofJson madmapperJson){
 	
 	// Set initial page
 	currentPage = pages.begin();
+    previousPage = currentPage;
+
 	setActivePage(&(*currentPage), nullptr);
 	
 	// Setup all the specialised control.
-	for(auto & page : pages) page.linkCycleControlComponents(platformM.midiComponents["chan_up"], platformM.midiComponents["chan_down"]);
-	platformM.midiComponents["bank_up"].value.addListener(this, &ofApp::bankForward);
+    platformM.midiComponents["chan_up"].value.addListener(this, &ofApp::chanForward);
+    platformM.midiComponents["chan_down"].value.addListener(this, &ofApp::chanBackward);
+    platformM.midiComponents["bank_up"].value.addListener(this, &ofApp::bankForward);
 	platformM.midiComponents["bank_down"].value.addListener(this, &ofApp::bankBackward);
 	platformM.midiComponents["mixer"].value.addListener(this, &ofApp::selectMixer);
     platformM.midiComponents["rep"].value.addListener(this, &ofApp::reloadFromServer);
@@ -209,10 +221,10 @@ void ofApp::keyPressed(int key){
 	
 	// Cycle through current page
 	if(key == OF_KEY_LEFT && !madMapperLoadError){
-		(*currentPage).cycleBackward(p);
+		chanBackward(p);
 	}
 	if(key == OF_KEY_RIGHT && !madMapperLoadError){
-		(*currentPage).cycleForward(p);
+		chanForward(p);
 	}
 }
 

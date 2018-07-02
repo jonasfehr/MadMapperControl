@@ -32,6 +32,7 @@ public:
     
     std::list<MadParameterPage> pages;
     std::list<MadParameterPage>::iterator currentPage;
+    std::list<MadParameterPage>::iterator previousPage;
     std::map<string, MadParameterPage> mediaPages;
 
 	void setActivePage(MadParameterPage* page, MadParameterPage* prevPage);
@@ -41,6 +42,8 @@ public:
 	ofImage errorImage;
 
     // FOR UX
+    void chanForward(float & p);
+    void chanBackward(float & p);
     void bankForward(float & p);
     void bankBackward(float & p);
     MadParameter * fadeToBlack;
