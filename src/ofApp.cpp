@@ -17,6 +17,9 @@ void ofApp::setup(){
 		
 		// One for each Surface
 		madOscQuery.createSurfacePages(pages, &platformM, madmapperJson);
+        
+        // One for each media
+        madOscQuery.createMediaPages(mediaPages, &platformM, madmapperJson);
 		
 		// Set initial page
 		currentPage = pages.begin();
