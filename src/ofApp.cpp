@@ -122,14 +122,14 @@ void ofApp::update(){
 }
 
 void ofApp::setupPages(ofJson madmapperJson){
-	// Create opacity pages
-	madOscQuery.createOpacityPages(pages, &platformM, madmapperJson);
-	
 	// One for each Surface
 	madOscQuery.createSurfacePages(pages, &platformM, madmapperJson);
 	
 	// One for each media
 	madOscQuery.createMediaPages(mediaPages, &platformM, madmapperJson);
+	
+	// Custom
+	madOscQuery.createCustomPage(pages, &platformM, "custom_page.json");
 	
 	// Set initial page
 	currentPage = pages.begin();
