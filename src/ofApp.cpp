@@ -16,6 +16,9 @@ void ofApp::setup(){
     // One for each Surface
     madOscQuery.createSurfacePages(pages, &platformM, madmapperJson);
     
+    // One for each media
+    madOscQuery.createMediaPages(mediaPages, &platformM, madmapperJson);
+    
     // Set initial page
     currentPage = pages.begin();
     setActivePage(&(*currentPage), nullptr);
@@ -33,7 +36,15 @@ void ofApp::setup(){
     speed = madOscQuery.addParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["GlobalBPM"]["CONTENTS"]["BPM"]);
     speed->linkMidiComponent(platformM.midiComponents["jog"]);
     
-    // Select Group.
+    // Select Group -> select surface page
+    selectGroup.doCheckbox = true;
+    for(int i = 1; i<9; i++){
+        selectGroup.add(platformM.midiComponents["sel_"+ofToString(i)]);
+    }
+    ofAddListener(selectGroup.lastChangedE, this, &ofApp::selectSurface);
+    ofAddListener(selectGroup.noneSelectedE, this, &ofApp::selectMixer);
+    
+    // Rec Group -> select media page
     selectGroup.doCheckbox = true;
     for(int i = 1; i<9; i++){
         selectGroup.add(platformM.midiComponents["sel_"+ofToString(i)]);

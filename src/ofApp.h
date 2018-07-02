@@ -46,6 +46,9 @@ public:
     MadParameter * fadeToBlack;
     MadParameter * speed;
     MidiComponentGroup selectGroup;
+    MidiComponentGroup muteGroup; // not used yet
+    MidiComponentGroup soloGroup; // not used yet
+    MidiComponentGroup recGroup;
     void selectSurface(string & name);
     void selectMixer(float & p);
     
