@@ -26,8 +26,6 @@ public:
 	void dragEvent(ofDragInfo dragInfo);
 	void gotMessage(ofMessage msg);
 	
-
-	
 	ofxMadOscQuery madOscQuery;
     ofxMidiDevice platformM;
     ofxMidiDevice launchpad;
@@ -37,6 +35,8 @@ public:
     std::map<string, MadParameterPage> mediaPages;
 
 	void setActivePage(MadParameterPage* page, MadParameterPage* prevPage);
+	void setupPages(ofJson madMapperJson);
+	bool reloadFromServer();
     std::string getStatusString();
 	bool madMapperLoadError = true;
 	ofImage errorImage;

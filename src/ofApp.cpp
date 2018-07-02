@@ -12,42 +12,9 @@ void ofApp::setup(){
 	madMapperLoadError = madmapperJson == nullptr;
 	
 	if(!madMapperLoadError){
-		// Create opacity pages
-		madOscQuery.createOpacityPages(pages, &platformM, madmapperJson);
-		
-		// One for each Surface
-		madOscQuery.createSurfacePages(pages, &platformM, madmapperJson);
-        
-        // One for each media
-        madOscQuery.createMediaPages(mediaPages, &platformM, madmapperJson);
-		
-		// Set initial page
-		currentPage = pages.begin();
-		setActivePage(&(*currentPage), nullptr);
-		
-		// Setup all the specialised control.
-		for(auto & page : pages) page.linkCycleControlComponents(platformM.midiComponents["chan_up"], platformM.midiComponents["chan_down"]);
-		platformM.midiComponents["bank_up"].value.addListener(this, &ofApp::bankForward);
-		platformM.midiComponents["bank_down"].value.addListener(this, &ofApp::bankBackward);
-		platformM.midiComponents["mixer"].value.addListener(this, &ofApp::selectMixer);
-		
-		// Fixed Controlls
-		fadeToBlack = madOscQuery.addParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["fade_to_black"]);
-		fadeToBlack->linkMidiComponent(platformM.midiComponents["fader_M"]);
-		
-		speed = madOscQuery.addParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["GlobalBPM"]["CONTENTS"]["BPM"]);
-		speed->linkMidiComponent(platformM.midiComponents["jog"]);
-		
-		// Select Group.
-		selectGroup.doCheckbox = true;
-		for(int i = 1; i<9; i++){
-			selectGroup.add(platformM.midiComponents["sel_"+ofToString(i)]);
-		}
-		ofAddListener(selectGroup.lastChangedE, this, &ofApp::selectSurface);
-		ofAddListener(selectGroup.noneSelectedE, this, &ofApp::selectMixer);
-	}else{
-		errorImage.load("debug.png");
+		setupPages(madmapperJson);
 	}
+	errorImage.load("debug.png");
 }
 
 // CALBACK FUNCTIONS
@@ -147,6 +114,42 @@ void ofApp::update(){
 	}
 }
 
+void ofApp::setupPages(ofJson madmapperJson){
+	// Create opacity pages
+	madOscQuery.createOpacityPages(pages, &platformM, madmapperJson);
+	
+	// One for each Surface
+	madOscQuery.createSurfacePages(pages, &platformM, madmapperJson);
+	
+	// One for each media
+	madOscQuery.createMediaPages(mediaPages, &platformM, madmapperJson);
+	
+	// Set initial page
+	currentPage = pages.begin();
+	setActivePage(&(*currentPage), nullptr);
+	
+	// Setup all the specialised control.
+	for(auto & page : pages) page.linkCycleControlComponents(platformM.midiComponents["chan_up"], platformM.midiComponents["chan_down"]);
+	platformM.midiComponents["bank_up"].value.addListener(this, &ofApp::bankForward);
+	platformM.midiComponents["bank_down"].value.addListener(this, &ofApp::bankBackward);
+	platformM.midiComponents["mixer"].value.addListener(this, &ofApp::selectMixer);
+	
+	// Fixed Controlls
+	fadeToBlack = madOscQuery.addParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["fade_to_black"]);
+	fadeToBlack->linkMidiComponent(platformM.midiComponents["fader_M"]);
+	
+	speed = madOscQuery.addParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["GlobalBPM"]["CONTENTS"]["BPM"]);
+	speed->linkMidiComponent(platformM.midiComponents["jog"]);
+	
+	// Select Group.
+	selectGroup.doCheckbox = true;
+	for(int i = 1; i<9; i++){
+		selectGroup.add(platformM.midiComponents["sel_"+ofToString(i)]);
+	}
+	ofAddListener(selectGroup.lastChangedE, this, &ofApp::selectSurface);
+	ofAddListener(selectGroup.noneSelectedE, this, &ofApp::selectMixer);
+}
+
 //--------------------------------------------------------------
 void ofApp::draw(){
 	if(!madMapperLoadError){
@@ -172,6 +175,11 @@ void ofApp::keyPressed(int key){
 	
 	if(key == 's'){
 		//        platformM.saveMidiComponentsToFile("platformM.json");
+	}
+	
+	if(key == ' '){
+		auto success = reloadFromServer();
+		madMapperLoadError = !success;
 	}
 	
 	if(key == 'l'){
@@ -225,7 +233,40 @@ std::string ofApp::getStatusString(){
 	}
 	return s;
 }
-
+//--------------------------------------------------------------
+bool ofApp::reloadFromServer(){
+	ofLog(OF_LOG_NOTICE) << "Attempting reload from server" << endl;
+	// Save previous location
+	std::string prevPageName = (*currentPage).getName();
+	int prevLowerBound = (*currentPage).getRange().first;
+	
+	// Reloads parameters from MadMapper
+	ofJson madmapperJson = madOscQuery.receive();
+	if(madmapperJson == nullptr){
+	ofLog(OF_LOG_WARNING) << "Reload unsuccessful!" << endl;
+		return false;
+	}
+	// Setups pages
+	removeListeners();
+	selectGroup.clear();
+	pages.clear();
+	setupPages(madmapperJson);
+	
+	std::list<MadParameterPage>::iterator pageIt;
+	for(pageIt = pages.begin(); pageIt != pages.end(); pageIt++){
+		if(pageIt->getName() == prevPageName){
+			MadParameterPage* prevPage = &(*currentPage);
+			currentPage = pageIt;
+			setActivePage(&(*currentPage), nullptr);
+			(*currentPage).setLowerBound(prevLowerBound);
+		}
+	}
+//
+	// Assigns current page and range to previous
+	// returns whether successful or not
+	ofLog(OF_LOG_NOTICE) << "Reload successful!" << endl;
+	return true;
+}
 
 //--------------------------------------------------------------
 void ofApp::exit(){
