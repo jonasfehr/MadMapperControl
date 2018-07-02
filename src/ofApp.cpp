@@ -20,25 +20,30 @@ void ofApp::setup(){
 // CALBACK FUNCTIONS
 // --------------------------------------------------------
 void ofApp::selectSurface(string & name){
-	if(currentPage->getName() == "opacity"){
-		// Find the name of the corresponding surface
-		auto result = ofSplitString(name, "_");
-		int index = ofToInt(result[1]);
-		std::list<MadParameter*>::iterator parameters = currentPage->getParameters()->begin();
-		std::advance(parameters, index);
-		string surface = (*parameters)->getName();
-		
-		std::list<MadParameterPage>::iterator pageIt;
-		for(pageIt = pages.begin(); pageIt != pages.end(); pageIt++){
-			if(pageIt->getName()==surface){
-				MadParameterPage* prevPage = &(*currentPage);
-				currentPage = pageIt;
-				setActivePage(&(*currentPage), prevPage);
-			}
-		}
-		
-		oscSelectSurface(surface);
-	}
+    // Find the name of the corresponding surface
+    auto result = ofSplitString(name, "_");
+    int index = ofToInt(result[1]);
+    if(currentPage->getParameters()->size()<index) return; // catch if no parameter connected
+    std::list<MadParameter*>::iterator parameters = currentPage->getParameters()->begin();
+    std::advance(parameters, index);
+    
+    if((*parameters)->isSelectable()){
+        auto oscAddress = ofSplitString((*parameters)->getOscAddress(), "/");
+        string subPageName = oscAddress[2];
+        
+        cout << subPageName << endl;
+        
+        std::list<MadParameterPage>::iterator pageIt;
+        for(pageIt = pages.begin(); pageIt != pages.end(); pageIt++){
+            if(pageIt->getName()==subPageName){
+                MadParameterPage* prevPage = &(*currentPage);
+                currentPage = pageIt;
+                setActivePage(&(*currentPage), prevPage);
+            }
+        }
+        
+        oscSelectSurface(subPageName);
+    }
 }
 
 void ofApp::selectMixer(float & p){
