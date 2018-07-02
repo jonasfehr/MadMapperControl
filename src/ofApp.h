@@ -26,15 +26,33 @@ public:
 	void dragEvent(ofDragInfo dragInfo);
 	void gotMessage(ofMessage msg);
 	
-	std::list<MadParameterPage> pages;
-	std::list<MadParameterPage>::iterator currentPage;
+
 	
 	ofxMadOscQuery madOscQuery;
     ofxMidiDevice platformM;
     ofxMidiDevice launchpad;
+    
+    std::list<MadParameterPage> pages;
+    std::list<MadParameterPage>::iterator currentPage;
+    std::map<string, MadParameterPage> mediaPages;
 
 	void setActivePage(MadParameterPage* page, MadParameterPage* prevPage);
     std::string getStatusString();
     
-    void oscSendToMadMapper(ofxOscMessage &m);
+    
+    // FOR UX
+    void bankForward(float & p);
+    void bankBackward(float & p);
+    MadParameter * fadeToBlack;
+    MadParameter * speed;
+    MidiComponentGroup selectGroup;
+    void selectSurface(string & name);
+    void selectMixer(float & p);
+    
+    // OSC functions
+    void oscSelectSurface(string name);
+    void oscRequestMediaName();
+
+    void removeListeners();
+
 };
