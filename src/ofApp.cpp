@@ -259,12 +259,13 @@ bool ofApp::reloadFromServer(){
 			currentPage = pageIt;
 			setActivePage(&(*currentPage), nullptr);
 			(*currentPage).setLowerBound(prevLowerBound);
+			ofLog(OF_LOG_NOTICE) << "Reload successfully and resuming from " << prevPageName << endl;
+			return true;
 		}
 	}
-//
-	// Assigns current page and range to previous
-	// returns whether successful or not
-	ofLog(OF_LOG_NOTICE) << "Reload successful!" << endl;
+	ofLog(OF_LOG_NOTICE) << "Reload successful assigning to first page!" << endl;
+	currentPage = pages.begin();
+	setActivePage(&(*currentPage), nullptr);
 	return true;
 }
 
