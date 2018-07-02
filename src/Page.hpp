@@ -12,7 +12,7 @@ public:
 		this->midiDevice = midiDevice;
 	};
 	
-	void addParameter(MadParameter parameter){
+	void addParameter(MadParameter* parameter){
 		parameters.push_front(parameter);
 		int upper = parameters.size(); // set range
 		if(upper > 8){
@@ -30,7 +30,7 @@ public:
 		return this->name;
 	}
 	
-	std::list<MadParameter>* getParameters(){
+	std::list<MadParameter*>* getParameters(){
 		return &this->parameters;
 	}
 	
@@ -61,7 +61,7 @@ public:
 		}
 		
 		for(int i = 1; i < 9 && (parameter != parameters.end()); i++){
-			parameter->linkMidiComponent(midiDevice->midiComponents["fader_" + ofToString(i)]);
+			(*parameter)->linkMidiComponent(midiDevice->midiComponents["fader_" + ofToString(i)]);
 			parameter++;
 		}
 	}
@@ -73,7 +73,7 @@ public:
 		}
 		
 		for(int i = 1; i < 9 && (prevParameter != parameters.end()); i++){
-			prevParameter->unlinkMidiComponent(midiDevice->midiComponents["fader_" + ofToString(i)]);
+			(*prevParameter)->unlinkMidiComponent(midiDevice->midiComponents["fader_" + ofToString(i)]);
 			prevParameter++;
 		}
 	}
@@ -93,7 +93,7 @@ public:
 	}
 	
 private:
-	std::list<MadParameter> parameters;
+	std::list<MadParameter*> parameters;
 	std::string name = "";
 	std::pair<int, int> range;
 	ofxMidiDevice* midiDevice;

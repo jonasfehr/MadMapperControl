@@ -55,7 +55,7 @@ void ofApp::keyPressed(int key){
     
     if(key == 'o'){
         for(auto& p : *(*currentPage).getParameters()){
-            std::cout << p.getParameterValue() << endl;
+            std::cout << p->getParameterValue() << endl;
         }
     }
     
@@ -103,7 +103,7 @@ std::string ofApp::getStatusString(){
     
     int parNum = 1;
     for(auto& p : *(*currentPage).getParameters()){
-        s+= "\n" + ofToString(parNum) + ") " + p.oscAddress + " " + ofToString(p.getParameterValue());
+        s+= "\n" + ofToString(parNum) + ") " + p->oscAddress + " " + ofToString(p->getParameterValue());
         parNum++;
     }
     
