@@ -49,9 +49,9 @@ void ofApp::selectSurface(string & name){
         // Find the name of the corresponding surface
         auto result = ofSplitString(name, "_");
         int index = ofToInt(result[1]);
-        std::list<MadParameter>::iterator parameters = currentPage->getParameters()->begin();
+        std::list<MadParameter*>::iterator parameters = currentPage->getParameters()->begin();
         std::advance(parameters, index);
-        string surface = parameters->getName();
+        string surface = (*parameters)->getName();
         
         std::list<MadParameterPage>::iterator pageIt;
         for(pageIt = pages.begin(); pageIt != pages.end(); pageIt++){
