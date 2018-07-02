@@ -5,6 +5,14 @@
       "surfaces": ["*/opacity"],
       "fixtures": ["adf"],
       "medias": ["lyCircles"]
+    },
+    {
+      "name": "Only shrek opacity",
+      "surfaces": ["/surfaces/Shrek/opacity"]
+    },
+    {
+      "name": "ALL THE STUFF",
+      "surfaces": ["*"]
     }
   ]
 }
