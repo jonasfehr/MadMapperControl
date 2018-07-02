@@ -27,11 +27,11 @@ void ofApp::setup(){
     platformM.midiComponents["mixer"].value.addListener(this, &ofApp::selectMixer);
 
     // Fixed Controlls
-//    fadeToBlack = madOscQuery.addParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["fade_toblack"]);
-//    fadeToBlack->linkMidiComponent(platformM.midiComponents["fader_M"]);
-//
-//    speed = madOscQuery.addParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["BPM"]);
-//    speed->linkMidiComponent(platformM.midiComponents["jog"]);
+    fadeToBlack = madOscQuery.addParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["fade_to_black"]);
+    fadeToBlack->linkMidiComponent(platformM.midiComponents["fader_M"]);
+
+    speed = madOscQuery.addParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["GlobalBPM"]["CONTENTS"]["BPM"]);
+    speed->linkMidiComponent(platformM.midiComponents["jog"]);
     
     // Select Group.
     selectGroup.doCheckbox = true;
@@ -103,8 +103,8 @@ void ofApp::removeListeners(){
     platformM.midiComponents["bank_up"].value.removeListener(this, &ofApp::bankForward);
     platformM.midiComponents["bank_down"].value.removeListener(this, &ofApp::bankBackward);
     
-//    fadeToBlack->unlinkMidiComponent(platformM.midiComponents["fader_M"]);
-//    speed->unlinkMidiComponent(platformM.midiComponents["jog"]);
+    fadeToBlack->unlinkMidiComponent(platformM.midiComponents["fader_M"]);
+    speed->unlinkMidiComponent(platformM.midiComponents["jog"]);
     
     ofRemoveListener(selectGroup.lastChangedE, this, &ofApp::selectSurface);
     ofRemoveListener(selectGroup.noneSelectedE, this, &ofApp::selectSurface);
