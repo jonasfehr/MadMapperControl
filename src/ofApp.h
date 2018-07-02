@@ -26,8 +26,6 @@ public:
 	void dragEvent(ofDragInfo dragInfo);
 	void gotMessage(ofMessage msg);
 	
-
-	
 	ofxMadOscQuery madOscQuery;
     ofxMidiDevice platformM;
     ofxMidiDevice launchpad;
@@ -37,6 +35,7 @@ public:
     std::map<string, MadParameterPage> mediaPages;
 
 	void setActivePage(MadParameterPage* page, MadParameterPage* prevPage);
+	void setupPages(ofJson madMapperJson);
     std::string getStatusString();
 	bool madMapperLoadError = true;
 	ofImage errorImage;
@@ -52,6 +51,8 @@ public:
     MidiComponentGroup recGroup;
     void selectSurface(string & name);
     void selectMixer(float & p);
+    bool reloadFromServer(float & p);
+
     
     // OSC functions
     void oscSelectSurface(string name);
