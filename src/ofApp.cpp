@@ -135,10 +135,10 @@ void ofApp::setupPages(ofJson madmapperJson){
 	platformM.midiComponents["mixer"].value.addListener(this, &ofApp::selectMixer);
 	
 	// Fixed Controlls
-	fadeToBlack = madOscQuery.addParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["fade_to_black"]);
+	fadeToBlack = madOscQuery.createParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["fade_to_black"]);
 	fadeToBlack->linkMidiComponent(platformM.midiComponents["fader_M"]);
 	
-	speed = madOscQuery.addParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["GlobalBPM"]["CONTENTS"]["BPM"]);
+	speed = madOscQuery.createParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["GlobalBPM"]["CONTENTS"]["BPM"]);
 	speed->linkMidiComponent(platformM.midiComponents["jog"]);
 	
 	// Select Group.
