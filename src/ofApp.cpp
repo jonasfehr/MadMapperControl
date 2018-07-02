@@ -21,6 +21,9 @@ void ofApp::setup(){
         // One for each media
         madOscQuery.createMediaPages(mediaPages, &platformM, madmapperJson);
 		
+		// Create custom pages
+		madOscQuery.createCustomPage(pages, &platformM, "custom_page.json");
+		
 		// Set initial page
 		currentPage = pages.begin();
 		setActivePage(&(*currentPage), nullptr);

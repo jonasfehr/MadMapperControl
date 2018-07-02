@@ -1,0 +1,15 @@
+{
+  "pages": [
+    {
+      "name": "Opacities",
+      "surfaces": ["*"],
+      "fixtures": ["adf"],
+      "medias": ["lyCircles"]
+    },
+    {
+      "name": "Custom page 2",
+      "fixtures": ["adf"],
+      "medias": ["WobblyCircles"]
+    }
+  ]
+}
