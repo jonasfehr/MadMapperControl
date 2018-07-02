@@ -38,8 +38,9 @@ public:
 
 	void setActivePage(MadParameterPage* page, MadParameterPage* prevPage);
     std::string getStatusString();
-    
-    
+	bool madMapperLoadError = true;
+	ofImage errorImage;
+
     // FOR UX
     void bankForward(float & p);
     void bankBackward(float & p);
