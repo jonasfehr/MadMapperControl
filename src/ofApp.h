@@ -36,7 +36,6 @@ public:
 
 	void setActivePage(MadParameterPage* page, MadParameterPage* prevPage);
 	void setupPages(ofJson madMapperJson);
-	bool reloadFromServer();
     std::string getStatusString();
 	bool madMapperLoadError = true;
 	ofImage errorImage;
@@ -52,6 +51,8 @@ public:
     MidiComponentGroup recGroup;
     void selectSurface(string & name);
     void selectMixer(float & p);
+    bool reloadFromServer(float & p);
+
     
     // OSC functions
     void oscSelectSurface(string name);

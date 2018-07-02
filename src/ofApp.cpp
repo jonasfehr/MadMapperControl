@@ -77,10 +77,12 @@ void ofApp::removeListeners(){
 	
 	platformM.midiComponents["bank_up"].value.removeListener(this, &ofApp::bankForward);
 	platformM.midiComponents["bank_down"].value.removeListener(this, &ofApp::bankBackward);
+    platformM.midiComponents["rep"].value.removeListener(this, &ofApp::reloadFromServer);
+    platformM.midiComponents["mixer"].value.removeListener(this, &ofApp::selectMixer);
 	
 	fadeToBlack->unlinkMidiComponent(platformM.midiComponents["fader_M"]);
-	speed->unlinkMidiComponent(platformM.midiComponents["jog"]);
-	
+    speed->unlinkMidiComponent(platformM.midiComponents["jog"]);
+
 	ofRemoveListener(selectGroup.lastChangedE, this, &ofApp::selectSurface);
 	ofRemoveListener(selectGroup.noneSelectedE, this, &ofApp::selectSurface);
 	
@@ -133,6 +135,7 @@ void ofApp::setupPages(ofJson madmapperJson){
 	platformM.midiComponents["bank_up"].value.addListener(this, &ofApp::bankForward);
 	platformM.midiComponents["bank_down"].value.addListener(this, &ofApp::bankBackward);
 	platformM.midiComponents["mixer"].value.addListener(this, &ofApp::selectMixer);
+    platformM.midiComponents["rep"].value.addListener(this, &ofApp::reloadFromServer);
 	
 	// Fixed Controlls
 	fadeToBlack = madOscQuery.createParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["fade_to_black"]);
@@ -178,7 +181,7 @@ void ofApp::keyPressed(int key){
 	}
 	
 	if(key == ' '){
-		auto success = reloadFromServer();
+		auto success = reloadFromServer(p);
 		madMapperLoadError = !success;
 	}
 	
@@ -234,7 +237,7 @@ std::string ofApp::getStatusString(){
 	return s;
 }
 //--------------------------------------------------------------
-bool ofApp::reloadFromServer(){
+bool ofApp::reloadFromServer(float & p){
 	ofLog(OF_LOG_NOTICE) << "Attempting reload from server" << endl;
 	// Save previous location
 	std::string prevPageName = (*currentPage).getName();
