@@ -2,12 +2,13 @@
   "pages": [
     {
       "name": "Opacities",
-      "surfaces": ["*"],
+      "surfaces": ["*", "*/opacity", "Shrek/color"],
       "fixtures": ["adf"],
       "medias": ["lyCircles"]
     },
     {
-      "name": "Custom page 2",
+      "name": "Freds pages",
+      "surfaces": ["*",""],
       "fixtures": ["adf"],
       "medias": ["WobblyCircles"]
     }
