@@ -16,6 +16,7 @@ void ofApp::setup(){
     }else{
         setupPages(madmapperJson);
         setupUI(madmapperJson);
+		madMapperLoadError = false;
 	}
 	errorImage.load("debug.png");
 }
