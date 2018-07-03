@@ -215,7 +215,7 @@ void ofApp::update(){
 void ofApp::setupPages(ofJson madmapperJson){
     
 	// Custom
-	madOscQuery.createCustomPage(pages, &platformM, "custom_page.json");
+    madOscQuery.createCustomPage(pages, &platformM, ofLoadJson("custom_page.json"));
     
     // One for each possible Subpage
     madOscQuery.createSubPages(subPages, &platformM, madmapperJson);
@@ -353,7 +353,7 @@ void ofApp::drawStatusString(){
         if(parNum>=(*currentPage).getRange().first && parNum<=(*currentPage).getRange().second) s+= "* ";
         else s+= "  ";
         s+= ofToString(parNum) + ") ";
-        if(p->isGroup())s+= " G ";
+        if(p->isGroup())s+= "G ";
         s+= p->oscAddress + " " + ofToString(p->getParameterValue());
 		parNum++;
 	}
