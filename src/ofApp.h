@@ -40,6 +40,7 @@ public:
     void setupUI(ofJson madMapperJson);
     std::string getStatusString();
 	bool madMapperLoadError = true;
+	bool initialised = false;
 	ofImage errorImage;
 
     // FOR UX

@@ -19,6 +19,7 @@ void ofApp::setup(){
 		float p = 1;
 		auto success = reloadFromServer(p);
 		madMapperLoadError = !success;
+		initialised = true;
 	}
 	errorImage.load("debug.png");
 }
@@ -332,9 +333,13 @@ bool ofApp::reloadFromServer(float & p){
     if(p == 1){
 	ofLog(OF_LOG_NOTICE) << "Attempting reload from server" << endl;
 	// Save previous location
-	std::string prevPageName = (*currentPage).getName();
-	int prevLowerBound = (*currentPage).getRange().first;
-	
+	std::string prevPageName = "";
+	int prevLowerBound = 1;
+	if(initialised){
+		std::string prevPageName = (*currentPage).getName();
+		int prevLowerBound = (*currentPage).getRange().first;
+	}
+
 	// Reloads parameters from MadMapper
 	ofJson madmapperJson = madOscQuery.receive();
 	if(madmapperJson == nullptr){
@@ -346,8 +351,8 @@ bool ofApp::reloadFromServer(float & p){
 	selectGroup.clear();
 	pages.clear();
         
-        setupPages(madmapperJson);
-        setupUI(madmapperJson);
+    setupPages(madmapperJson);
+    setupUI(madmapperJson);
 
 	std::list<MadParameterPage>::iterator pageIt;
 	for(pageIt = pages.begin(); pageIt != pages.end(); pageIt++){
