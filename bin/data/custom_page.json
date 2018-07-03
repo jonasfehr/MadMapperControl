@@ -3,6 +3,10 @@
     {
       "name": "Opacities",
       "surfaces": ["*/opacity"]
+    },
+    {
+      "name": "Group wildcards",
+      "surfaces": ["Group/*/opacity"]
     }
   ]
 }

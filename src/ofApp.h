@@ -38,7 +38,7 @@ public:
 	void setActivePage(MadParameterPage* page, MadParameterPage* prevPage);
 	void setupPages(ofJson madMapperJson);
     void setupUI(ofJson madMapperJson);
-    std::string getStatusString();
+    void drawStatusString();
 	bool madMapperLoadError = true;
 	bool initialised = false;
 	ofImage errorImage;
@@ -60,7 +60,6 @@ public:
     void backToCurrent(float & p);
     bool reloadFromServer(float & p);
 
-    
     // OSC functions
     void oscSelectSurface(string name);
     void oscRequestMediaName();

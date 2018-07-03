@@ -85,9 +85,7 @@ void ofApp::showMedia(string & name){
             setActivePage(&(*currentPage), prevPage);
         }
     }
-    
     oscSelectSurface(name);
-    
 }
 
 
@@ -177,7 +175,7 @@ void ofApp::oscRequestMediaName(){
 //--------------------------------------------------------------
 void ofApp::update(){
 	if(!madMapperLoadError){
-		ofSetWindowTitle((*currentPage).getName());
+		ofSetWindowTitle("MADMAPPER MIDI MAPPER");
 	}else{
 		ofSetWindowTitle("MADMAPPER LOAD ERROR");
 	}
@@ -245,14 +243,13 @@ void ofApp::setupUI(ofJson madmapperJson){
 //--------------------------------------------------------------
 void ofApp::draw(){
 	if(!madMapperLoadError){
-		//        platformM.drawRawInput();
-		platformM.gui.setPosition(ofGetWidth()-230,10);
-		platformM.gui.draw();
-		
-		launchpad.gui.setPosition(ofGetWidth()-460,10);
-		launchpad.gui.draw();
-		
-		ofDrawBitmapStringHighlight(getStatusString(), 15, 15);
+//		platformM.gui.setPosition(ofGetWidth()-230,10);
+//		platformM.gui.draw();
+//
+//		launchpad.gui.setPosition(ofGetWidth()-460,10);
+//		launchpad.gui.draw();
+		ofBackground(0);
+		drawStatusString();
 	}else{
 		std::string s = "MADMAPPER HTTP ENDPOINT NOT FOUND - TRY AGAIN!";
 		ofDrawBitmapStringHighlight(s, 15, 15);
@@ -312,7 +309,7 @@ void ofApp::setActivePage(MadParameterPage* page, MadParameterPage* prevPage){
 }
 
 //--------------------------------------------------------------
-std::string ofApp::getStatusString(){
+void ofApp::drawStatusString(){
 	std::string s = "";
 	s+= "Current page: " + (*currentPage).getName();
 	s+= "\nRange: " + ofToString((*currentPage).getRange().first) + " " + ofToString((*currentPage).getRange().second);
@@ -326,7 +323,7 @@ std::string ofApp::getStatusString(){
         s+= ofToString(parNum) + ") " + p->oscAddress + " " + ofToString(p->getParameterValue());
 		parNum++;
 	}
-	return s;
+	ofDrawBitmapString(s, 15, 15);
 }
 //--------------------------------------------------------------
 bool ofApp::reloadFromServer(float & p){
