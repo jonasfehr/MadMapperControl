@@ -55,6 +55,7 @@ public:
     MidiComponentGroup soloGroup; // not used yet
     MidiComponentGroup recGroup;
     void selectSurface(string & name);
+    void selectGroupContent(string & name);
     void selectMedia(string & name);
     void showMedia(string & name);
     void backToCurrent(float & p);

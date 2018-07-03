@@ -46,11 +46,41 @@ void ofApp::selectSurface(string & name){
                     MadParameterPage* prevPage = &(*currentPage);
                     currentPage = pageIt;
                     setActivePage(&(*currentPage), prevPage);
+                    return;
                 }
             }
 
             oscSelectSurface(subpageName);
         }
+}
+
+void ofApp::selectGroupContent(string & name){
+    // Find the name of the corresponding surface
+    auto result = ofSplitString(name, "_");
+    int index = ofToInt(result[1]);
+    
+    if(currentPage->getParameters()->size()<index) return; // catch if no parameter connected
+    std::list<MadParameter*>::iterator parameter = currentPage->getParameters()->begin();
+    std::advance(parameter, index-1);
+    if((*parameter)->isSelectable() && (*parameter)->isGroup()){
+        auto oscAddress = ofSplitString((*parameter)->getOscAddress(), "/");
+        string subpageName = oscAddress[2];
+        
+        if((*currentPage).isSubpage()) return;
+        previousPage = currentPage;
+        
+        std::list<MadParameterPage>::iterator pageIt;
+        for(pageIt = subPages.begin(); pageIt != subPages.end(); pageIt++){
+            if(pageIt->getName()==subpageName+"_SubPage"){
+                MadParameterPage* prevPage = &(*currentPage);
+                currentPage = pageIt;
+                setActivePage(&(*currentPage), prevPage);
+                return;
+            }
+        }
+        
+        oscSelectSurface(subpageName);
+    }
 }
 
 void ofApp::selectMedia(string & name){
@@ -83,6 +113,7 @@ void ofApp::showMedia(string & name){
             MadParameterPage* prevPage = &(*currentPage);
             currentPage = pageIt;
             setActivePage(&(*currentPage), prevPage);
+            return;
         }
     }
     oscSelectSurface(name);
@@ -144,12 +175,12 @@ void ofApp::removeListeners(){
 	fadeToBlack->unlinkMidiComponent(platformM.midiComponents["fader_M"]);
     speed->unlinkMidiComponent(platformM.midiComponents["jog"]);
 
-    ofRemoveListener(selectGroup.lastChangedE, this, &ofApp::selectSurface);
-    ofRemoveListener(selectGroup.noneSelectedE, this, &ofApp::selectSurface);
+    ofRemoveListener(selectGroup.lastChangedE, this, &ofApp::selectGroupContent);
+    ofRemoveListener(selectGroup.noneSelectedE, this, &ofApp::backToCurrent);
     ofRemoveListener(recGroup.lastChangedE, this, &ofApp::selectSurface);
-    ofRemoveListener(recGroup.noneSelectedE, this, &ofApp::selectSurface);
+    ofRemoveListener(recGroup.noneSelectedE, this, &ofApp::backToCurrent);
     ofRemoveListener(soloGroup.lastChangedE, this, &ofApp::selectSurface);
-    ofRemoveListener(soloGroup.noneSelectedE, this, &ofApp::selectSurface);
+    ofRemoveListener(soloGroup.noneSelectedE, this, &ofApp::backToCurrent);
 }
 
 // OSC FUNCTIONS
@@ -188,7 +219,8 @@ void ofApp::setupPages(ofJson madmapperJson){
     
     // One for each possible Subpage
     madOscQuery.createSubPages(subPages, &platformM, madmapperJson);
-
+    
+//    cout << "subPages " << subPages.size() << endl;
     
 	// Set initial page
 	currentPage = pages.begin();
@@ -220,7 +252,7 @@ void ofApp::setupUI(ofJson madmapperJson){
 	for(int i = 1; i<9; i++){
 		selectGroup.add(platformM.midiComponents["sel_"+ofToString(i)]);
 	}
-	ofAddListener(selectGroup.lastChangedE, this, &ofApp::selectMedia);
+	ofAddListener(selectGroup.lastChangedE, this, &ofApp::selectGroupContent);
 	ofAddListener(selectGroup.noneSelectedE, this, &ofApp::backToCurrent);
     
     // Rec Group.
@@ -320,7 +352,9 @@ void ofApp::drawStatusString(){
         s+= "\n";
         if(parNum>=(*currentPage).getRange().first && parNum<=(*currentPage).getRange().second) s+= "* ";
         else s+= "  ";
-        s+= ofToString(parNum) + ") " + p->oscAddress + " " + ofToString(p->getParameterValue());
+        s+= ofToString(parNum) + ") ";
+        if(p->isGroup())s+= " G ";
+        s+= p->oscAddress + " " + ofToString(p->getParameterValue());
 		parNum++;
 	}
 	ofDrawBitmapString(s, 15, 15);
@@ -347,6 +381,8 @@ bool ofApp::reloadFromServer(float & p){
 	if(initialised){
 		removeListeners();
 		selectGroup.clear();
+        recGroup.clear();
+        soloGroup.clear();
 		pages.clear();
 	}
 

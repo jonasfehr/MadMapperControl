@@ -5,8 +5,13 @@
       "surfaces": ["*/opacity"]
     },
     {
+<<<<<<< HEAD
       "name": "Group wildcards",
       "surfaces": ["Group/*/opacity"]
+=======
+      "name": "Medias",
+      "surface": ["surfaces/Group1", "surfaces/Quad1"]
+>>>>>>> feature/detectGroups
     }
   ]
 }
