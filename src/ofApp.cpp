@@ -14,8 +14,6 @@ void ofApp::setup(){
     if(madmapperJson == nullptr){
         ofLog(OF_LOG_WARNING) << "Load unsuccessful!" << endl;
     }else{
-        setupPages(madmapperJson);
-        setupUI(madmapperJson);
 		float p = 1;
 		auto success = reloadFromServer(p);
 		madMapperLoadError = !success;
@@ -347,10 +345,12 @@ bool ofApp::reloadFromServer(float & p){
 		return false;
 	}
 	// Setups pages
-	removeListeners();
-	selectGroup.clear();
-	pages.clear();
-        
+	if(initialised){
+		removeListeners();
+		selectGroup.clear();
+		pages.clear();
+	}
+
     setupPages(madmapperJson);
     setupUI(madmapperJson);
 

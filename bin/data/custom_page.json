@@ -5,8 +5,8 @@
       "surfaces": ["*/opacity"]
     },
     {
-      "name": "Medias",
-      "medias": ["*"]
+      "name": "Fredquad",
+      "surfaces": ["Fredquad"]
     }
   ]
 }
