@@ -2,24 +2,10 @@
   "pages": [
     {
       "name": "Opacities",
-      "surfaces": ["*/opacity"],
-      "fixtures": ["adf"],
-      "medias": ["lyCircles"]
+      "surfaces": ["*/opacity"]
     },
     {
-      "name": "Only shrek opacity",
-      "surfaces": ["/surfaces/Shrek/opacity"]
-    },
-    {
-      "name": "ALL THE STUFF",
-      "surfaces": ["*"]
-    },
-    {
-      "name": "All fixtures",
-      "fixtures": ["*"]
-    },
-    {
-      "name": "All medias",
+      "name": "Medias",
       "medias": ["*"]
     }
   ]

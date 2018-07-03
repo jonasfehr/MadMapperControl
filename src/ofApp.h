@@ -31,12 +31,13 @@ public:
     ofxMidiDevice launchpad;
     
     std::list<MadParameterPage> pages;
+    std::list<MadParameterPage> subPages;
     std::list<MadParameterPage>::iterator currentPage;
     std::list<MadParameterPage>::iterator previousPage;
-    std::map<string, MadParameterPage> mediaPages;
 
 	void setActivePage(MadParameterPage* page, MadParameterPage* prevPage);
 	void setupPages(ofJson madMapperJson);
+    void setupUI(ofJson madMapperJson);
     std::string getStatusString();
 	bool madMapperLoadError = true;
 	ofImage errorImage;
@@ -53,7 +54,9 @@ public:
     MidiComponentGroup soloGroup; // not used yet
     MidiComponentGroup recGroup;
     void selectSurface(string & name);
-    void selectMixer(float & p);
+    void selectMedia(string & name);
+    void showMedia(string & name);
+    void backToCurrent(float & p);
     bool reloadFromServer(float & p);
 
     
