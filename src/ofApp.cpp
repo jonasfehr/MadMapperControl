@@ -38,6 +38,7 @@ void ofApp::selectSurface(string & name){
             string subpageName = oscAddress[2];
             
             if((*currentPage).isSubpage()) return;
+
             previousPage = currentPage;
             
             std::list<MadParameterPage>::iterator pageIt;
@@ -122,15 +123,15 @@ void ofApp::showMedia(string & name){
 
 void ofApp::backToCurrent(float & p){
 	MadParameterPage* prevPage = &(*currentPage);
-	currentPage = previousPage;
+    currentPage = pages.begin();//previousPage;
 	setActivePage(&(*currentPage), prevPage);
-	
-	for(auto & midiComponent : selectGroup.midiComponents){
-		midiComponent.second->value.disableEvents();
-		midiComponent.second->value = 0;
-		midiComponent.second->update();
-		midiComponent.second->value.enableEvents();
-	}
+    
+    for(auto & midiComponent : selectGroup.midiComponents){
+        midiComponent.second->value.disableEvents();
+        midiComponent.second->value = 0;
+        midiComponent.second->update();
+        midiComponent.second->value.enableEvents();
+    }
 }
 
 void ofApp::chanForward(float & p){
