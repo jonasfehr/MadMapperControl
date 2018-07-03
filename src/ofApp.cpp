@@ -15,6 +15,8 @@ void ofApp::setup(){
         ofLog(OF_LOG_WARNING) << "Load unsuccessful!" << endl;
     }else{
 		float p = 1;
+		setupPages(madmapperJson);
+//		setupUI(madmapperJson);
 		auto success = reloadFromServer(p);
 		madMapperLoadError = !success;
 		initialised = true;
