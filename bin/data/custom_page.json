@@ -6,7 +6,7 @@
     },
     {
       "name": "Medias",
-      "medias": ["*"]
+      "surface": ["surfaces/Group1", "surfaces/Quad1"]
     }
   ]
 }
