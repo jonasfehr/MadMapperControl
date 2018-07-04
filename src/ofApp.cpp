@@ -4,7 +4,7 @@
 void ofApp::setup(){
 	// Setup midi controllers
 	platformM.setup("Platform M+ V2.00");
-	launchpad.setup("Launchpad");
+//    launchpad.setup("Launchpad");
 	
 	madOscQuery.setup("127.0.0.1", 8010, 8011);
     ofSleepMillis(100);
@@ -289,8 +289,8 @@ void ofApp::draw(){
 		ofTranslate(ofGetWidth()/2, ofGetHeight()/2);
 		errorImage.draw(-errorImage.getWidth()/2,-errorImage.getHeight()/2,errorImage.getWidth(), errorImage.getHeight());
 	}
-    platformM.gui.setPosition(ofGetWidth()-230,10);
-    platformM.gui.draw();
+//    platformM.gui.setPosition(ofGetWidth()-230,10);
+//    platformM.gui.draw();
 
 }
 
