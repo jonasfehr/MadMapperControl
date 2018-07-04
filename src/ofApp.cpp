@@ -3,9 +3,17 @@
 //--------------------------------------------------------------
 void ofApp::setup(){
 	// Setup midi controllers
+#ifdef TARGET_OS_OSX
 	platformM.setup("Platform M+ V2.00");
 	launchpad.setup("Launchpad");
+#else
+	// Windows
+	for(auto& m : platformM.midiIn.getPortList()){
+		ofLog(OF_LOG_NOTICE) << "Found midi device: " << m << endl;
+	}
+#endif
 	
+
 	madOscQuery.setup("127.0.0.1", 8010, 8011);
     ofSleepMillis(100);
 
@@ -276,8 +284,7 @@ void ofApp::setupUI(ofJson madmapperJson){
 //--------------------------------------------------------------
 void ofApp::draw(){
 	if(!madMapperLoadError){
-//		platformM.gui.setPosition(ofGetWidth()-230,10);
-//		platformM.gui.draw();
+
 //
 //		launchpad.gui.setPosition(ofGetWidth()-460,10);
 //		launchpad.gui.draw();
@@ -289,6 +296,8 @@ void ofApp::draw(){
 		ofTranslate(ofGetWidth()/2, ofGetHeight()/2);
 		errorImage.draw(-errorImage.getWidth()/2,-errorImage.getHeight()/2,errorImage.getWidth(), errorImage.getHeight());
 	}
+	platformM.gui.setPosition(ofGetWidth()-230,10);
+	platformM.gui.draw();
 }
 
 //--------------------------------------------------------------
