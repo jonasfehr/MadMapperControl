@@ -3,9 +3,20 @@
 //--------------------------------------------------------------
 void ofApp::setup(){
 	// Setup midi controllers
-	platformM.setup("Platform M+ V2.00");
-//    launchpad.setup("Launchpad");
-	
+#ifdef TARGET_OS_OSX
+	platformM.setup("Platform M+ V2.00", "Platform M+ V2.00");
+#else
+	// Windows
+	for(auto& m : platformM.midiIn.getPortList()){
+		ofLog(OF_LOG_NOTICE) << "Found midi in device: " << m << endl;
+	}
+	for (auto& m : platformM.midiOut.getPortList()) {
+		ofLog(OF_LOG_NOTICE) << "Found midi out device: " << m << endl;
+	}
+	platformM.setup("Platform M+ V2.00 0", "Platform M+ V2.00 1");
+#endif
+
+
 	madOscQuery.setup("127.0.0.1", 8010, 8011);
     ofSleepMillis(100);
 
@@ -278,9 +289,6 @@ void ofApp::setupUI(ofJson madmapperJson){
 //--------------------------------------------------------------
 void ofApp::draw(){
 	if(!madMapperLoadError){
-//
-//		launchpad.gui.setPosition(ofGetWidth()-460,10);
-//		launchpad.gui.draw();
 		ofBackground(0);
 		drawStatusString();
 	}else{
@@ -289,9 +297,8 @@ void ofApp::draw(){
 		ofTranslate(ofGetWidth()/2, ofGetHeight()/2);
 		errorImage.draw(-errorImage.getWidth()/2,-errorImage.getHeight()/2,errorImage.getWidth(), errorImage.getHeight());
 	}
-//    platformM.gui.setPosition(ofGetWidth()-230,10);
-//    platformM.gui.draw();
-
+	//platformM.gui.setPosition(10,10);
+	//platformM.gui.draw();
 }
 
 //--------------------------------------------------------------
