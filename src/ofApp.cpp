@@ -8,7 +8,10 @@ void ofApp::setup(){
 #else
 	// Windows
 	for(auto& m : platformM.midiIn.getPortList()){
-		ofLog(OF_LOG_NOTICE) << "Found midi device: " << m << endl;
+		ofLog(OF_LOG_NOTICE) << "Found midi in device: " << m << endl;
+	}
+	for (auto& m : platformM.midiOut.getPortList()) {
+		ofLog(OF_LOG_NOTICE) << "Found midi out device: " << m << endl;
 	}
 	platformM.setup("Platform M+ V2.00 0", "Platform M+ V2.00 1");
 #endif
@@ -292,8 +295,8 @@ void ofApp::draw(){
 		ofTranslate(ofGetWidth()/2, ofGetHeight()/2);
 		errorImage.draw(-errorImage.getWidth()/2,-errorImage.getHeight()/2,errorImage.getWidth(), errorImage.getHeight());
 	}
-	platformM.gui.setPosition(ofGetWidth()-230,10);
-	platformM.gui.draw();
+	//platformM.gui.setPosition(10,10);
+	//platformM.gui.draw();
 }
 
 //--------------------------------------------------------------
