@@ -1,12 +1,33 @@
 {
-  "pages": [
+  "pages": [{
+      "name": "Opacities",
+      "surfaces": ["*/opacity"]
+    },
     {
-      "name": "Group wildcards",
-      "surfaces": ["Group/*/opacity"]
-  },
-  {
-    "name": "Opacities",
-    "surfaces": ["*/opacity"]
-  }
-]
+      "name": "GAZE_REAR",
+      "surfaces": [
+        "/surfaces/FX_SEND/opacity",
+        "/surfaces/LED/opacity",
+        "/surfaces/PVC/opacity",
+        "/surfaces/GAZE_FRONT/opacity",
+        "/surfaces/GAZE_REAR/*"
+      ]
+    },
+    {
+      "name": "Master",
+      "surfaces": [
+        "/surfaces/FX_SEND/opacity",
+        "/surfaces/GROUP_LED/opacity",
+        "/surfaces/PVC/opacity",
+        "/surfaces/GAZE_FRONT/opacity",
+        "/surfaces/GAZE_REAR/opacity"
+      ]
+    },
+    {
+      "name": "Master",
+      "surfaces": [
+        "/surfaces/Group 1/*/opacity"
+      ]
+    }
+  ]
 }

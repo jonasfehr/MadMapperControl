@@ -44,6 +44,8 @@ public:
 	ofImage errorImage;
 
     // FOR UX
+    void updatePageDisplay();
+    void updateParameterDisplay();
     void chanForward(float & p);
     void chanBackward(float & p);
     void bankForward(float & p);

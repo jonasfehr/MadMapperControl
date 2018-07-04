@@ -123,7 +123,7 @@ void ofApp::showMedia(string & name){
 
 void ofApp::backToCurrent(float & p){
 	MadParameterPage* prevPage = &(*currentPage);
-    currentPage = pages.begin();//previousPage;
+    currentPage = previousPage;
 	setActivePage(&(*currentPage), prevPage);
     
     for(auto & midiComponent : selectGroup.midiComponents){
@@ -138,12 +138,14 @@ void ofApp::chanForward(float & p){
     if(p == 1){
         (*currentPage).cycleForward();
     }
+    updateParameterDisplay();
 }
 
 void ofApp::chanBackward(float & p){
     if(p == 1){
         (*currentPage).cycleBackward();
     }
+    updateParameterDisplay();
 }
 
 void ofApp::bankForward(float & p){
@@ -276,8 +278,6 @@ void ofApp::setupUI(ofJson madmapperJson){
 //--------------------------------------------------------------
 void ofApp::draw(){
 	if(!madMapperLoadError){
-//		platformM.gui.setPosition(ofGetWidth()-230,10);
-//		platformM.gui.draw();
 //
 //		launchpad.gui.setPosition(ofGetWidth()-460,10);
 //		launchpad.gui.draw();
@@ -289,6 +289,9 @@ void ofApp::draw(){
 		ofTranslate(ofGetWidth()/2, ofGetHeight()/2);
 		errorImage.draw(-errorImage.getWidth()/2,-errorImage.getHeight()/2,errorImage.getWidth(), errorImage.getHeight());
 	}
+    platformM.gui.setPosition(ofGetWidth()-230,10);
+    platformM.gui.draw();
+
 }
 
 //--------------------------------------------------------------
@@ -339,6 +342,10 @@ void ofApp::setActivePage(MadParameterPage* page, MadParameterPage* prevPage){
 	page->linkDevice();
 	
 	ofLog() << "Active page set to " << (*currentPage).getName() << endl;
+    
+    updatePageDisplay();
+    updateParameterDisplay();
+
 }
 
 //--------------------------------------------------------------
@@ -359,6 +366,7 @@ void ofApp::drawStatusString(){
 		parNum++;
 	}
 	ofDrawBitmapString(s, 15, 15);
+    
 }
 //--------------------------------------------------------------
 bool ofApp::reloadFromServer(float & p){
@@ -463,6 +471,68 @@ void ofApp::dragEvent(ofDragInfo dragInfo){
 	
 }
 
+void ofApp::updatePageDisplay(){
+    // UPPER ROW_INPUT
+    vector<unsigned char> text;
+    text.push_back(0xF0);
+    text.push_back(0x00);
+    text.push_back(0x00);
+    text.push_back(0x66);
+    text.push_back(0x14); // DEVICE ID
+    text.push_back(0x12); // DISPLAY
+    //    text.push_back(0x00); // POSITION FIRST LINE
+    text.push_back(0x38); // UPPER LINE
+    
+    std::string str = (*currentPage).getName();;
+    std::copy(str.begin(), str.end(), std::back_inserter(text));
 
+    while(text.size()<66+6){
+        text.push_back(' '); // Clear other fields
+    }
+    
+    text.push_back(0xF7);// DETERMINATOR
+    platformM.midiOut.sendMidiBytes(text);
+}
 
+void ofApp::updateParameterDisplay(){
+    // UPPER ROW_INPUT
+    vector<unsigned char> text;
+    text.push_back(0xF0);
+    text.push_back(0x00);
+    text.push_back(0x00);
+    text.push_back(0x66);
+    text.push_back(0x14); // DEVICE ID
+    text.push_back(0x12); // DISPLAY
+    text.push_back(0x00); // POSITION FIRST LINE
+//    text.push_back(0x38); // UPPER LINE
+//    text.push_back('|');
+
+    int parNum = 1;
+    for(auto& p : *(*currentPage).getParameters()){
+        if(parNum>=(*currentPage).getRange().first && parNum<=(*currentPage).getRange().second){
+            string oscAddress = p->oscAddress;
+            auto result = ofSplitString(oscAddress, "/");
+            string page = result[result.size()-2];
+            
+            int maxNumChar = 6;
+            string name;
+            if((*currentPage).isSubpage()) name = result[result.size()-1];
+            else name = result[result.size()-2];
+
+            int length = name.size();
+            if(name.size()>maxNumChar) length = maxNumChar;
+            std::copy(name.begin(), name.begin()+length, std::back_inserter(text));
+            for(int i=length;i<maxNumChar;i++) text.push_back(' ');
+            text.push_back(' ');
+        }
+        parNum++;
+    }
+
+    while(text.size()<66+6){
+        text.push_back(' '); // Clear other fields
+    }
+    
+    text.push_back(0xF7);// DETERMINATOR
+    platformM.midiOut.sendMidiBytes(text);
+}
 
