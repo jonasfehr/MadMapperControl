@@ -28,8 +28,7 @@ public:
 	
 	ofxMadOscQuery madOscQuery;
     ofxMidiDevice platformM;
-    ofxMidiDevice launchpad;
-    
+
     std::list<MadParameterPage> pages;
     std::list<MadParameterPage> subPages;
     std::list<MadParameterPage>::iterator currentPage;

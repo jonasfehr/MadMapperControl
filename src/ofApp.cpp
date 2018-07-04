@@ -4,13 +4,13 @@
 void ofApp::setup(){
 	// Setup midi controllers
 #ifdef TARGET_OS_OSX
-	platformM.setup("Platform M+ V2.00");
-	launchpad.setup("Launchpad");
+	platformM.setup("Platform M+ V2.00", "Platform M+ V2.00");
 #else
 	// Windows
 	for(auto& m : platformM.midiIn.getPortList()){
 		ofLog(OF_LOG_NOTICE) << "Found midi device: " << m << endl;
 	}
+	platformM.setup("Platform M+ V2.00 0", "Platform M+ V2.00 1");
 #endif
 	
 
@@ -284,10 +284,6 @@ void ofApp::setupUI(ofJson madmapperJson){
 //--------------------------------------------------------------
 void ofApp::draw(){
 	if(!madMapperLoadError){
-
-//
-//		launchpad.gui.setPosition(ofGetWidth()-460,10);
-//		launchpad.gui.draw();
 		ofBackground(0);
 		drawStatusString();
 	}else{
