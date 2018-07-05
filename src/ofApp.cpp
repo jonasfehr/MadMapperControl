@@ -189,7 +189,7 @@ void ofApp::removeListeners(){
 	fadeToBlack->unlinkMidiComponent(platformM.midiComponents["fader_M"]);
     speed->unlinkMidiComponent(platformM.midiComponents["jog"]);
 
-    ofRemoveListener(selectGroup.lastChangedE, this, &ofApp::selectGroupContent);
+    ofRemoveListener(selectGroup.lastChangedE, this, &ofApp::selectSurface);
     ofRemoveListener(selectGroup.noneSelectedE, this, &ofApp::backToCurrent);
     ofRemoveListener(recGroup.lastChangedE, this, &ofApp::selectSurface);
     ofRemoveListener(recGroup.noneSelectedE, this, &ofApp::backToCurrent);
@@ -266,7 +266,7 @@ void ofApp::setupUI(ofJson madmapperJson){
 	for(int i = 1; i<9; i++){
 		selectGroup.add(platformM.midiComponents["sel_"+ofToString(i)]);
 	}
-	ofAddListener(selectGroup.lastChangedE, this, &ofApp::selectGroupContent);
+	ofAddListener(selectGroup.lastChangedE, this, &ofApp::selectSurface);
 	ofAddListener(selectGroup.noneSelectedE, this, &ofApp::backToCurrent);
     
     // Rec Group.
