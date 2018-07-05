@@ -264,13 +264,16 @@ void ofApp::setupUI(ofJson madmapperJson){
     platformM.midiComponents["rep"].value.addListener(this, &ofApp::reload);
 	
 	// Fixed Controlls
-	fadeToBlack = madOscQuery.createParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["fade_to_black"]);
-	fadeToBlack->linkMidiComponent(platformM.midiComponents["fader_M"]);
-	
+    fadeToBlack = madOscQuery.createParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["fade_to_black"]);
+    fadeToBlack->linkMidiComponent(platformM.midiComponents["fader_M"]);
+
+#ifdef MM33
+    speed = madOscQuery.createParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["parameters"]["CONTENTS"]["GlobalBPM"]["CONTENTS"]["BPM"]); // MadMapper 3.5
+    speed->linkMidiComponent(platformM.midiComponents["jog"]);
+#else
     speed = madOscQuery.createParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["GlobalBPM"]["CONTENTS"]["BPM"]); // MadMapper 3.5
-//    speed = madOscQuery.createParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["parameters"]["CONTENTS"]["GlobalBPM"]["CONTENTS"]["BPM"]); // MadMapper 3.3
-	speed->linkMidiComponent(platformM.midiComponents["jog"]);
-	
+    speed->linkMidiComponent(platformM.midiComponents["jog"]);
+#endif
 	// Select Group.
 	selectGroup.doCheckbox = true;
 	for(int i = 1; i<9; i++){
