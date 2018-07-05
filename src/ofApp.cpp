@@ -175,6 +175,14 @@ void ofApp::bankBackward(float & p){
 	}
 }
 
+void ofApp::reload(float & p){
+    if(p==1){
+        isLoading = true;
+        auto success = reloadFromServer(p);
+        madMapperLoadError = !success;
+    }else isLoading = false;
+}
+
 void ofApp::removeListeners(){
 	
 	currentPage->unlinkDevice();
@@ -183,7 +191,7 @@ void ofApp::removeListeners(){
     platformM.midiComponents["chan_down"].value.removeListener(this, &ofApp::chanBackward);
 	platformM.midiComponents["bank_up"].value.removeListener(this, &ofApp::bankForward);
 	platformM.midiComponents["bank_down"].value.removeListener(this, &ofApp::bankBackward);
-//    platformM.midiComponents["rep"].value.removeListener(this, &ofApp::reloadFromServer);
+    platformM.midiComponents["rep"].value.removeListener(this, &ofApp::reload);
     platformM.midiComponents["mixer"].value.removeListener(this, &ofApp::backToCurrent);
 	
 	fadeToBlack->unlinkMidiComponent(platformM.midiComponents["fader_M"]);
@@ -219,11 +227,13 @@ void ofApp::oscRequestMediaName(){
 
 //--------------------------------------------------------------
 void ofApp::update(){
-	if(!madMapperLoadError){
-		ofSetWindowTitle("MADMAPPER MIDI MAPPER");
-	}else{
-		ofSetWindowTitle("MADMAPPER LOAD ERROR");
-	}
+    if(!isLoading){
+        if(!madMapperLoadError){
+            ofSetWindowTitle("MADMAPPER MIDI MAPPER");
+        }else{
+            ofSetWindowTitle("MADMAPPER LOAD ERROR");
+        }
+    }
 }
 
 void ofApp::setupPages(ofJson madmapperJson){
@@ -251,7 +261,7 @@ void ofApp::setupUI(ofJson madmapperJson){
     platformM.midiComponents["bank_up"].value.addListener(this, &ofApp::bankForward);
 	platformM.midiComponents["bank_down"].value.addListener(this, &ofApp::bankBackward);
 	platformM.midiComponents["mixer"].value.addListener(this, &ofApp::backToCurrent);
-//    platformM.midiComponents["rep"].value.addListener(this, &ofApp::reloadFromServer);
+    platformM.midiComponents["rep"].value.addListener(this, &ofApp::reload);
 	
 	// Fixed Controlls
 	fadeToBlack = madOscQuery.createParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["fade_to_black"]);
@@ -288,6 +298,8 @@ void ofApp::setupUI(ofJson madmapperJson){
 
 //--------------------------------------------------------------
 void ofApp::draw(){
+    if(!isLoading){
+
 	if(!madMapperLoadError){
 		ofBackground(0);
 		drawStatusString();
@@ -297,8 +309,12 @@ void ofApp::draw(){
 		ofTranslate(ofGetWidth()/2, ofGetHeight()/2);
 		errorImage.draw(-errorImage.getWidth()/2,-errorImage.getHeight()/2,errorImage.getWidth(), errorImage.getHeight());
 	}
-	//platformM.gui.setPosition(10,10);
-	//platformM.gui.draw();
+        if(showMidiIn){
+            platformM.gui.setPosition(10,10);
+            platformM.gui.draw();
+        }
+
+    }
 }
 
 //--------------------------------------------------------------
@@ -308,6 +324,11 @@ void ofApp::keyPressed(int key){
 	if(key == 's'){
 		//        platformM.saveMidiComponentsToFile("platformM.json");
 	}
+    if(key == 'm'){
+        showMidiIn!=showMidiIn;
+        
+    }
+    
 	
 	if(key == ' '){
 		auto success = reloadFromServer(p);

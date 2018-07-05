@@ -61,7 +61,10 @@ public:
     void showMedia(string & name);
     void backToCurrent(float & p);
     bool reloadFromServer(float & p);
-
+    void reload(float & p);
+    bool isLoading;
+    bool showMidiIn = false;
+    
     // OSC functions
     void oscSelectSurface(string name);
     void oscRequestMediaName();
