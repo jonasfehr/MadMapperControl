@@ -1,32 +1,59 @@
 {
-  "pages": [{
-      "name": "Opacities",
-      "surfaces": ["*/opacity"]
-    },
+  "pages": [
     {
-      "name": "GAZE_REAR",
-      "surfaces": [
-        "/surfaces/FX_SEND/opacity",
-        "/surfaces/LED/opacity",
-        "/surfaces/PVC/opacity",
-        "/surfaces/GAZE_FRONT/opacity",
-        "/surfaces/GAZE_REAR/*"
-      ]
-    },
-    {
-      "name": "Master",
-      "surfaces": [
-        "/surfaces/FX_SEND/opacity",
-        "/surfaces/GROUP_LED/opacity",
-        "/surfaces/PVC/opacity",
-        "/surfaces/GAZE_FRONT/opacity",
-        "/surfaces/GAZE_REAR/opacity"
-      ]
-    },
-    {
-      "name": "Master",
-      "surfaces": [
-        "/surfaces/Group 1/*/opacity"
+        "name": "Polar",
+        "elements": [
+          "/surfaces/Polar/*/opacity"
+        ]
+      },
+      {
+          "name": "MadeInChina",
+          "elements": [
+            "/surfaces/Made_in_china/*/opacity"
+          ]
+        },
+        {
+            "name": "Sattelite",
+            "elements": [
+              "/surfaces/Sattelite/*/opacity",
+              "/medias/Smokey.fs/zoom",
+              "/medias/Smokey.fs/xScale",
+              "/medias/Smokey.fs/xSpeed",
+              "/medias/Smokey.fs/contrast"
+            ]
+          },
+            {
+                "name": "Waves",
+                "elements": [
+                  "/surfaces/WavesB/*/opacity",
+                  "/surfaces/Waves/*/opacity"
+
+                ]
+              },
+              {
+                  "name": "FlyingLow",
+                  "elements": [
+                    "/surfaces/FlyingLow/*/opacity"
+                  ]
+                },
+                {
+                    "name": "Molecules",
+                    "elements": [
+                      "/surfaces/Molecules/opacity"
+                    ]
+                  }
+  ],
+  "subpages": [{
+      "key": "/surfaces/*",
+      "elements": [
+        "/surfaces/*/fx/*",
+        "/surfaces/*/color/blue",
+        "/surfaces/*/color/green",
+        "/surfaces/*/color/red",
+        "/surfaces/*/opacity"
+      ],
+      "skipKeys":[
+        "selected"
       ]
     }
   ]

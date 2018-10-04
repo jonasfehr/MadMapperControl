@@ -6,8 +6,6 @@
 #include "Page.hpp"
 #include "MadParameterPage.hpp"
 
-#define MM33
-
 class ofApp : public ofBaseApp{
 	
 public:
@@ -31,8 +29,6 @@ public:
 	ofxMadOscQuery madOscQuery;
     ofxMidiDevice platformM;
 
-    std::list<MadParameterPage> pages;
-    std::list<MadParameterPage> subPages;
     std::list<MadParameterPage>::iterator currentPage;
     std::list<MadParameterPage>::iterator previousPage;
 
@@ -69,6 +65,7 @@ public:
     
     // OSC functions
     void oscSelectSurface(string name);
+    void oscSelectMedia(string name);
     void oscRequestMediaName();
 
     void removeListeners();

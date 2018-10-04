@@ -20,13 +20,17 @@ void ofApp::setup(){
 	madOscQuery.setup("127.0.0.1", 8010, 8011);
     ofSleepMillis(100);
 
-    ofJson madmapperJson = madOscQuery.receive();
 
-    if(madmapperJson == nullptr){
+    if(madOscQuery.madMapperJson == nullptr){
         ofLog(OF_LOG_WARNING) << "Load unsuccessful!" << endl;
     }else{
+        
+//        madOscQuery.createParameterMap(madmapperJson);
+//        madOscQuery.createCustomPages(&platformM, ofLoadJson("custom_page.json"), madOscQuery.madMapperJson);
+
+        
 		float p = 1;
-		setupPages(madmapperJson);
+//        setupPages(madmapperJson);
 //		setupUI(madmapperJson);
 		auto success = reloadFromServer(p);
 		madMapperLoadError = !success;
@@ -38,6 +42,9 @@ void ofApp::setup(){
 // CALBACK FUNCTIONS
 // --------------------------------------------------------
 void ofApp::selectSurface(string & name){
+    
+    if((*currentPage).isSubpage()) return;
+
     // Find the name of the corresponding surface
     auto result = ofSplitString(name, "_");
     int index = ofToInt(result[1]);
@@ -46,14 +53,18 @@ void ofApp::selectSurface(string & name){
     std::advance(parameter, index-1);
         if((*parameter)->isSelectable()){
             auto oscAddress = ofSplitString((*parameter)->getOscAddress(), "/");
-            string subpageName = oscAddress[2];
+            int i = 0;
+            while(oscAddress[i]!="opacity" && i < oscAddress.size()){
+                i++;
+            }
+
+            string subpageName = oscAddress[i-1];
             
-            if((*currentPage).isSubpage()) return;
 
             previousPage = currentPage;
             
             std::list<MadParameterPage>::iterator pageIt;
-            for(pageIt = subPages.begin(); pageIt != subPages.end(); pageIt++){
+            for(pageIt = madOscQuery.subPages.begin(); pageIt != madOscQuery.subPages.end(); pageIt++){
                 if(pageIt->getName()==subpageName){
                     MadParameterPage* prevPage = &(*currentPage);
                     currentPage = pageIt;
@@ -82,7 +93,7 @@ void ofApp::selectGroupContent(string & name){
         previousPage = currentPage;
         
         std::list<MadParameterPage>::iterator pageIt;
-        for(pageIt = subPages.begin(); pageIt != subPages.end(); pageIt++){
+        for(pageIt = madOscQuery.subPages.begin(); pageIt != madOscQuery.subPages.end(); pageIt++){
             if(pageIt->getName()==subpageName+"_SubPage"){
                 MadParameterPage* prevPage = &(*currentPage);
                 currentPage = pageIt;
@@ -96,6 +107,8 @@ void ofApp::selectGroupContent(string & name){
 }
 
 void ofApp::selectMedia(string & name){
+    if((*currentPage).isSubpage()) return;
+    
     // Find the name of the corresponding surface
     auto result = ofSplitString(name, "_");
     int index = ofToInt(result[1]);
@@ -103,14 +116,22 @@ void ofApp::selectMedia(string & name){
     std::list<MadParameter*>::iterator parameter = currentPage->getParameters()->begin();
     std::advance(parameter, index-1);
     if((*parameter)->isSelectable()){
-        auto oscAddress = ofSplitString((*parameter)->getOscAddress(), "/");
-        string subpageName = oscAddress[2];
+        string subpageName = (*parameter)->getConnectedMediaName();
         
-        if((*currentPage).isSubpage()) return;
-
-        ofAddListener(madOscQuery.mediaNameE, this, &ofApp::showMedia);
-        oscSelectSurface(name);
-        oscRequestMediaName();
+        
+        previousPage = currentPage;
+        
+        std::list<MadParameterPage>::iterator pageIt;
+        for(pageIt = madOscQuery.subPages.begin(); pageIt != madOscQuery.subPages.end(); pageIt++){
+            if(pageIt->getName()==subpageName){
+                MadParameterPage* prevPage = &(*currentPage);
+                currentPage = pageIt;
+                setActivePage(&(*currentPage), prevPage);
+                return;
+            }
+        }
+        
+        oscSelectSurface(subpageName);
     }
 }
 void ofApp::showMedia(string & name){
@@ -120,7 +141,7 @@ void ofApp::showMedia(string & name){
     previousPage = currentPage;
     
     std::list<MadParameterPage>::iterator pageIt;
-    for(pageIt = subPages.begin(); pageIt != subPages.end(); pageIt++){
+    for(pageIt = madOscQuery.subPages.begin(); pageIt != madOscQuery.subPages.end(); pageIt++){
         if(pageIt->getName()==name){
             MadParameterPage* prevPage = &(*currentPage);
             currentPage = pageIt;
@@ -160,7 +181,7 @@ void ofApp::chanBackward(float & p){
 }
 
 void ofApp::bankForward(float & p){
-	if(next(currentPage) != pages.end() && p == 1){
+	if(next(currentPage) != madOscQuery.pages.end() && p == 1){
 		MadParameterPage* prevPage = &(*currentPage);
 		currentPage++;
 		setActivePage(&(*currentPage), prevPage);
@@ -168,7 +189,7 @@ void ofApp::bankForward(float & p){
 }
 
 void ofApp::bankBackward(float & p){
-	if(currentPage != pages.begin() && p == 1){
+	if(currentPage != madOscQuery.pages.begin() && p == 1){
 		MadParameterPage* prevPage = &(*currentPage);
 		currentPage--;
 		setActivePage(&(*currentPage), prevPage);
@@ -201,7 +222,7 @@ void ofApp::removeListeners(){
     ofRemoveListener(selectGroup.noneSelectedE, this, &ofApp::backToCurrent);
     ofRemoveListener(recGroup.lastChangedE, this, &ofApp::selectSurface);
     ofRemoveListener(recGroup.noneSelectedE, this, &ofApp::backToCurrent);
-    ofRemoveListener(soloGroup.lastChangedE, this, &ofApp::selectSurface);
+    ofRemoveListener(soloGroup.lastChangedE, this, &ofApp::selectMedia);
     ofRemoveListener(soloGroup.noneSelectedE, this, &ofApp::backToCurrent);
 }
 
@@ -214,6 +235,15 @@ void ofApp::oscSelectSurface(string name){
 	m.setAddress(oscAddress);
 	m.addFloatArg(1);
 	madOscQuery.oscSendToMadMapper(m);
+}
+
+void ofApp::oscSelectMedia(string name){
+    string oscAddress = "/medias/select_by_name";
+    
+    ofxOscMessage m;
+    m.setAddress(oscAddress);
+    m.addStringArg(name);
+    madOscQuery.oscSendToMadMapper(m);
 }
 
 void ofApp::oscRequestMediaName(){
@@ -238,16 +268,16 @@ void ofApp::update(){
 
 void ofApp::setupPages(ofJson madmapperJson){
     
-	// Custom
-    madOscQuery.createCustomPage(pages, &platformM, ofLoadJson("custom_page.json"));
-    
-    // One for each possible Subpage
-    madOscQuery.createSubPages(subPages, &platformM, madmapperJson);
+//    // Custom
+//    madOscQuery.createCustomPage(pages, &platformM, ofLoadJson("custom_page.json"));
+//
+//    // One for each possible Subpage
+//    madOscQuery.createSubPages(subPages, &platformM, madmapperJson);
     
 //    cout << "subPages " << subPages.size() << endl;
     
 	// Set initial page
-	currentPage = pages.begin();
+	currentPage = madOscQuery.pages.begin();
     previousPage = currentPage;
     
 	setActivePage(&(*currentPage), nullptr);
@@ -264,16 +294,13 @@ void ofApp::setupUI(ofJson madmapperJson){
     platformM.midiComponents["rep"].value.addListener(this, &ofApp::reload);
 	
 	// Fixed Controlls
-    fadeToBlack = madOscQuery.createParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["fade_to_black"]);
+//    fadeToBlack = madOscQuery.createParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["fade_to_black"]);
+    fadeToBlack = madOscQuery.createParameter(madmapperJson["CONTENTS"]["surfaces"]["CONTENTS"]["Mapping"]["CONTENTS"]["opacity"]);
+
     fadeToBlack->linkMidiComponent(platformM.midiComponents["fader_M"]);
 
-#ifdef MM33
-    speed = madOscQuery.createParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["parameters"]["CONTENTS"]["GlobalBPM"]["CONTENTS"]["BPM"]); // MadMapper 3.5
-    speed->linkMidiComponent(platformM.midiComponents["jog"]);
-#else
     speed = madOscQuery.createParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["GlobalBPM"]["CONTENTS"]["BPM"]); // MadMapper 3.5
     speed->linkMidiComponent(platformM.midiComponents["jog"]);
-#endif
 	// Select Group.
 	selectGroup.doCheckbox = true;
 	for(int i = 1; i<9; i++){
@@ -328,14 +355,15 @@ void ofApp::keyPressed(int key){
 		//        platformM.saveMidiComponentsToFile("platformM.json");
 	}
     if(key == 'm'){
-        showMidiIn!=showMidiIn;
+        showMidiIn=!showMidiIn;
         
     }
     
 	
 	if(key == ' '){
-		auto success = reloadFromServer(p);
-		madMapperLoadError = !success;
+//        auto success = reloadFromServer(p);
+//        madMapperLoadError = !success;
+        madOscQuery.updateValues();
 	}
 	
 	if(key == 'l'){
@@ -362,6 +390,16 @@ void ofApp::keyPressed(int key){
 	if(key == OF_KEY_RIGHT && !madMapperLoadError){
 		chanForward(p);
 	}
+    
+    if(key>48 && key<58){
+        int index = key-48;
+        string name = "solo_"+ofToString(index);
+        selectMedia(name);
+    }
+    if(key == '0'){
+        float p = 1;
+        backToCurrent(p);
+    }
 }
 
 
@@ -410,27 +448,29 @@ bool ofApp::reloadFromServer(float & p){
 		std::string prevPageName = (*currentPage).getName();
 		int prevLowerBound = (*currentPage).getRange().first;
 	}
-
+        madOscQuery.receive();
+        
 	// Reloads parameters from MadMapper
-	ofJson madmapperJson = madOscQuery.receive();
-	if(madmapperJson == nullptr){
+	if(madOscQuery.madMapperJson == nullptr){
 	ofLog(OF_LOG_WARNING) << "Reload unsuccessful!" << endl;
 		return false;
 	}
+        madOscQuery.createCustomPages(&platformM, ofLoadJson("custom_page.json"), madOscQuery.madMapperJson);
+
 	// Setups pages
 	if(initialised){
 		removeListeners();
 		selectGroup.clear();
         recGroup.clear();
         soloGroup.clear();
-		pages.clear();
+		madOscQuery.pages.clear();
 	}
 
-    setupPages(madmapperJson);
-    setupUI(madmapperJson);
+//    setupPages(madmapperJson);
+    setupUI(madOscQuery.madMapperJson);
 
 	std::list<MadParameterPage>::iterator pageIt;
-	for(pageIt = pages.begin(); pageIt != pages.end(); pageIt++){
+	for(pageIt = madOscQuery.pages.begin(); pageIt != madOscQuery.pages.end(); pageIt++){
 		if(pageIt->getName() == prevPageName){
 			MadParameterPage* prevPage = &(*currentPage);
 			currentPage = pageIt;
@@ -441,7 +481,7 @@ bool ofApp::reloadFromServer(float & p){
 		}
 	}
 	ofLog(OF_LOG_NOTICE) << "Reload successful assigning to first page!" << endl;
-	currentPage = pages.begin();
+	currentPage = madOscQuery.pages.begin();
 	setActivePage(&(*currentPage), nullptr);
 	return true;
     } else return false;
@@ -547,9 +587,10 @@ void ofApp::updateParameterDisplay(){
             
             int maxNumChar = 6;
             string name;
-            if((*currentPage).isSubpage()) name = result[result.size()-1];
-            else name = result[result.size()-2];
-
+            if(p->isMaster) name = result[result.size()-2];
+//            if(!(*currentPage).isSubpage()) name = result[result.size()-1];
+            else name = result[result.size()-1];
+            
             int length = name.size();
             if(name.size()>maxNumChar) length = maxNumChar;
             std::copy(name.begin(), name.begin()+length, std::back_inserter(text));
