@@ -318,7 +318,7 @@ void ofApp::setupUI(ofJson madmapperJson){
     ofAddListener(recGroup.noneSelectedE, this, &ofApp::backToCurrent);
     
     // Rec Group.
-    soloGroup.doCheckbox = false;
+    soloGroup.doCheckbox = true;
     for(int i = 1; i<9; i++){
         soloGroup.add(platformM.midiComponents["solo_"+ofToString(i)]);
     }
