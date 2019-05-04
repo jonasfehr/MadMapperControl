@@ -4,7 +4,7 @@
 void ofApp::setup(){
 	// Setup midi controllers
 #ifdef TARGET_OS_OSX
-	platformM.setup("Platform M+ V2.00", "Platform M+ V2.00");
+    platformM.setup("Platform M+ V2.04", "Platform M+ V2.04");
 #else
 	// Windows
 	for(auto& m : platformM.midiIn.getPortList()){
@@ -13,11 +13,74 @@ void ofApp::setup(){
 	for (auto& m : platformM.midiOut.getPortList()) {
 		ofLog(OF_LOG_NOTICE) << "Found midi out device: " << m << endl;
 	}
-	platformM.setup("Platform M+ V2.00 0", "Platform M+ V2.00 1");
+	platformM.setup("Platform M+ V2.04 0", "Platform M+ V2.04 1");
 #endif
 
 
 	madOscQuery.setup("127.0.0.1", 8010, 8011);
+
+    
+    // OSC
+    oscParamSync.setup(swarmParameters, PORT_RECEIVE, HOST, PORT_SEND);
+    gui.setup();
+    gui.add(swarmParameters);
+    
+    
+    MadParameterPage page = MadParameterPage("Flocking", &platformM);
+    //add PArameters
+    for(int i = 0; i<swarmParameters.getGroup("Flocking").size(); i++){
+        if(swarmParameters.getGroup("Flocking").getType(i) == "11ofParameterIfE"){
+            string name = swarmParameters.getGroup("Flocking").getName(i);
+            float value = swarmParameters.getGroup("Flocking").getFloat(i);
+//                    float min = swarmParameters.getGroup("Flocking").get(i).getMin();
+//                    float max = swarmParameters.getGroup("Flocking").get(i).getmax();
+//
+            ofJson param;
+            param["FULL_PATH"] = "/ParticleSystem/Flocking/"+name;
+            param["DESCRIPTION"] = name;
+            param["VALUE"][0] = value;
+            param["RANGE"][0] = {{"MIN", 0.},{"MAX", 1.}} ;
+   
+            std::string key = name;
+            madOscQuery.parameterMap[key] = *madOscQuery.createParameter(param);
+            auto mParam = &madOscQuery.parameterMap.operator[](key);
+            page.addParameter(mParam);
+            mParam->makeReferenceTo(swarmParameters.getGroup("Flocking").get(i).cast<float>());
+        }
+    }
+    if(!page.isEmpty()){
+        madOscQuery.pages.push_back(page);
+    }
+    
+    page = MadParameterPage("Visual", &platformM);
+    //add PArameters
+    for(int i = 0; i<swarmParameters.getGroup("Visual").size(); i++){
+        if(swarmParameters.getGroup("Visual").getType(i) == "11ofParameterIfE"){
+            string name = swarmParameters.getGroup("Visual").getName(i);
+            float value = swarmParameters.getGroup("Visual").getFloat(i);
+            //                    float min = swarmParameters.getGroup("Flocking").get(i).getMin();
+            //                    float max = swarmParameters.getGroup("Flocking").get(i).getmax();
+            //
+            ofJson param;
+            param["FULL_PATH"] = "/ParticleSystem/Visual/"+name;
+            param["DESCRIPTION"] = name;
+            param["VALUE"][0] = value;
+            param["RANGE"][0] = {{"MIN", 0.},{"MAX", 1.}} ;
+            
+            std::string key = name;
+            madOscQuery.parameterMap[key] = *madOscQuery.createParameter(param);
+            auto mParam = &madOscQuery.parameterMap.operator[](key);
+            page.addParameter(mParam);
+            mParam->makeReferenceTo(swarmParameters.getGroup("Visual").get(i).cast<float>());
+        }
+    }
+    if(!page.isEmpty()){
+        madOscQuery.pages.push_back(page);
+    }
+
+
+    
+    madOscQuery.receive();
     ofSleepMillis(100);
 
 
@@ -38,6 +101,7 @@ void ofApp::setup(){
 	}
 	errorImage.load("debug.png");
 }
+
 
 // CALBACK FUNCTIONS
 // --------------------------------------------------------
@@ -264,6 +328,10 @@ void ofApp::update(){
             ofSetWindowTitle("MADMAPPER LOAD ERROR");
         }
     }
+    
+    oscParamSync.update();
+    
+    madOscQuery.oscReceiveMessages(swarmParameters);
 }
 
 void ofApp::setupPages(ofJson madmapperJson){
@@ -294,8 +362,9 @@ void ofApp::setupUI(ofJson madmapperJson){
     platformM.midiComponents["rep"].value.addListener(this, &ofApp::reload);
 	
 	// Fixed Controlls
-//    fadeToBlack = madOscQuery.createParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["fade_to_black"]);
-    fadeToBlack = madOscQuery.createParameter(madmapperJson["CONTENTS"]["surfaces"]["CONTENTS"]["Mapping"]["CONTENTS"]["opacity"]);
+    // check if there is a group or layer calledMapping, ells it controlles fade to black.
+    if(madmapperJson["CONTENTS"]["surfaces"]["CONTENTS"]["Mapping"].is_object()) fadeToBlack = madOscQuery.createParameter(madmapperJson["CONTENTS"]["surfaces"]["CONTENTS"]["Mapping"]["CONTENTS"]["opacity"]);
+    else fadeToBlack = madOscQuery.createParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["fade_to_black"]);
 
     fadeToBlack->linkMidiComponent(platformM.midiComponents["fader_M"]);
 
@@ -345,6 +414,8 @@ void ofApp::draw(){
         }
 
     }
+    
+   //gui.draw();
 }
 
 //--------------------------------------------------------------

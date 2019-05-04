@@ -1,47 +1,25 @@
 {
   "pages": [
     {
-        "name": "Polar",
+        "name": "Master",
         "elements": [
-          "/surfaces/Polar/*/opacity"
+          "/surfaces/*/opacity"
+        ],
+        "skipKeys":[
+          "selected",
+          "texture",
+          "wireframe",
+          "solid",
+          "Borders",
+          "Mapping"
         ]
-      },
-      {
-          "name": "MadeInChina",
-          "elements": [
-            "/surfaces/Made_in_china/*/opacity"
-          ]
-        },
-        {
-            "name": "Sattelite",
-            "elements": [
-              "/surfaces/Sattelite/*/opacity",
-              "/medias/Smokey.fs/zoom",
-              "/medias/Smokey.fs/xScale",
-              "/medias/Smokey.fs/xSpeed",
-              "/medias/Smokey.fs/contrast"
-            ]
-          },
-            {
-                "name": "Waves",
-                "elements": [
-                  "/surfaces/WavesB/*/opacity",
-                  "/surfaces/Waves/*/opacity"
-
-                ]
-              },
-              {
-                  "name": "FlyingLow",
-                  "elements": [
-                    "/surfaces/FlyingLow/*/opacity"
-                  ]
-                },
-                {
-                    "name": "Molecules",
-                    "elements": [
-                      "/surfaces/Molecules/opacity"
-                    ]
-                  }
+    },
+    {
+        "name": "Borders",
+        "elements": [
+          "/surfaces/Borders/*/opacity"
+        ]
+    }
   ],
   "subpages": [{
       "key": "/surfaces/*",
