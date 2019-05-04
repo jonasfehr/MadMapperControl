@@ -3,8 +3,6 @@
 #include "ofMain.h"
 #include "ofxMadOscQuery.h"
 #include "ofxMidiDevice.h"
-#include "Page.hpp"
-#include "MadParameterPage.hpp"
 #include "ofxOscParameterSync.h"
 #include "ofxGui.h"
 
