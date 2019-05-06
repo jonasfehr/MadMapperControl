@@ -1,38 +1,106 @@
 {
   "pages": [
     {
-        "name": "Master",
-        "elements": [
-          "/surfaces/*/opacity"
-        ],
-        "skipKeys":[
-          "selected",
-          "texture",
-          "wireframe",
-          "solid",
-          "Borders",
-          "Mapping"
-        ]
+      "name": "Polar",
+      "elements": [
+        "/surfaces/Polar/*/opacity",
+        "/surfaces/BG_Spheres/*/opacity"
+      ]
     },
     {
-        "name": "Borders",
-        "elements": [
-          "/surfaces/Borders/*/opacity"
-        ]
+      "name": "FlyingLow",
+      "elements": [
+        "/surfaces/FlyingLow/*/opacity",
+        "/medias/IsoLines.fs/speedX",
+        "/medias/IsoLines.fs/speedT",
+        "/medias/IsoLines.fs/zoom",
+        "/medias/LaserSmoke_maped.fs/zoom",
+        "/medias/LaserSmoke_maped.fs/contrast",
+        "/medias/LaserSmoke_maped.fs/speed"
+      ]
+    },
+    {
+      "name": "Cyan",
+      "elements": [
+        "/surfaces/Flocking/opacity",
+        "/surfaces/BG_Spheres/opacity",
+        "/surfaces/LED_Color/opacity",
+        "/medias/Flocking.fs/Flocking/speedBoids",
+        "/medias/Flocking.fs/Flocking/noiseSteering",
+        "/medias/Flocking.fs/Visual/transparency",
+        "/medias/Flocking.fs/Visual/trace",
+        "/medias/Flocking.fs/Flocking/cohesion"
+      ]
+    },
+    {
+      "name": "Largo",
+      "elements": [
+        "/surfaces/Flocking/opacity",
+        "/surfaces/BG_Spheres/opacity",
+        "/surfaces/NoiseVis/opacity",
+        "/surfaces/LED_Color/opacity",
+        "/medias/Flocking.fs/Flocking/speedBoids",
+        "/medias/Flocking.fs/Flocking/borderAvoid",
+        "/medias/Flocking.fs/Flocking/noiseSteering",
+        "/medias/Flocking.fs/Visual/transparency",
+        "/medias/Flocking.fs/Visual/trace"
+      ]
+    },
+    {
+      "name": "Breeze",
+      "elements": [
+        "/surfaces/NoiseVis/opacity",
+        "/medias/Noise_Combinations/Noise_Speed",
+        "/surfaces/NoiseBG/opacity",
+        "/medias/Simplex_Gradient/Noise_Speed",
+        "/surfaces/LED_Color/opacity"
+      ]
+    },
+    {
+      "name": "MadeInChina",
+      "elements": [
+        "/surfaces/Made_in_china/white/opacity",
+        "/surfaces/Made_in_china/blue/opacity",
+        "/surfaces/Made_in_china/orange/opacity",
+        "/medias/Noise_Combinations/Noise_Speed"
+      ]
+    },
+    {
+      "name": "Sattelite",
+      "elements": [
+        "/surfaces/Sattelite/*/opacity",
+        "/medias/Smokey.fs/zoom",
+        "/medias/Smokey.fs/xScale",
+        "/medias/Smokey.fs/xSpeed",
+        "/medias/Smokey.fs/contrast"
+      ]
+    },
+    {
+      "name": "Master",
+      "elements": [
+        "/surfaces/*/opacity"
+      ],
+      "skipKeys": [
+        "selected",
+        "texture",
+        "wireframe",
+        "solid",
+        "Borders",
+        "Mapping"
+      ]
     }
   ],
   "subpages": [{
-      "key": "/surfaces/*",
-      "elements": [
-        "/surfaces/*/fx/*",
-        "/surfaces/*/color/blue",
-        "/surfaces/*/color/green",
-        "/surfaces/*/color/red",
-        "/surfaces/*/opacity"
-      ],
-      "skipKeys":[
-        "selected"
-      ]
-    }
-  ]
+    "key": "/surfaces/*",
+    "elements": [
+      "/surfaces/*/fx/*",
+      "/surfaces/*/color/blue",
+      "/surfaces/*/color/green",
+      "/surfaces/*/color/red",
+      "/surfaces/*/opacity"
+    ],
+    "skipKeys": [
+      "selected"
+    ]
+  }]
 }

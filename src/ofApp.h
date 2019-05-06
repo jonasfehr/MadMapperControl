@@ -32,6 +32,7 @@ public:
 	
 	ofxMadOscQuery madOscQuery;
     ofxMidiDevice platformM;
+//  ofxMidiDevice launchpad;
 
     std::list<MadParameterPage>::iterator currentPage;
     std::list<MadParameterPage>::iterator previousPage;
@@ -64,9 +65,12 @@ public:
     void backToCurrent(float & p);
     bool reloadFromServer(float & p);
     void reload(float & p);
+    void updateValues(float & p);
+    
     bool isLoading;
     bool showMidiIn = false;
-    
+    bool showStatusString = false;
+
     // OSC functions
     void oscSelectSurface(string name);
     void oscSelectMedia(string name);
@@ -84,7 +88,7 @@ public:
     ofParameter<float> align{"align", 0.5f, 0.0f, 1.0f};
     ofParameter<float> random{"random", 0.01f, 0.0f, 1.0f};
     ofParameter<float> borderAvoid{"borderAvoid", 0.01f, 0.0f, 1.0f};
-    ofParameter<float> noiseSteering{"noiseSteerings", 0.01f, 0.0f, 1.0f};
+    ofParameter<float> noiseSteering{"noiseSteering", 0.01f, 0.0f, 1.0f};
     ofParameter<float> cohesionDist{"cohesionDist", 0.5f, 0.0f, 1.0f};
     ofParameter<float> separationDist{"separationDist", 0.5f, 0.0f, 1.0f};
     ofParameter<float> alignDist{"alignDist", 0.5f, 0.0f, 1.0f};

@@ -5,6 +5,7 @@ void ofApp::setup(){
 	// Setup midi controllers
 #ifdef TARGET_OS_OSX
     platformM.setup("Platform M+ V2.04", "Platform M+ V2.04");
+//    launchpad.setup("Launchpad", "Launchpad");
 #else
 	// Windows
 	for(auto& m : platformM.midiIn.getPortList()){
@@ -14,6 +15,8 @@ void ofApp::setup(){
 		ofLog(OF_LOG_NOTICE) << "Found midi out device: " << m << endl;
 	}
 	platformM.setup("Platform M+ V2.04 0", "Platform M+ V2.04 1");
+    
+    // missing Launchpad Setup
 #endif
 
 
@@ -230,6 +233,7 @@ void ofApp::backToCurrent(float & p){
     }
 }
 
+// ======= CHANNEL CONTROL =======
 void ofApp::chanForward(float & p){
     if(p == 1){
         (*currentPage).cycleForward();
@@ -244,6 +248,7 @@ void ofApp::chanBackward(float & p){
     updateParameterDisplay();
 }
 
+// ======= BANK CONTROL =======
 void ofApp::bankForward(float & p){
 	if(next(currentPage) != madOscQuery.pages.end() && p == 1){
 		MadParameterPage* prevPage = &(*currentPage);
@@ -268,6 +273,13 @@ void ofApp::reload(float & p){
     }else isLoading = false;
 }
 
+void ofApp::updateValues(float & p){
+    if(p==1 && !isLoading){
+        isLoading = true;
+        madOscQuery.updateValues();
+    }else isLoading = false;
+}
+
 void ofApp::removeListeners(){
 	
 	currentPage->unlinkDevice();
@@ -276,7 +288,7 @@ void ofApp::removeListeners(){
     platformM.midiComponents["chan_down"].value.removeListener(this, &ofApp::chanBackward);
 	platformM.midiComponents["bank_up"].value.removeListener(this, &ofApp::bankForward);
 	platformM.midiComponents["bank_down"].value.removeListener(this, &ofApp::bankBackward);
-    platformM.midiComponents["rep"].value.removeListener(this, &ofApp::reload);
+    platformM.midiComponents["rep"].value.removeListener(this, &ofApp::updateValues);
     platformM.midiComponents["mixer"].value.removeListener(this, &ofApp::backToCurrent);
 	
 	fadeToBlack->unlinkMidiComponent(platformM.midiComponents["fader_M"]);
@@ -359,7 +371,7 @@ void ofApp::setupUI(ofJson madmapperJson){
     platformM.midiComponents["bank_up"].value.addListener(this, &ofApp::bankForward);
 	platformM.midiComponents["bank_down"].value.addListener(this, &ofApp::bankBackward);
 	platformM.midiComponents["mixer"].value.addListener(this, &ofApp::backToCurrent);
-    platformM.midiComponents["rep"].value.addListener(this, &ofApp::reload);
+    platformM.midiComponents["rep"].value.addListener(this, &ofApp::updateValues);
 	
 	// Fixed Controlls
     // check if there is a group or layer calledMapping, ells it controlles fade to black.
@@ -370,6 +382,7 @@ void ofApp::setupUI(ofJson madmapperJson){
 
     speed = madOscQuery.createParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["GlobalBPM"]["CONTENTS"]["BPM"]); // MadMapper 3.5
     speed->linkMidiComponent(platformM.midiComponents["jog"]);
+    
 	// Select Group.
 	selectGroup.doCheckbox = true;
 	for(int i = 1; i<9; i++){
@@ -398,24 +411,25 @@ void ofApp::setupUI(ofJson madmapperJson){
 //--------------------------------------------------------------
 void ofApp::draw(){
     if(!isLoading){
-
-	if(!madMapperLoadError){
-		ofBackground(0);
-		drawStatusString();
-	}else{
-		std::string s = "MADMAPPER HTTP ENDPOINT NOT FOUND - TRY AGAIN!";
-		ofDrawBitmapStringHighlight(s, 15, 15);
-		ofTranslate(ofGetWidth()/2, ofGetHeight()/2);
-		errorImage.draw(-errorImage.getWidth()/2,-errorImage.getHeight()/2,errorImage.getWidth(), errorImage.getHeight());
-	}
-        if(showMidiIn){
-            platformM.gui.setPosition(10,10);
-            platformM.gui.draw();
+        
+        if(!madMapperLoadError){
+            ofBackground(0);
+            if(showStatusString) drawStatusString();
+        }else{
+            std::string s = "MADMAPPER HTTP ENDPOINT NOT FOUND - TRY AGAIN!";
+            ofDrawBitmapStringHighlight(s, 15, 15);
+            ofTranslate(ofGetWidth()/2, ofGetHeight()/2);
+            errorImage.draw(-errorImage.getWidth()/2,-errorImage.getHeight()/2,errorImage.getWidth(), errorImage.getHeight());
+            
         }
-
+           if(showMidiIn){
+               platformM.gui.setPosition(10,10);
+               platformM.gui.draw();
+           }
+           
     }
-    
-   //gui.draw();
+           
+           //gui.draw();
 }
 
 //--------------------------------------------------------------
@@ -423,6 +437,8 @@ void ofApp::keyPressed(int key){
 	float p = 1; // for use in callback functions
 	
 	if(key == 's'){
+        showStatusString=!showStatusString;
+
 		//        platformM.saveMidiComponentsToFile("platformM.json");
 	}
     if(key == 'm'){
