@@ -22,7 +22,7 @@
     {
       "name": "Cyan",
       "elements": [
-        "/surfaces/Flocking/opacity",
+        "/surfaces/Flock/Flocking/opacity",
         "/surfaces/BG_Spheres/opacity",
         "/surfaces/LED_Color/opacity",
         "/medias/Flocking.fs/Flocking/speedBoids",
@@ -54,6 +54,20 @@
         "/surfaces/NoiseBG/opacity",
         "/medias/Simplex_Gradient/Noise_Speed",
         "/surfaces/LED_Color/opacity"
+      ]
+    },
+    {
+      "name": "Depart",
+      "elements": [
+        "/surfaces/Flocking/opacity",
+        "/surfaces/BG_Spheres/opacity",
+        "/surfaces/NoiseVis/opacity",
+        "/surfaces/LED_Color/opacity",
+        "/medias/Flocking.fs/Flocking/speedBoids",
+        "/medias/Flocking.fs/Flocking/borderAvoid",
+        "/medias/Flocking.fs/Flocking/noiseSteering",
+        "/medias/Flocking.fs/Visual/transparency",
+        "/medias/Flocking.fs/Visual/trace"
       ]
     },
     {
