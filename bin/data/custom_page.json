@@ -1,88 +1,124 @@
 {
   "pages": [
     {
-      "name": "Polar",
+      "name": "light",
       "elements": [
-        "/surfaces/Polar/*/opacity",
-        "/surfaces/BG_Spheres/*/opacity"
+        "/fixtures/Group-1/color/red",
+        "/fixtures/Group-1/color/green",
+        "/fixtures/Group-1/color/blue"
+      ],
+      "skipKeys": []
+    },
+    {
+      "name": "Train ing",
+      "elements": [
+        "/surfaces/VariousNoiseLayers/Blink/opacity",
+        "/surfaces/VariousNoiseLayers/Anaglyph/opacity",
+        "/surfaces/VariousNoiseLayers/Crater/opacity",
+        "/surfaces/VariousNoiseLayers/Points/opacity",
+        "/surfaces/VariousNoiseLayers/PlanetShadow/opacity"
+      ],
+      "skipKeys": [
+        "children"
       ]
     },
     {
-      "name": "FlyingLow",
+      "name": "Eins",
       "elements": [
-        "/surfaces/FlyingLow/*/opacity",
-        "/medias/IsoLines.fs/speedX",
-        "/medias/IsoLines.fs/speedT",
-        "/medias/IsoLines.fs/zoom",
-        "/medias/LaserSmoke_maped.fs/zoom",
-        "/medias/LaserSmoke_maped.fs/contrast",
-        "/medias/LaserSmoke_maped.fs/speed"
+        "/surfaces/NoiseSwarms/opacity",
+        "/surfaces/Swarm-1/opacity",
+        "/surfaces/VariousNoiseLayers/Eins_InvReliefNoise/opacity",
+        "/surfaces/VariousNoiseLayers/SUB_GrainedGradient/opacity"
+      ],
+      "skipKeys": [
+        "children"
       ]
     },
     {
-      "name": "Cyan",
+      "name": "Prozess 2",
       "elements": [
-        "/surfaces/Flock/Flocking/opacity",
-        "/surfaces/BG_Spheres/opacity",
-        "/surfaces/LED_Color/opacity",
-        "/medias/Flocking.fs/Flocking/speedBoids",
-        "/medias/Flocking.fs/Flocking/noiseSteering",
-        "/medias/Flocking.fs/Visual/transparency",
-        "/medias/Flocking.fs/Visual/trace",
-        "/medias/Flocking.fs/Flocking/cohesion"
+        "/surfaces/Molecules-1/opacity",
+        "/surfaces/VariousNoiseLayers/Rel_bl/opacity",
+        "/surfaces/VariousNoiseLayers/Rel_or/opacity"
+      ],
+      "skipKeys": [
+        "children"
       ]
     },
     {
       "name": "Largo",
       "elements": [
-        "/surfaces/Flocking/opacity",
-        "/surfaces/BG_Spheres/opacity",
-        "/surfaces/NoiseVis/opacity",
-        "/surfaces/LED_Color/opacity",
-        "/medias/Flocking.fs/Flocking/speedBoids",
-        "/medias/Flocking.fs/Flocking/borderAvoid",
-        "/medias/Flocking.fs/Flocking/noiseSteering",
-        "/medias/Flocking.fs/Visual/transparency",
-        "/medias/Flocking.fs/Visual/trace"
+        "/surfaces/Swarm-1/opacity",
+        "/surfaces/VariousNoiseLayers/RedBackground/opacity"
       ]
     },
     {
-      "name": "Breeze",
+      "name": "Prozess 3",
       "elements": [
-        "/surfaces/NoiseVis/opacity",
-        "/medias/Noise_Combinations/Noise_Speed",
-        "/surfaces/NoiseBG/opacity",
-        "/medias/Simplex_Gradient/Noise_Speed",
-        "/surfaces/LED_Color/opacity"
+        "/surfaces/Satellite/Smokey_ws/opacity",
+        "/surfaces/Satellite/Smokey_bl/opacity",
+        "/surfaces/Satellite/Smokey_gr/opacity",
+        "/medias/Smokey.fs/zoom",
+        "/medias/Smokey.fs/xScale",
+        "/medias/Smokey.fs/xSpeed",
+        "/medias/Smokey.fs/contrast"
+      ],
+      "skipKeys": [
+        "children"
       ]
     },
     {
-      "name": "Depart",
+      "name": "FlyingLow",
       "elements": [
-        "/surfaces/Flocking/opacity",
-        "/surfaces/BG_Spheres/opacity",
-        "/surfaces/NoiseVis/opacity",
-        "/surfaces/LED_Color/opacity",
-        "/medias/Flocking.fs/Flocking/speedBoids",
-        "/medias/Flocking.fs/Flocking/borderAvoid",
-        "/medias/Flocking.fs/Flocking/noiseSteering",
-        "/medias/Flocking.fs/Visual/transparency",
-        "/medias/Flocking.fs/Visual/trace"
+        "/surfaces/FlyingLow/*/opacity"
+      ],
+      "skipKeys": [
+        "children"
       ]
     },
     {
-      "name": "MadeInChina",
+      "name": "Ink",
       "elements": [
-        "/surfaces/Made_in_china/white/opacity",
-        "/surfaces/Made_in_china/blue/opacity",
-        "/surfaces/Made_in_china/orange/opacity",
-        "/medias/Noise_Combinations/Noise_Speed"
+        "/surfaces/VariousNoiseLayers/RedBackground/opacity",
+        "/surfaces/VariousNoiseLayers/Marble/opacity",
+        "/surfaces/VariousNoiseLayers/PerlinNoiseFun/opacity",
+        "/surfaces/VariousNoiseLayers/Bioluminecence/opacity",
+        "/surfaces/VariousNoiseLayers/SUB_GrainedGradient/opacity"
+      ],
+      "skipKeys": [
+        "children"
       ]
     },
     {
-      "name": "Sattelite",
+      "name": "Waves",
       "elements": [
-        "/surfaces/Sattelite/*/opacity",
+        "/surfaces/M8/opacity",
+        "/surfaces/Waves/*/opacity"
+      ],
+      "skipKeys": [
+        "children"
+      ]
+    },
+    {
+      "name": "Polar",
+      "elements": [
+        "/surfaces/Polar/*/opacity"
+      ],
+      "skipKeys": [
+        "children"
+      ]
+    },
+    {
+      "name": "Largo",
+      "elements": [
+        "/surfaces/Swarm-1/opacity",
+        "/surfaces/VariousNoiseLayers/RedBackground/opacity"
+      ]
+    },
+    {
+      "name": "Satellite",
+      "elements": [
+        "/surfaces/Satellite/*/opacity",
         "/medias/Smokey.fs/zoom",
         "/medias/Smokey.fs/xScale",
         "/medias/Smokey.fs/xSpeed",
@@ -90,31 +126,29 @@
       ]
     },
     {
-      "name": "Master",
+      "name": "Molecules",
       "elements": [
+        "/surfaces/Molecules-1/opacity"
+      ],
+      "skipKeys": [
+        "children"
+      ]
+    }
+  ],
+  "subpages": [
+    {
+      "key": "/surfaces/*",
+      "elements": [
+        "/surfaces/*/fx/*",
+        "/surfaces/*/color/blue",
+        "/surfaces/*/color/green",
+        "/surfaces/*/color/red",
         "/surfaces/*/opacity"
       ],
       "skipKeys": [
         "selected",
-        "texture",
-        "wireframe",
-        "solid",
-        "Borders",
-        "Mapping"
+        "children"
       ]
     }
-  ],
-  "subpages": [{
-    "key": "/surfaces/*",
-    "elements": [
-      "/surfaces/*/fx/*",
-      "/surfaces/*/color/blue",
-      "/surfaces/*/color/green",
-      "/surfaces/*/color/red",
-      "/surfaces/*/opacity"
-    ],
-    "skipKeys": [
-      "selected"
-    ]
-  }]
+  ]
 }

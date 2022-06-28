@@ -4,7 +4,7 @@
 void ofApp::setup(){
 	// Setup midi controllers
 #ifdef TARGET_OS_OSX
-    platformM.setup("Platform M+ V2.04", "Platform M+ V2.04");
+    platformM.setup("Platform M+ V2.12", "Platform M+ V2.12");
 //    launchpad.setup("Launchpad", "Launchpad");
 #else
 	// Windows
@@ -14,22 +14,22 @@ void ofApp::setup(){
 	for (auto& m : platformM.midiOut.getPortList()) {
 		ofLog(OF_LOG_NOTICE) << "Found midi out device: " << m << endl;
 	}
-	platformM.setup("Platform M+ V2.04 0", "Platform M+ V2.04 1");
+	platformM.setup("Platform M+ V2.12 0", "Platform M+ V2.12 1");
     
     // missing Launchpad Setup
 #endif
 
 
-	madOscQuery.setup("127.0.0.1", 8010, 8011);
+	madOscQuery.setup("127.0.0.1", 9001, 8983);
 
     
     // OSC
-    oscParamSync.setup(swarmParameters, PORT_RECEIVE, HOST, PORT_SEND);
+    //oscParamSync.setup(swarmParameters, PORT_RECEIVE, HOST, PORT_SEND);
     gui.setup();
-    gui.add(swarmParameters);
+   // gui.add(swarmParameters);
     
     
-    MadParameterPage page = MadParameterPage("Flocking", &platformM);
+ /*   MadParameterPage page = MadParameterPage("Flocking", &platformM);
     //add PArameters
     for(int i = 0; i<swarmParameters.getGroup("Flocking").size(); i++){
         if(swarmParameters.getGroup("Flocking").getType(i) == "11ofParameterIfE"){
@@ -81,7 +81,7 @@ void ofApp::setup(){
         madOscQuery.pages.push_back(page);
     }
 
-
+*/
     
     madOscQuery.receive();
     ofSleepMillis(100);
@@ -376,11 +376,11 @@ void ofApp::setupUI(ofJson madmapperJson){
 	// Fixed Controlls
     // check if there is a group or layer calledMapping, ells it controlles fade to black.
     if(madmapperJson["CONTENTS"]["surfaces"]["CONTENTS"]["Mapping"].is_object()) fadeToBlack = madOscQuery.createParameter(madmapperJson["CONTENTS"]["surfaces"]["CONTENTS"]["Mapping"]["CONTENTS"]["opacity"]);
-    else fadeToBlack = madOscQuery.createParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["fade_to_black"]);
+    else fadeToBlack = madOscQuery.createParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["master_level"]);
 
     fadeToBlack->linkMidiComponent(platformM.midiComponents["fader_M"]);
 
-    speed = madOscQuery.createParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["GlobalBPM"]["CONTENTS"]["BPM"]); // MadMapper 3.5
+    speed = madOscQuery.createParameter(madmapperJson["CONTENTS"]["master"]["CONTENTS"]["Global_BPM"]["CONTENTS"]["BPM"]); // MadMapper 3.5
     speed->linkMidiComponent(platformM.midiComponents["jog"]);
     
 	// Select Group.
@@ -430,6 +430,12 @@ void ofApp::draw(){
     }
            
            //gui.draw();
+    
+    stringstream windowInfo;
+    windowInfo << "| -- MadMapperControl -- | FPS: " << fixed << setprecision(1) << ofGetFrameRate();
+    windowInfo << " |";
+    
+    ofSetWindowTitle(windowInfo.str());
 }
 
 //--------------------------------------------------------------
