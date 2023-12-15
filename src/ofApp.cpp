@@ -432,7 +432,7 @@ void ofApp::draw(){
            //gui.draw();
     
     stringstream windowInfo;
-    windowInfo << "| -- MadMapperControl -- | FPS: " << fixed << setprecision(1) << ofGetFrameRate();
+    windowInfo << "| -- MadMapperControl -- | FPS: " << std::fixed << std::setprecision(1) << ofGetFrameRate();
     windowInfo << " |";
     
     ofSetWindowTitle(windowInfo.str());
@@ -681,6 +681,7 @@ void ofApp::updateParameterDisplay(){
             int maxNumChar = 6;
             string name;
             if(p->isMaster) name = result[result.size()-2];
+            else if(p->isModuleParameter) name = result[result.size()-3];
 //            if(!(*currentPage).isSubpage()) name = result[result.size()-1];
             else name = result[result.size()-1];
             

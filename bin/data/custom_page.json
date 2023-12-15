@@ -1,134 +1,20 @@
 {
   "pages": [
     {
-      "name": "light",
+      "name": "Noise",
       "elements": [
-        "/fixtures/Group-1/color/red",
-        "/fixtures/Group-1/color/green",
-        "/fixtures/Group-1/color/blue"
-      ],
-      "skipKeys": []
-    },
-    {
-      "name": "Train ing",
-      "elements": [
-        "/surfaces/VariousNoiseLayers/Blink/opacity",
-        "/surfaces/VariousNoiseLayers/Anaglyph/opacity",
-        "/surfaces/VariousNoiseLayers/Crater/opacity",
-        "/surfaces/VariousNoiseLayers/Points/opacity",
-        "/surfaces/VariousNoiseLayers/PlanetShadow/opacity"
+        "/surfaces/NoiseOut/*/opacity"
       ],
       "skipKeys": [
         "children"
       ]
     },
     {
-      "name": "Eins",
+      "name": "Physarum",
       "elements": [
-        "/surfaces/NoiseSwarms/opacity",
-        "/surfaces/Swarm-1/opacity",
-        "/surfaces/VariousNoiseLayers/Eins_InvReliefNoise/opacity",
-        "/surfaces/VariousNoiseLayers/SUB_GrainedGradient/opacity"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "Prozess 2",
-      "elements": [
-        "/surfaces/Molecules-1/opacity",
-        "/surfaces/VariousNoiseLayers/Rel_bl/opacity",
-        "/surfaces/VariousNoiseLayers/Rel_or/opacity"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "Largo",
-      "elements": [
-        "/surfaces/Swarm-1/opacity",
-        "/surfaces/VariousNoiseLayers/RedBackground/opacity"
-      ]
-    },
-    {
-      "name": "Prozess 3",
-      "elements": [
-        "/surfaces/Satellite/Smokey_ws/opacity",
-        "/surfaces/Satellite/Smokey_bl/opacity",
-        "/surfaces/Satellite/Smokey_gr/opacity",
-        "/medias/Smokey.fs/zoom",
-        "/medias/Smokey.fs/xScale",
-        "/medias/Smokey.fs/xSpeed",
-        "/medias/Smokey.fs/contrast"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "FlyingLow",
-      "elements": [
-        "/surfaces/FlyingLow/*/opacity"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "Ink",
-      "elements": [
-        "/surfaces/VariousNoiseLayers/RedBackground/opacity",
-        "/surfaces/VariousNoiseLayers/Marble/opacity",
-        "/surfaces/VariousNoiseLayers/PerlinNoiseFun/opacity",
-        "/surfaces/VariousNoiseLayers/Bioluminecence/opacity",
-        "/surfaces/VariousNoiseLayers/SUB_GrainedGradient/opacity"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "Waves",
-      "elements": [
-        "/surfaces/M8/opacity",
-        "/surfaces/Waves/*/opacity"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "Polar",
-      "elements": [
-        "/surfaces/Polar/*/opacity"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "Largo",
-      "elements": [
-        "/surfaces/Swarm-1/opacity",
-        "/surfaces/VariousNoiseLayers/RedBackground/opacity"
-      ]
-    },
-    {
-      "name": "Satellite",
-      "elements": [
-        "/surfaces/Satellite/*/opacity",
-        "/medias/Smokey.fs/zoom",
-        "/medias/Smokey.fs/xScale",
-        "/medias/Smokey.fs/xSpeed",
-        "/medias/Smokey.fs/contrast"
-      ]
-    },
-    {
-      "name": "Molecules",
-      "elements": [
-        "/surfaces/Molecules-1/opacity"
+        "/modules/PSpeed/Event/Float_Value",
+        "/modules/PAngle/Event/Float_Value",
+        "/modules/PLength/Event/Float_Value"
       ],
       "skipKeys": [
         "children"
