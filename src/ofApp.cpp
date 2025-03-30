@@ -1,7 +1,23 @@
 #include "ofApp.h"
 
+void writeLogToWindow::log(ofLogLevel level, const string & module, const string & message){
+    // print to cerr for OF_LOG_ERROR and OF_LOG_FATAL_ERROR, everything else to cout
+    stringstream log;
+    log << "[" << ofGetLogLevelName(level, true)  << "] ";
+    // only print the module name if it's not ""
+    if(module != ""){
+        log << module << ": ";
+    }
+    log << message << std::endl;
+    
+    ofDrawBitmapString(log.str(), 0, 0);
+}
+
+static void noopDeleter_new(ofBaseLoggerChannel*){}
+
 //--------------------------------------------------------------
 void ofApp::setup() {
+   // ofSetLoggerChannel(shared_ptr<writeLogToWindow>(new writeLogToWindow, std::function<void(ofBaseLoggerChannel *)>(noopDeleter_new)));
   // Setup midi controllers
   settings = ofLoadJson("settings.json");
   ip = "127.0.0.1";
@@ -10,17 +26,27 @@ void ofApp::setup() {
   }
 
 #ifdef TARGET_OS_OSX
-  platformM.setup("Platform M+ V2.12", "Platform M+ V2.12");
-//    launchpad.setup("Launchpad", "Launchpad");
+// platformM.setup("Platform M+ V2.12", "Platform M+ V2.12");
+// launchpad.setup("Launchpad", "Launchpad");
+/*
+    for (auto& m : faderport16.midiIn.getInPortList()) {
+      ofLog(OF_LOG_NOTICE) << "Found midi in device: " << m << endl;
+    }
+    for (auto& m : faderport16.midiOut.getOutPortList()) {
+      ofLog(OF_LOG_NOTICE) << "Found midi out device: " << m << endl;
+    }
+*/
+    faderport16.setup("PreSonus FP16 Port 1", "PreSonus FP16 Port 1");
+    faderport16XT.setup("PreSonus FP16 Port 2", "PreSonus FP16 Port 2");
 #else
   // Windows
-  for (auto& m : platformM.midiIn.getPortList()) {
+  for (auto& m : faderport16.midiIn.getPortList()) {
     ofLog(OF_LOG_NOTICE) << "Found midi in device: " << m << endl;
   }
-  for (auto& m : platformM.midiOut.getPortList()) {
+  for (auto& m : faderport16.midiOut.getPortList()) {
     ofLog(OF_LOG_NOTICE) << "Found midi out device: " << m << endl;
   }
-  platformM.setup("Platform M+ V2.12 0", "Platform M+ V2.12 1");
+    faderport16.setup("Platform M+ V2.12 0", "Platform M+ V2.12 1");
 
 // missing Launchpad Setup
 #endif
@@ -297,26 +323,26 @@ void ofApp::updateValues(float& p) {
 void ofApp::removeListeners() {
   currentPage->unlinkDevice();
 
-  platformM.midiComponents["chan_up"].value.removeListener(this,
+  faderport16.midiComponents["chan_up"].value.removeListener(this,
                                                            &ofApp::chanForward);
-  platformM.midiComponents["chan_down"].value.removeListener(
+  faderport16.midiComponents["chan_down"].value.removeListener(
       this, &ofApp::chanBackward);
-  platformM.midiComponents["bank_up"].value.removeListener(this,
+  faderport16.midiComponents["bank_up"].value.removeListener(this,
                                                            &ofApp::bankForward);
-  platformM.midiComponents["bank_down"].value.removeListener(
+  faderport16.midiComponents["bank_down"].value.removeListener(
       this, &ofApp::bankBackward);
-  platformM.midiComponents["rep"].value.removeListener(this,
+  faderport16.midiComponents["rep"].value.removeListener(this,
                                                        &ofApp::updateValues);
-  platformM.midiComponents["mixer"].value.removeListener(this,
+  faderport16.midiComponents["mixer"].value.removeListener(this,
                                                          &ofApp::backToCurrent);
 
-  fadeToBlack->unlinkMidiComponent(platformM.midiComponents["fader_M"]);
-  speed->unlinkMidiComponent(platformM.midiComponents["jog"]);
+  fadeToBlack->unlinkMidiComponent(faderport16.midiComponents["fader_M"]);
+  speed->unlinkMidiComponent(faderport16.midiComponents["jog"]);
 
   ofRemoveListener(selectGroup.lastChangedE, this, &ofApp::selectSurface);
   ofRemoveListener(selectGroup.noneSelectedE, this, &ofApp::backToCurrent);
-  ofRemoveListener(recGroup.lastChangedE, this, &ofApp::selectSurface);
-  ofRemoveListener(recGroup.noneSelectedE, this, &ofApp::backToCurrent);
+  ofRemoveListener(muteGroup.lastChangedE, this, &ofApp::selectSurface);
+  ofRemoveListener(muteGroup.noneSelectedE, this, &ofApp::backToCurrent);
   ofRemoveListener(soloGroup.lastChangedE, this, &ofApp::selectMedia);
   ofRemoveListener(soloGroup.noneSelectedE, this, &ofApp::backToCurrent);
 }
@@ -383,17 +409,17 @@ void ofApp::setupPages(ofJson madmapperJson) {
 
 void ofApp::setupUI(ofJson madmapperJson) {
   // Setup all the specialised control.
-  platformM.midiComponents["chan_up"].value.addListener(this,
+  faderport16.midiComponents["chan_up"].value.addListener(this,
                                                         &ofApp::chanForward);
-  platformM.midiComponents["chan_down"].value.addListener(this,
+  faderport16.midiComponents["chan_down"].value.addListener(this,
                                                           &ofApp::chanBackward);
-  platformM.midiComponents["bank_up"].value.addListener(this,
+  faderport16.midiComponents["bank_up"].value.addListener(this,
                                                         &ofApp::bankForward);
-  platformM.midiComponents["bank_down"].value.addListener(this,
+  faderport16.midiComponents["bank_down"].value.addListener(this,
                                                           &ofApp::bankBackward);
-  platformM.midiComponents["mixer"].value.addListener(this,
+  faderport16.midiComponents["mixer"].value.addListener(this,
                                                       &ofApp::backToCurrent);
-  platformM.midiComponents["rep"].value.addListener(this, &ofApp::updateValues);
+  faderport16.midiComponents["rep"].value.addListener(this, &ofApp::updateValues);
 
   // Fixed Controlls
   // check if there is a group or layer calledMapping, ells it controlles fade
@@ -406,33 +432,33 @@ void ofApp::setupUI(ofJson madmapperJson) {
     fadeToBlack = madOscQuery.createParameter(
         madmapperJson["CONTENTS"]["master"]["CONTENTS"]["master_level"]);
 
-  fadeToBlack->linkMidiComponent(platformM.midiComponents["fader_M"]);
+  fadeToBlack->linkMidiComponent(faderport16.midiComponents["fader_M"]);
 
   speed = madOscQuery.createParameter(
       madmapperJson["CONTENTS"]["master"]["CONTENTS"]["Global_BPM"]["CONTENTS"]
                    ["BPM"]);  // MadMapper 3.5
-  speed->linkMidiComponent(platformM.midiComponents["jog"]);
+  speed->linkMidiComponent(faderport16.midiComponents["jog"]);
 
   // Select Group.
   selectGroup.doCheckbox = true;
-  for (int i = 1; i < 9; i++) {
-    selectGroup.add(platformM.midiComponents["sel_" + ofToString(i)]);
+  for (int i = 1; i < 17; i++) {
+    selectGroup.add(faderport16.midiComponents["sel_" + ofToString(i)]);
   }
   ofAddListener(selectGroup.lastChangedE, this, &ofApp::selectSurface);
   ofAddListener(selectGroup.noneSelectedE, this, &ofApp::backToCurrent);
 
   // Rec Group.
-  recGroup.doCheckbox = false;
-  for (int i = 1; i < 9; i++) {
-    recGroup.add(platformM.midiComponents["rec_" + ofToString(i)]);
+  muteGroup.doCheckbox = false;
+  for (int i = 1; i < 17; i++) {
+    muteGroup.add(faderport16.midiComponents["mute_" + ofToString(i)]);
   }
-  ofAddListener(recGroup.lastChangedE, this, &ofApp::selectSurface);
-  ofAddListener(recGroup.noneSelectedE, this, &ofApp::backToCurrent);
+  ofAddListener(muteGroup.lastChangedE, this, &ofApp::selectSurface);
+  ofAddListener(muteGroup.noneSelectedE, this, &ofApp::backToCurrent);
 
   // Rec Group.
   soloGroup.doCheckbox = true;
-  for (int i = 1; i < 9; i++) {
-    soloGroup.add(platformM.midiComponents["solo_" + ofToString(i)]);
+  for (int i = 1; i < 17; i++) {
+    soloGroup.add(faderport16.midiComponents["solo_" + ofToString(i)]);
   }
   ofAddListener(soloGroup.lastChangedE, this, &ofApp::selectMedia);
   ofAddListener(soloGroup.noneSelectedE, this, &ofApp::backToCurrent);
@@ -452,8 +478,8 @@ void ofApp::draw() {
                       errorImage.getWidth(), errorImage.getHeight());
     }
     if (showMidiIn) {
-      platformM.gui.setPosition(10, 10);
-      platformM.gui.draw();
+      faderport16.gui.setPosition(10, 10);
+      faderport16.gui.draw();
     }
   }
 
@@ -487,7 +513,7 @@ void ofApp::keyPressed(int key) {
   }
 
   if (key == 'l') {
-    platformM.setupFromFile("platformM.json");
+    //platformM.setupFromFile("platformM.json");
   }
 
   if (key == 'o' && !madMapperLoadError) {
@@ -576,14 +602,14 @@ bool ofApp::reloadFromServer(float& p) {
       ofLog(OF_LOG_WARNING) << "Reload unsuccessful!" << endl;
       return false;
     }
-    madOscQuery.createCustomPages(&platformM, ofLoadJson("custom_page.json"),
+    madOscQuery.createCustomPages(&faderport16, ofLoadJson("custom_page.json"),
                                   madOscQuery.madMapperJson);
 
     // Setups pages
     if (initialised) {
       removeListeners();
       selectGroup.clear();
-      recGroup.clear();
+      muteGroup.clear();
       soloGroup.clear();
       madOscQuery.pages.clear();
     }
@@ -649,51 +675,109 @@ void ofApp::gotMessage(ofMessage msg) {}
 void ofApp::dragEvent(ofDragInfo dragInfo) {}
 
 void ofApp::updatePageDisplay() {
+// UPPER ROW_INPUT
+    
+    std::string str = (*currentPage).getName();
+    
+    int numOfLettersPerField = 5; // Mode 2 big Letters
+    for(int i = 0; i*numOfLettersPerField < str.length(); i++){
+        
+        vector<unsigned char> text;
+          text.push_back(0xF0);
+          text.push_back(0x00);
+          text.push_back(0x01);
+          text.push_back(0x06);
+          text.push_back(0x16); // DEVICE ID
+          text.push_back(0x12);  // DISPLAY
+          text.push_back(i);  // Channel
+          text.push_back(0x00);  // line
+          text.push_back(0x01);  // alignment (0:center, 1:left, 2:right)
+        
+        if((i+1)*numOfLettersPerField<str.length()){
+            std::copy(str.begin()+i*numOfLettersPerField, str.begin()+(i+1)*numOfLettersPerField, std::back_inserter(text));
+        }
+        else{
+            std::copy(str.begin()+i*numOfLettersPerField, str.end(), std::back_inserter(text));
+        }
+        
+        text.push_back(0xF7);  // DETERMINATOR
+        faderport16.midiOut.sendMidiBytes(text);
+    }
+    
+
+
+
+    
+}
+
+
+void ofApp::setDisplayMode(int channel, bool clear = false) {
   // UPPER ROW_INPUT
   vector<unsigned char> text;
   text.push_back(0xF0);
   text.push_back(0x00);
-  text.push_back(0x00);
-  text.push_back(0x66);
-  text.push_back(0x14);  // DEVICE ID
-  text.push_back(0x12);  // DISPLAY
-  //    text.push_back(0x00); // POSITION FIRST LINE
-  text.push_back(0x38);  // UPPER LINE
+  text.push_back(0x01);
+  text.push_back(0x06);
+  text.push_back(0x16);  // FaderPort16
+  text.push_back(0x13);  // DISPLAY Mode Code
+    text.push_back(channel);  // channel
+    int mode = 1;
+    text.push_back(mode+(clear<<4));  // mode
+/*
+        Default = 0
+        AlternativeDefault = 1
+        SmallText = 2
+        LargeText = 3
+        LargeTextMetering = 4
+        DefaultTextMetering = 5
+        MixedText = 6
+        AlternativeTextMetering = 7
+        MixedTextMetering = 8
+        Menu = 9
 
-  std::string str = (*currentPage).getName();
-  ;
-  std::copy(str.begin(), str.end(), std::back_inserter(text));
-
-  while (text.size() < 66 + 6) {
-    text.push_back(' ');  // Clear other fields
-  }
-
+     ValueBarMode:
+        Normal = 0
+        Bipolar = 1
+        Fill = 2
+        Spread = 3
+        Off = 4
+ 
+ */
   text.push_back(0xF7);  // DETERMINATOR
-  platformM.midiOut.sendMidiBytes(text);
+  faderport16.midiOut.sendMidiBytes(text);
 }
 
 void ofApp::updateParameterDisplay() {
-  // UPPER ROW_INPUT
-  vector<unsigned char> text;
-  text.push_back(0xF0);
-  text.push_back(0x00);
-  text.push_back(0x00);
-  text.push_back(0x66);
-  text.push_back(0x14);  // DEVICE ID
-  text.push_back(0x12);  // DISPLAY
-  text.push_back(0x00);  // POSITION FIRST LINE
-                         //    text.push_back(0x38); // UPPER LINE
-                         //    text.push_back('|');
-
-  int parNum = 1;
+    
+    
+    for(int i = 0; i < 16; i++){
+        setDisplayMode(i, true); // Clear the Display
+    }
+    
+    updatePageDisplay();
+    
+    
+    int parNum = 1;
   for (auto& p : *(*currentPage).getParameters()) {
     if (parNum >= (*currentPage).getRange().first &&
         parNum <= (*currentPage).getRange().second) {
+        
+        vector<unsigned char> text;
+          text.push_back(0xF0);
+          text.push_back(0x00);
+          text.push_back(0x01);
+          text.push_back(0x06);
+          text.push_back(0x16); // DEVICE ID
+          text.push_back(0x12);  // DISPLAY
+          text.push_back(parNum-1);  // Channel
+          text.push_back(0x01);  // line
+          text.push_back(0x00);  // alignment
+        
       string oscAddress = p->oscAddress;
       auto result = ofSplitString(oscAddress, "/");
       string page = result[result.size() - 2];
 
-      int maxNumChar = 6;
+      int maxNumChar = 7;
       string name;
       if (p->isMaster)
         name = result[result.size() - 2];
@@ -708,15 +792,12 @@ void ofApp::updateParameterDisplay() {
       if (name.size() > maxNumChar) length = maxNumChar;
       std::copy(name.begin(), name.begin() + length, std::back_inserter(text));
       for (int i = length; i < maxNumChar; i++) text.push_back(' ');
-      text.push_back(' ');
+        
+        text.push_back(0xF7);  // DETERMINATOR
+        faderport16.midiOut.sendMidiBytes(text);
     }
     parNum++;
   }
 
-  while (text.size() < 66 + 6) {
-    text.push_back(' ');  // Clear other fields
-  }
 
-  text.push_back(0xF7);  // DETERMINATOR
-  platformM.midiOut.sendMidiBytes(text);
 }

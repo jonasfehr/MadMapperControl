@@ -10,6 +10,14 @@
 #define PORT_SEND 9000
 #define PORT_RECEIVE 9001
 
+
+class writeLogToWindow : public ofBaseLoggerChannel {
+public:
+    /// \brief Destroy the console logger channel.
+    virtual ~writeLogToWindow() {};
+    void log(ofLogLevel level, const std::string & module, const std::string & message);
+};
+
 class ofApp : public ofBaseApp {
  public:
   void setup();
@@ -32,7 +40,8 @@ class ofApp : public ofBaseApp {
   ofJson settings;
   string ip;
   ofxMadOscQuery madOscQuery;
-  ofxMidiDevice platformM;
+    ofxMidiDevice faderport16;
+    ofxMidiDevice faderport16XT;
   //  ofxMidiDevice launchpad;
 
   std::list<MadParameterPage>::iterator currentPage;
@@ -47,6 +56,7 @@ class ofApp : public ofBaseApp {
   ofImage errorImage;
 
   // FOR UX
+  void setDisplayMode(int channel, bool clear);
   void updatePageDisplay();
   void updateParameterDisplay();
   void chanForward(float& p);
@@ -56,9 +66,8 @@ class ofApp : public ofBaseApp {
   MadParameter* fadeToBlack;
   MadParameter* speed;
   MidiComponentGroup selectGroup;
-  MidiComponentGroup muteGroup;  // not used yet
-  MidiComponentGroup soloGroup;  // not used yet
-  MidiComponentGroup recGroup;
+  MidiComponentGroup soloGroup;
+  MidiComponentGroup muteGroup;
   void selectSurface(string& name);
   void selectGroupContent(string& name);
   void selectMedia(string& name);
