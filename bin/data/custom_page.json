@@ -3,317 +3,144 @@
     {
       "name": "Einlass",
       "elements": [
-        "/surfaces/Background/opacity",
-        "/surfaces/Gradient/opacity",
-        "/laser_surfaces/TXT_KINEMA/opacity",
-        "/surfaces/Light/*/opacity"
+        "/surfaces/AllPages/*/opacity",
+        "/surfaces/Korridore_Dim/opacity",
+        "/surfaces/FrontDesk/opacity"
       ],
       "skipKeys": [
         "children"
       ]
     },
     {
-      "name": "Polar",
+      "name": "Intro -> Tsunami",
       "elements": [
-        "/surfaces/TD_direkt/opacity",
-        "/surfaces/Polar/M8/opacity",
-        "/modules/PaSize/Event/Float_Value",
-        "/modules/PaSpeedForceVariation/Event/Float_Value",
-        "/modules/PaRotationSpeed/Event/Float_Value"
+        "/surfaces/AllPages/*/opacity",
+        "/surfaces/Intro_Tsunami/*/opacity"
       ],
       "skipKeys": [
         "children"
       ]
     },
     {
-      "name": "Zephyr (TD-Surface)",
+      "name": "TodayYesterdayTomorrow (Stimme)",
       "elements": [
-        "/surfaces/TD_direkt/opacity",
-        "/surfaces/Zephyr/*/opacity",
-        "/modules/LightDim/Event/Float_Value"
+        "/surfaces/AllPages/*/opacity",
+        "/surfaces/Stimme/*/opacity"
       ],
       "skipKeys": [
         "children"
       ]
     },
     {
-      "name": "Ink (Pink marbles)",
+      "name": "Sturz",
       "elements": [
-        "/surfaces/VariousNoiseLayers/Bioluminecence/opacity",
-        "/surfaces/VariousNoiseLayers/Marble/opacity",
-        "/surfaces/VariousNoiseLayers/PerlinNoiseFun/opacity",
-        "/surfaces/VariousNoiseLayers/RedBackground/opacity",
-        "/surfaces/VariousNoiseLayers/SUB_GrainedGradient/opacity"
+        "/surfaces/AllPages/*/opacity",
+        "/surfaces/Sturz/*/opacity",
+        "/surfaces/Grid/G_Flicker/opacity",
+        "/media/walkerSturz/threshold",
+        "/media/walkerSturz/softfade",
+        "/surfaces/FixPos/FP_Front_Dim/opacity",
+        "/surfaces/FixPos/FI_Strobo_Dim/opacity",
+        "/surfaces/FixPos/FI_Strobo_Dim/FX/Atomic3k_Control/Atomic/Duration",
+        "/surfaces/FixPos/FI_Strobo_Dim/FX/Atomic3k_Control/Atomic/Ratio"
       ],
       "skipKeys": [
         "children"
       ]
     },
     {
-      "name": "Training",
+      "name": "Volver_Erreka",
       "elements": [
-        "/medias/Smokey.fs/zoom",
-        "/medias/Smokey.fs/xScale",
-        "/medias/Smokey.fs/xSpeed",
-        "/medias/Smokey.fs/contrast",
-        "/surfaces/Training/*/opacity",
-        "/laser_surfaces/LLines/opacity"
+        "/surfaces/AllPages/*/opacity",
+        "/surfaces/Volver_Erreka/*/opacity",
+        "/surfaces/FixPos/FI_Strobo_Dim/opacity",
+        "/surfaces/FixPos/FI_Strobo_Dim/FX/Atomic3k_Control/Atomic/Duration",
+        "/surfaces/FixPos/FI_Strobo_Dim/FX/Atomic3k_Control/Atomic/Ratio",
+        "/surfaces/Atomic/FX/Atomic3k_Control/Atomic/Duration",
+        "/surfaces/Atomic/FX/Atomic3k_Control/Atomic/Ratio",
+        "/media/walkerErreka/threshold",
+        "/media/walkerErreka/softfade",
+        "/media/walkerErreka/speed"
       ],
       "skipKeys": [
         "children"
       ]
     },
     {
-      "name": "- Pause -",
+      "name": "Drone",
       "elements": [
-        "/surfaces/Background/opacity",
-        "/surfaces/Gradient/opacity",
-        "/laser_surfaces/TXT_KINEMA/opacity",
-        "/surfaces/Light/*/opacity"
+        "/surfaces/AllPages/*/opacity",
+        "/surfaces/Drone/*/opacity",
+        "/surfaces/FixPos/FI_Strobo_Dim/opacity",
+        "/surfaces/FixPos/FI_Strobo_Dim/FX/Atomic3k_Control/Atomic/Duration",
+        "/surfaces/FixPos/FI_Strobo_Dim/FX/Atomic3k_Control/Atomic/Ratio",
+        "/surfaces/Applaus/opacity"
       ],
       "skipKeys": [
         "children"
       ]
     },
     {
-      "name": "Kinema Laserlike",
+      "name": "Applaus & Auslass",
       "elements": [
-        "/surfaces/TD_direkt/opacity",
-        "/surfaces/Kinema_LaserReplacement/*/opacity",
-        "/medias/Dancing_Lines/Length",
-        "/medias/LaserVector2D/Auto_Scale/Size",
-        "/medias/LaserVector2D/Auto_Scale/Speed"
+        "/surfaces/AllPages/*/opacity",
+        "/surfaces/Applaus/opacity",
+        "/surfaces/Korridore_Dim/opacity"
       ],
       "skipKeys": [
         "children"
       ]
     },
     {
-      "name": "Kinema ParticlesDiffusion",
+      "name": "Grid",
       "elements": [
-        "/surfaces/TD_direkt/opacity",
-        "/modules/PDPartSpeed/Event/Float_Value",
-        "/modules/PDNSpeed/Event/Float_Value",
-        "/modules/PDCNSpeed/Event/Float_Value",
-        "/modules/PDLifetime/Event/Float_Value",
-        "/modules/PDAttraction/Event/Float_Value",
-        "/surfaces/M5/*/opacity"
+        "/surfaces/Grid/*/opacity"
       ],
       "skipKeys": [
         "children"
       ]
     },
     {
-      "name": "M3 (Physarum)",
+      "name": "FixPos",
       "elements": [
-        "/surfaces/TD_direkt/opacity",
-        "/modules/PSpeed/Event/Float_Value",
-        "/modules/PAngle/Event/Float_Value",
-        "/modules/PLength/Event/Float_Value",
-        "/modules/PSharpen/Event/Float_Value",
-        "/modules/PFeedback/Event/Float_Value"
+        "/surfaces/FixPos/*/opacity"
       ],
       "skipKeys": [
         "children"
       ]
     },
     {
-      "name": "M5 (FlyingLow)",
+      "name": "Fadenvorhang",
       "elements": [
-        "/surfaces/FlyingLow/*/opacity",
-        "/medias/IsoLines.fs/speedX",
-        "/medias/IsoLines.fs/speedT",
-        "/medias/LaserSmoke.fs/speed",
-        "/medias/LaserSmoke.fs/zoom",
-        "/medias/LaserSmoke.fs/contrast"
+        "/surfaces/Fadenvorhang/*/opacity"
       ],
       "skipKeys": [
         "children"
       ]
     },
     {
-      "name": "Largo",
+      "name": "ALL",
       "elements": [
-        "/modules/FSpeedBoids/Event/Float_Value",
-        "/modules/FNumBoids/Event/Float_Value",
-        "/modules/FNoiseSteer/Event/Float_Value",
-        "/modules/FRandom/Event/Float_Value",
-        "/modules/FTrace/Event/Float_Value",
-        "/modules/FTransparency/Event/Float_Value",
-        "/modules/FScale/Event/Float_Value",
-        "/surfaces/Largo/*/opacity",
-        "/medias/Fluid_Noise/NoiseAnim/Noise_Speed"
+        "/surfaces/Grid/*/opacity",
+        "/surfaces/Fadenvorhang/*/opacity",
+        "/surfaces/Projector/*/opacity",
+        "/surfaces/FixPos/*/opacity"
       ],
       "skipKeys": [
         "children"
       ]
     },
     {
-      "name": "- APPLAUS -",
+      "name": "Atomics",
       "elements": [
-        "/surfaces/Background/opacity",
-        "/surfaces/Gradient/opacity",
-        "/laser_surfaces/TXT_KINEMA/opacity",
-        "/surfaces/Light/*/opacity"
+        "/surfaces/AtomicComp/*/opacity",
+        "/surfaces/Atomic/FX/Atomic3k_Control/Atomic/AtomicMaster",
+        "/surfaces/Atomic/FX/Atomic3k_Control/Atomic/Duration",
+        "/surfaces/Atomic/FX/Atomic3k_Control/Atomic/Ratio"
       ],
       "skipKeys": [
         "children"
       ]
-    },
-    {
-      "name": "M7 - ReactDiffusion",
-      "elements": [
-        "/surfaces/TD_direkt/opacity",
-        "/surfaces/NoiseOut/*/opacity",
-        "/modules/RDSpeed/Event/Float_Value",
-        "/modules/RDZoomSpeed/Event/Float_Value",
-        "/modules/RDSharpen/Event/Float_Value",
-        "/modules/RDbWeight/Event/Float_Value"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "Morph SmokeySphere",
-      "elements": [
-        "/surfaces/TD_direkt/opacity",
-        "/modules/SS_Stepsize/Event/Float_Value",
-        "/modules/SS_NSpeed/Event/Float_Value",
-        "/modules/SS_NForceamt/Event/Float_Value",
-        "/modules/LightDim/Event/Float_Value"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "Cyan",
-      "elements": [
-        "/modules/FSpeedBoids/Event/Float_Value",
-        "/modules/FNumBoids/Event/Float_Value",
-        "/modules/FNoiseSteer/Event/Float_Value",
-        "/modules/FRandom/Event/Float_Value",
-        "/modules/FTrace/Event/Float_Value",
-        "/modules/FTransparency/Event/Float_Value",
-        "/modules/FScale/Event/Float_Value",
-        "/surfaces/Cyan/*/opacity"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "M3",
-      "elements": [
-        "/surfaces/TD_direkt/opacity",
-        "/modules/PDPartSpeed/Event/Float_Value",
-        "/modules/PDNSpeed/Event/Float_Value",
-        "/modules/PDCNSpeed/Event/Float_Value",
-        "/modules/PDLifetime/Event/Float_Value",
-        "/modules/PDAttraction/Event/Float_Value",
-        "/laser_surfaces/TDAttractors/opacity"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "ReactDiffusion",
-      "elements": [
-        "/surfaces/TD_direkt/opacity",
-        "/surfaces/NoiseOut/*/opacity",
-        "/modules/RDSpeed/Event/Float_Value",
-        "/modules/RDZoomSpeed/Event/Float_Value",
-        "/modules/RDSharpen/Event/Float_Value",
-        "/modules/RDbWeight/Event/Float_Value"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "Kinema Laserversion",
-      "elements": [
-        "/laser_surfaces/StrobeDots/opacity",
-        "/medias/Dancing_Lines/Length",
-        "/laser_surfaces/DancingLines/opacity",
-        "/laser_surfaces/Circles/opacity",
-        "/medias/LaserVector2D/Auto_Scale/Size",
-        "/medias/LaserVector2D/Auto_Scale/Speed",
-        "/surfaces/Kinema/NoiseWater/opacity",
-        "/surfaces/Kinema/TD/opacity"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "Prozess 2",
-      "elements": [
-        "/surfaces/Molecules-1/opacity",
-        "/surfaces/VariousNoiseLayers/Rel_bl/opacity",
-        "/surfaces/VariousNoiseLayers/Rel_or/opacity"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "Prozess 3",
-      "elements": [
-        "/surfaces/Satellite/Smokey_ws/opacity",
-        "/surfaces/Satellite/Smokey_bl/opacity",
-        "/surfaces/Satellite/Smokey_gr/opacity",
-        "/medias/Smokey.fs/zoom",
-        "/medias/Smokey.fs/xScale",
-        "/medias/Smokey.fs/xSpeed",
-        "/medias/Smokey.fs/contrast"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "Waves",
-      "elements": [
-        "/surfaces/M8/opacity",
-        "/surfaces/Waves/*/opacity"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "Satellite",
-      "elements": [
-        "/surfaces/Satellite/*/opacity",
-        "/medias/Smokey.fs/zoom",
-        "/medias/Smokey.fs/xScale",
-        "/medias/Smokey.fs/xSpeed",
-        "/medias/Smokey.fs/contrast"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "Molecules",
-      "elements": [
-        "/surfaces/Molecules-1/opacity"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "light",
-      "elements": [
-        "/fixtures/Group-1/color/red",
-        "/fixtures/Group-1/color/green",
-        "/fixtures/Group-1/color/blue"
-      ],
-      "skipKeys": []
     }
   ],
   "subpages": [

@@ -7,8 +7,8 @@
 #include "ofxOscParameterSync.h"
 
 #define HOST "localhost"
-#define PORT_SEND 9000
-#define PORT_RECEIVE 9001
+#define PORT_RECEIVE 8010
+#define PORT_FEEDBACK 9893
 
 
 class writeLogToWindow : public ofBaseLoggerChannel {
@@ -39,6 +39,9 @@ class ofApp : public ofBaseApp {
 
   ofJson settings;
   string ip;
+  int     queryPort;
+	int feedbackPort;
+	int receivePort;
   ofxMadOscQuery madOscQuery;
     ofxMidiDevice faderport16;
     ofxMidiDevice faderport16XT;
@@ -63,7 +66,9 @@ class ofApp : public ofBaseApp {
   void chanBackward(float& p);
   void bankForward(float& p);
   void bankBackward(float& p);
-  MadParameter* fadeToBlack;
+    MadParameter* fadeMasterVideo;
+    MadParameter* fadeMasterDMX;
+    MadParameter* fadeEngingeSpeed;
   MadParameter* speed;
   MidiComponentGroup selectGroup;
   MidiComponentGroup soloGroup;
