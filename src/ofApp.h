@@ -5,6 +5,8 @@
 #include "ofxMadOscQuery.h"
 #include "ofxMidiDevice.h"
 #include "ofxOscParameterSync.h"
+//#include "Faderport16Surface.h"
+#include "Push3Surface.h"
 
 #define HOST "localhost"
 #define PORT_RECEIVE 8010
@@ -13,9 +15,9 @@
 
 class writeLogToWindow : public ofBaseLoggerChannel {
 public:
-    /// \brief Destroy the console logger channel.
-    virtual ~writeLogToWindow() {};
-    void log(ofLogLevel level, const std::string & module, const std::string & message);
+	/// \brief Destroy the console logger channel.
+	virtual ~writeLogToWindow() {};
+	void log(ofLogLevel level, const std::string & module, const std::string & message);
 };
 
 class ofApp : public ofBaseApp {
@@ -41,11 +43,10 @@ class ofApp : public ofBaseApp {
   string ip;
   int     queryPort;
 	int feedbackPort;
-	int receivePort;
+	int sendPort;
   ofxMadOscQuery madOscQuery;
-    ofxMidiDevice faderport16;
-    ofxMidiDevice faderport16XT;
-  //  ofxMidiDevice launchpad;
+  //Faderport16Surface faderSurface;
+	Push3Surface faderSurface;
 
   std::list<MadParameterPage>::iterator currentPage;
   std::list<MadParameterPage>::iterator previousPage;
@@ -59,16 +60,15 @@ class ofApp : public ofBaseApp {
   ofImage errorImage;
 
   // FOR UX
-  void setDisplayMode(int channel, bool clear);
   void updatePageDisplay();
   void updateParameterDisplay();
-  void chanForward(float& p);
-  void chanBackward(float& p);
+  void pageForward(float& p);
+  void pageBackward(float& p);
   void bankForward(float& p);
   void bankBackward(float& p);
-    MadParameter* fadeMasterVideo;
-    MadParameter* fadeMasterDMX;
-    MadParameter* fadeEngingeSpeed;
+	MadParameter* fadeMasterVideo;
+	MadParameter* fadeMasterDMX;
+	MadParameter* fadeEngingeSpeed;
   MadParameter* speed;
   MidiComponentGroup selectGroup;
   MidiComponentGroup soloGroup;
@@ -95,37 +95,6 @@ class ofApp : public ofBaseApp {
 
   ofxOscParameterSync oscParamSync;
   ofxPanel gui;
-
-  ofParameter<float> speedBoids{"speedBoids", 1.f, 0.0f, 1.0f};
-  ofParameter<float> numBoids{"numBoids", 1.0f, 0.0f, 1.0f};
-  ofParameter<float> cohesion{"cohesion", 0.5f, 0.0f, 1.0f};
-  ofParameter<float> separation{"separation", 0.5f, 0.0f, 1.0f};
-  ofParameter<float> align{"align", 0.5f, 0.0f, 1.0f};
-  ofParameter<float> random{"random", 0.01f, 0.0f, 1.0f};
-  ofParameter<float> borderAvoid{"borderAvoid", 0.01f, 0.0f, 1.0f};
-  ofParameter<float> noiseSteering{"noiseSteering", 0.01f, 0.0f, 1.0f};
-  ofParameter<float> cohesionDist{"cohesionDist", 0.5f, 0.0f, 1.0f};
-  ofParameter<float> separationDist{"separationDist", 0.5f, 0.0f, 1.0f};
-  ofParameter<float> alignDist{"alignDist", 0.5f, 0.0f, 1.0f};
-  ofParameter<bool> do2D{"do2D", true};
-
-  ofParameterGroup parametersFlocking{
-      "Flocking",     numBoids,    cohesion,      separation, align,
-      random,         borderAvoid, noiseSteering, speedBoids, cohesionDist,
-      separationDist, alignDist,   do2D};
-
-  ofParameter<float> pointScale{"pointScale", 1.0f, 0.0001f, 50.0f};
-  ofParameter<float> dotSize{"dotSize", 1.0f, 0.f, 1.0f};
-  ofParameter<float> feather{"feather", 1.0f, 0.f, 1.0f};
-  ofParameter<float> gamma{"gamma", 1.0f, 0.000001f, 2.0f};
-  ofParameter<float> transparency{"transparency", 1.0f, 0.f, 1.0f};
-  ofParameter<float> trace{"trace", 1.0f, 0.f, 1.0f};
-
-  ofParameterGroup parametersVisual{"Visual", pointScale,   dotSize, feather,
-                                    gamma,    transparency, trace};
-
-  ofParameterGroup swarmParameters{"ParticleSystem", parametersFlocking,
-                                   parametersVisual};
 
   vector<MadParameter> madParameters;
 };
