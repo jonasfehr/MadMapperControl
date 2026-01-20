@@ -5,8 +5,12 @@
 #include "ofxMadOscQuery.h"
 #include "ofxMidiDevice.h"
 #include "ofxOscParameterSync.h"
-//#include "Faderport16Surface.h"
+#include "DeviceProfile.h"
+#include "MidiControlSurface.h"
+#include "Faderport16Surface.h"
+#include "PlatformMSurface.h"
 #include "Push3Surface.h"
+#include <memory>
 
 #define HOST "localhost"
 #define PORT_RECEIVE 8010
@@ -45,8 +49,8 @@ class ofApp : public ofBaseApp {
 	int feedbackPort;
 	int sendPort;
   ofxMadOscQuery madOscQuery;
-  //Faderport16Surface faderSurface;
-	Push3Surface faderSurface;
+  std::unique_ptr<MidiControlSurface> surface;
+  std::optional<DeviceProfile> activeProfile;
 
   std::list<MadParameterPage>::iterator currentPage;
   std::list<MadParameterPage>::iterator previousPage;
@@ -85,6 +89,7 @@ class ofApp : public ofBaseApp {
   bool isLoading;
   bool showMidiIn = false;
   bool showStatusString = false;
+  bool noDeviceConnected = false; // true when no MIDI profile matches connected ports
 
   // OSC functions
   void oscSelectSurface(string name);
@@ -97,4 +102,6 @@ class ofApp : public ofBaseApp {
   ofxPanel gui;
 
   vector<MadParameter> madParameters;
+
+  MidiComponent* getComponentByRole(const std::string& role);
 };
