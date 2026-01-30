@@ -1,0 +1,10 @@
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Always
+ColumnLimit: 120
+PointerAlignment: Left
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: true
+AllowShortBlocksOnASingleLine: Empty
+SortIncludes: false

@@ -17,14 +17,14 @@
 #define PORT_FEEDBACK 9893
 
 class writeLogToWindow : public ofBaseLoggerChannel {
-public:
+  public:
 	/// \brief Destroy the console logger channel.
-	virtual ~writeLogToWindow() { };
-	void log(ofLogLevel level, const std::string & module, const std::string & message);
+	virtual ~writeLogToWindow() {};
+	void log(ofLogLevel level, const std::string& module, const std::string& message);
 };
 
 class ofApp : public ofBaseApp {
-public:
+  public:
 	void setup();
 	void update();
 	void draw();
@@ -54,7 +54,7 @@ public:
 	std::list<MadParameterPage>::iterator currentPage;
 	std::list<MadParameterPage>::iterator previousPage;
 
-	void setActivePage(MadParameterPage * page, MadParameterPage * prevPage);
+	void setActivePage(MadParameterPage* page, MadParameterPage* prevPage);
 	void setupPages(ofJson madMapperJson);
 	void setupUI(ofJson madMapperJson);
 	void drawStatusString();
@@ -65,25 +65,25 @@ public:
 	// FOR UX
 	void updatePageDisplay();
 	void updateParameterDisplay();
-	void pageForward(float & p);
-	void pageBackward(float & p);
-	void bankForward(float & p);
-	void bankBackward(float & p);
-	MadParameter * fadeMasterVideo;
-	MadParameter * fadeMasterDMX;
-	MadParameter * fadeEngingeSpeed;
-	MadParameter * speed;
+	void pageForward(float& p);
+	void pageBackward(float& p);
+	void bankForward(float& p);
+	void bankBackward(float& p);
+	MadParameter* fadeMasterVideo;
+	MadParameter* fadeMasterDMX;
+	MadParameter* fadeEngingeSpeed;
+	MadParameter* speed;
 	MidiComponentGroup selectGroup;
 	MidiComponentGroup soloGroup;
 	MidiComponentGroup muteGroup;
-	void selectSurface(string & name);
-	void selectGroupContent(string & name);
-	void selectMedia(string & name);
-	void showMedia(string & name);
-	void backToCurrent(float & p);
-	bool reloadFromServer(float & p);
-	void reload(float & p);
-	void updateValues(float & p);
+	void selectSurface(string& name);
+	void selectGroupContent(string& name);
+	void selectMedia(string& name);
+	void showMedia(string& name);
+	void backToCurrent(float& p);
+	bool reloadFromServer(float& p);
+	void reload(float& p);
+	void updateValues(float& p);
 
 	bool isLoading;
 	bool showMidiIn = false;
@@ -102,5 +102,5 @@ public:
 
 	vector<MadParameter> madParameters;
 
-	MidiComponent * getComponentByRole(const std::string & role);
+	MidiComponent* getComponentByRole(const std::string& role);
 };

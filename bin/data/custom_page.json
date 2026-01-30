@@ -1,142 +1,19 @@
 {
   "pages": [
     {
-      "name": "Einlass",
+      "name": "Testpage",
       "elements": [
-        "/surfaces/AllPages/*/opacity",
-        "/surfaces/Korridore_Dim/opacity",
-        "/surfaces/FrontDesk/opacity"
+        "/surfaces/Grp/*/opacity",
+        "/surfaces/Quad-1/opacity"
       ],
       "skipKeys": [
         "children"
       ]
     },
     {
-      "name": "Intro -> Tsunami",
+      "name": "Testp2",
       "elements": [
-        "/surfaces/AllPages/*/opacity",
-        "/surfaces/Intro_Tsunami/*/opacity"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "TodayYesterdayTomorrow (Stimme)",
-      "elements": [
-        "/surfaces/AllPages/*/opacity",
-        "/surfaces/Stimme/*/opacity"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "Sturz",
-      "elements": [
-        "/surfaces/AllPages/*/opacity",
-        "/surfaces/Sturz/*/opacity",
-        "/surfaces/Grid/G_Flicker/opacity",
-        "/media/walkerSturz/threshold",
-        "/media/walkerSturz/softfade",
-        "/surfaces/FixPos/FP_Front_Dim/opacity",
-        "/surfaces/FixPos/FI_Strobo_Dim/opacity",
-        "/surfaces/FixPos/FI_Strobo_Dim/FX/Atomic3k_Control/Atomic/Duration",
-        "/surfaces/FixPos/FI_Strobo_Dim/FX/Atomic3k_Control/Atomic/Ratio"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "Volver_Erreka",
-      "elements": [
-        "/surfaces/AllPages/*/opacity",
-        "/surfaces/Volver_Erreka/*/opacity",
-        "/surfaces/FixPos/FI_Strobo_Dim/opacity",
-        "/surfaces/FixPos/FI_Strobo_Dim/FX/Atomic3k_Control/Atomic/Duration",
-        "/surfaces/FixPos/FI_Strobo_Dim/FX/Atomic3k_Control/Atomic/Ratio",
-        "/surfaces/Atomic/FX/Atomic3k_Control/Atomic/Duration",
-        "/surfaces/Atomic/FX/Atomic3k_Control/Atomic/Ratio",
-        "/media/walkerErreka/threshold",
-        "/media/walkerErreka/softfade",
-        "/media/walkerErreka/speed"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "Drone",
-      "elements": [
-        "/surfaces/AllPages/*/opacity",
-        "/surfaces/Drone/*/opacity",
-        "/surfaces/FixPos/FI_Strobo_Dim/opacity",
-        "/surfaces/FixPos/FI_Strobo_Dim/FX/Atomic3k_Control/Atomic/Duration",
-        "/surfaces/FixPos/FI_Strobo_Dim/FX/Atomic3k_Control/Atomic/Ratio",
-        "/surfaces/Applaus/opacity"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "Applaus & Auslass",
-      "elements": [
-        "/surfaces/AllPages/*/opacity",
-        "/surfaces/Applaus/opacity",
-        "/surfaces/Korridore_Dim/opacity"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "Grid",
-      "elements": [
-        "/surfaces/Grid/*/opacity"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "FixPos",
-      "elements": [
-        "/surfaces/FixPos/*/opacity"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "Fadenvorhang",
-      "elements": [
-        "/surfaces/Fadenvorhang/*/opacity"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "ALL",
-      "elements": [
-        "/surfaces/Grid/*/opacity",
-        "/surfaces/Fadenvorhang/*/opacity",
-        "/surfaces/Projector/*/opacity",
-        "/surfaces/FixPos/*/opacity"
-      ],
-      "skipKeys": [
-        "children"
-      ]
-    },
-    {
-      "name": "Atomics",
-      "elements": [
-        "/surfaces/AtomicComp/*/opacity",
-        "/surfaces/Atomic/FX/Atomic3k_Control/Atomic/AtomicMaster",
-        "/surfaces/Atomic/FX/Atomic3k_Control/Atomic/Duration",
-        "/surfaces/Atomic/FX/Atomic3k_Control/Atomic/Ratio"
+        "/surfaces/Grp/*/opacity"
       ],
       "skipKeys": [
         "children"

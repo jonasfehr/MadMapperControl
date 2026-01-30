@@ -1,7 +1,7 @@
 #include "ofApp.h"
 #include <algorithm>
 
-static MidiComponent * getComponentByRole(ofxMidiDevice * dev, const std::string & role) {
+static MidiComponent* getComponentByRole(ofxMidiDevice* dev, const std::string& role) {
 	if (!dev) return nullptr;
 	auto it = dev->bindings.find(role);
 	if (it == dev->bindings.end()) return nullptr;
@@ -21,7 +21,7 @@ void ofApp::setup() {
 	if (profilesOpt) {
 		const auto inPorts = ofxMidiIn().getInPortList();
 		const auto outPorts = ofxMidiOut().getOutPortList();
-		for (const auto & p : *profilesOpt) {
+		for (const auto& p : *profilesOpt) {
 			bool inMatch = std::find(inPorts.begin(), inPorts.end(), p.midiInPort) != inPorts.end();
 			bool outMatch = std::find(outPorts.begin(), outPorts.end(), p.midiOutPort) != outPorts.end();
 			if (inMatch && outMatch) {
@@ -39,7 +39,10 @@ void ofApp::setup() {
 			surface = std::make_unique<PlatformMSurface>();
 		else
 			surface = std::make_unique<Faderport16Surface>();
-		static_cast<ofxMidiDevice *>(surface.get())->setupFromProfile(*activeProfile);
+
+		static_cast<ofxMidiDevice*>(surface.get())->setupFromProfile(*activeProfile);
+		// Run device-specific initialization (e.g., Push display) after profile setup.
+		surface->onProfileLoaded(*activeProfile);
 	} else {
 		noDeviceConnected = true;
 		ofLogWarning() << "No MIDI device/profile matched. Running without controller.";
@@ -58,14 +61,24 @@ void ofApp::setup() {
 
 	madOscQuery.setup(ip, sendPort, feedbackPort, queryPort);
 	gui.setup();
+
 	madOscQuery.receive();
 	ofSleepMillis(100);
 	if (madOscQuery.madMapperJson == nullptr) {
-		ofLog(OF_LOG_WARNING) << "Load unsuccessful!" << endl;
+		ofLog(OF_LOG_WARNING) << "Load unsuccessful!";
 	} else {
 		float p = 1;
 		auto success = reloadFromServer(p);
 		madMapperLoadError = !success;
+		if (!madMapperLoadError) {
+			bool wsConnected = madOscQuery.connectWebSocket(queryPort);
+			if (!wsConnected) {
+				ofLogWarning() << "OSCQuery WebSocket connection failed on port " << queryPort;
+			} else {
+				madOscQuery.subscribeAllParameters();
+				ofLogNotice() << "OSCQuery WebSocket connected on port " << queryPort;
+			}
+		}
 		initialised = true;
 	}
 	errorImage.load("debug.png");
@@ -73,7 +86,7 @@ void ofApp::setup() {
 
 // CALBACK FUNCTIONS
 // --------------------------------------------------------
-void ofApp::selectSurface(string & name) {
+void ofApp::selectSurface(string& name) {
 	if ((*currentPage).isSubpage()) return;
 	auto result = ofSplitString(name, "_");
 	if (result.size() < 2) return;
@@ -92,7 +105,7 @@ void ofApp::selectSurface(string & name) {
 		previousPage = currentPage;
 		for (auto pageIt = madOscQuery.subPages.begin(); pageIt != madOscQuery.subPages.end(); ++pageIt) {
 			if (pageIt->getName() == subpageName) {
-				MadParameterPage * prevPage = &(*currentPage);
+				MadParameterPage* prevPage = &(*currentPage);
 				currentPage = pageIt;
 				setActivePage(&(*currentPage), prevPage);
 				return;
@@ -102,7 +115,7 @@ void ofApp::selectSurface(string & name) {
 	}
 }
 
-void ofApp::selectGroupContent(string & name) {
+void ofApp::selectGroupContent(string& name) {
 	auto result = ofSplitString(name, "_");
 	if (result.size() < 2) return;
 	int index = ofToInt(result[1]);
@@ -117,7 +130,7 @@ void ofApp::selectGroupContent(string & name) {
 		previousPage = currentPage;
 		for (auto pageIt = madOscQuery.subPages.begin(); pageIt != madOscQuery.subPages.end(); ++pageIt) {
 			if (pageIt->getName() == subpageName + "_SubPage") {
-				MadParameterPage * prevPage = &(*currentPage);
+				MadParameterPage* prevPage = &(*currentPage);
 				currentPage = pageIt;
 				setActivePage(&(*currentPage), prevPage);
 				return;
@@ -127,15 +140,14 @@ void ofApp::selectGroupContent(string & name) {
 	}
 }
 
-void ofApp::selectMedia(string & name) {
+void ofApp::selectMedia(string& name) {
 	if ((*currentPage).isSubpage()) return;
 
 	// Find the name of the corresponding surface
 	auto result = ofSplitString(name, "_");
 	int index = ofToInt(result[1]);
-	if (currentPage->getParameters()->size() < index)
-		return; // catch if no parameter connected
-	std::list<MadParameter *>::iterator parameter = currentPage->getParameters()->begin();
+	if (currentPage->getParameters()->size() < index) return; // catch if no parameter connected
+	std::list<MadParameter*>::iterator parameter = currentPage->getParameters()->begin();
 	std::advance(parameter, index - 1);
 	if ((*parameter)->isSelectable()) {
 		string subpageName = (*parameter)->getConnectedMediaName();
@@ -143,10 +155,9 @@ void ofApp::selectMedia(string & name) {
 		previousPage = currentPage;
 
 		std::list<MadParameterPage>::iterator pageIt;
-		for (pageIt = madOscQuery.subPages.begin();
-			pageIt != madOscQuery.subPages.end(); pageIt++) {
+		for (pageIt = madOscQuery.subPages.begin(); pageIt != madOscQuery.subPages.end(); pageIt++) {
 			if (pageIt->getName() == subpageName) {
-				MadParameterPage * prevPage = &(*currentPage);
+				MadParameterPage* prevPage = &(*currentPage);
 				currentPage = pageIt;
 				setActivePage(&(*currentPage), prevPage);
 				return;
@@ -156,17 +167,16 @@ void ofApp::selectMedia(string & name) {
 		oscSelectSurface(subpageName);
 	}
 }
-void ofApp::showMedia(string & name) {
+void ofApp::showMedia(string& name) {
 	ofRemoveListener(madOscQuery.mediaNameE, this, &ofApp::showMedia);
 
 	if ((*currentPage).isSubpage()) return;
 	previousPage = currentPage;
 
 	std::list<MadParameterPage>::iterator pageIt;
-	for (pageIt = madOscQuery.subPages.begin();
-		pageIt != madOscQuery.subPages.end(); pageIt++) {
+	for (pageIt = madOscQuery.subPages.begin(); pageIt != madOscQuery.subPages.end(); pageIt++) {
 		if (pageIt->getName() == name) {
-			MadParameterPage * prevPage = &(*currentPage);
+			MadParameterPage* prevPage = &(*currentPage);
 			currentPage = pageIt;
 			setActivePage(&(*currentPage), prevPage);
 			return;
@@ -175,12 +185,12 @@ void ofApp::showMedia(string & name) {
 	oscSelectSurface(name);
 }
 
-void ofApp::backToCurrent(float & p) {
-	MadParameterPage * prevPage = &(*currentPage);
+void ofApp::backToCurrent(float& p) {
+	MadParameterPage* prevPage = &(*currentPage);
 	currentPage = previousPage;
 	setActivePage(&(*currentPage), prevPage);
 
-	for (auto & midiComponent : selectGroup.midiComponents) {
+	for (auto& midiComponent : selectGroup.midiComponents) {
 		midiComponent.second->value.disableEvents();
 		midiComponent.second->value = 0;
 		midiComponent.second->update();
@@ -189,14 +199,14 @@ void ofApp::backToCurrent(float & p) {
 }
 
 // ======= CHANNEL CONTROL =======
-void ofApp::pageForward(float & p) {
+void ofApp::pageForward(float& p) {
 	if (p == 1) {
 		(*currentPage).cycleForward();
 	}
 	updateParameterDisplay();
 }
 
-void ofApp::pageBackward(float & p) {
+void ofApp::pageBackward(float& p) {
 	if (p == 1) {
 		(*currentPage).cycleBackward();
 	}
@@ -204,23 +214,23 @@ void ofApp::pageBackward(float & p) {
 }
 
 // ======= BANK CONTROL =======
-void ofApp::bankForward(float & p) {
+void ofApp::bankForward(float& p) {
 	if (next(currentPage) != madOscQuery.pages.end() && p == 1) {
-		MadParameterPage * prevPage = &(*currentPage);
+		MadParameterPage* prevPage = &(*currentPage);
 		currentPage++;
 		setActivePage(&(*currentPage), prevPage);
 	}
 }
 
-void ofApp::bankBackward(float & p) {
+void ofApp::bankBackward(float& p) {
 	if (currentPage != madOscQuery.pages.begin() && p == 1) {
-		MadParameterPage * prevPage = &(*currentPage);
+		MadParameterPage* prevPage = &(*currentPage);
 		currentPage--;
 		setActivePage(&(*currentPage), prevPage);
 	}
 }
 
-void ofApp::reload(float & p) {
+void ofApp::reload(float& p) {
 	if (p == 1) {
 		isLoading = true;
 		auto success = reloadFromServer(p);
@@ -229,7 +239,7 @@ void ofApp::reload(float & p) {
 		isLoading = false;
 }
 
-void ofApp::updateValues(float & p) {
+void ofApp::updateValues(float& p) {
 	if (p == 1 && !isLoading) {
 		isLoading = true;
 		madOscQuery.updateValues();
@@ -240,7 +250,7 @@ void ofApp::updateValues(float & p) {
 
 void ofApp::removeListeners() {
 	if (!surface) return;
-	auto * dev = static_cast<ofxMidiDevice *>(surface.get());
+	auto* dev = static_cast<ofxMidiDevice*>(surface.get());
 	currentPage->unlinkDevice();
 	if (auto c = ::getComponentByRole(dev, "nav.pageNext")) c->value.removeListener(this, &ofApp::pageForward);
 	if (auto c = ::getComponentByRole(dev, "nav.pagePrev")) c->value.removeListener(this, &ofApp::pageBackward);
@@ -248,12 +258,13 @@ void ofApp::removeListeners() {
 	if (auto c = ::getComponentByRole(dev, "nav.bankPrev")) c->value.removeListener(this, &ofApp::bankBackward);
 	if (auto c = ::getComponentByRole(dev, "nav.reload")) c->value.removeListener(this, &ofApp::updateValues);
 	if (auto c = ::getComponentByRole(dev, "action.back")) c->value.removeListener(this, &ofApp::backToCurrent);
-	if (dev->midiComponents.count("arrow_page_left")) dev->midiComponents["arrow_page_left"].value.removeListener(this, &ofApp::pageBackward);
-	if (dev->midiComponents.count("arrow_page_right")) dev->midiComponents["arrow_page_right"].value.removeListener(this, &ofApp::pageForward);
 
-	if (dev->midiComponents.count("fader_M_video")) fadeMasterVideo->unlinkMidiComponent(dev->midiComponents["fader_M_video"]);
-	if (dev->midiComponents.count("fader_M_dmx")) fadeMasterDMX->unlinkMidiComponent(dev->midiComponents["fader_M_dmx"]);
-	if (dev->midiComponents.count("fader_Speed")) fadeEngingeSpeed->unlinkMidiComponent(dev->midiComponents["fader_Speed"]);
+	if (dev->midiComponents.count("fader_M_video"))
+		fadeMasterVideo->unlinkMidiComponent(dev->midiComponents["fader_M_video"]);
+	if (dev->midiComponents.count("fader_M_dmx"))
+		fadeMasterDMX->unlinkMidiComponent(dev->midiComponents["fader_M_dmx"]);
+	if (dev->midiComponents.count("fader_Speed"))
+		fadeEngingeSpeed->unlinkMidiComponent(dev->midiComponents["fader_Speed"]);
 	if (dev->midiComponents.count("jog")) speed->unlinkMidiComponent(dev->midiComponents["jog"]);
 
 	ofRemoveListener(selectGroup.lastChangedE, this, &ofApp::selectSurface);
@@ -303,6 +314,16 @@ void ofApp::update() {
 	}
 
 	oscParamSync.update();
+
+	// Throttled refresh so displays (e.g. Push3) show value changes even without page navigation.
+	static uint64_t lastDisplayRefreshMs = 0;
+	const uint64_t nowMs = ofGetElapsedTimeMillis();
+	if (!isLoading && initialised && !madMapperLoadError && surface && currentPage != madOscQuery.pages.end()) {
+		if (nowMs - lastDisplayRefreshMs >= 100) {
+			updateParameterDisplay();
+			lastDisplayRefreshMs = nowMs;
+		}
+	}
 }
 
 void ofApp::setupPages(ofJson madmapperJson) {
@@ -322,8 +343,8 @@ void ofApp::setupPages(ofJson madmapperJson) {
 	setActivePage(&(*currentPage), nullptr);
 }
 
-static const ofJson * jsonGet(const ofJson & root, std::initializer_list<const char *> keys) {
-	const ofJson * node = &root;
+static const ofJson* jsonGet(const ofJson& root, std::initializer_list<const char*> keys) {
+	const ofJson* node = &root;
 	for (auto k : keys) {
 		if (!node->is_object()) return nullptr;
 		auto it = node->find(k);
@@ -335,34 +356,38 @@ static const ofJson * jsonGet(const ofJson & root, std::initializer_list<const c
 
 void ofApp::setupUI(ofJson madmapperJson) {
 	if (!surface) return;
-	auto * dev = static_cast<ofxMidiDevice *>(surface.get());
+	auto* dev = static_cast<ofxMidiDevice*>(surface.get());
 	if (auto c = ::getComponentByRole(dev, "nav.pageNext")) c->value.addListener(this, &ofApp::pageForward);
 	if (auto c = ::getComponentByRole(dev, "nav.pagePrev")) c->value.addListener(this, &ofApp::pageBackward);
 	if (auto c = ::getComponentByRole(dev, "nav.bankNext")) c->value.addListener(this, &ofApp::bankForward);
 	if (auto c = ::getComponentByRole(dev, "nav.bankPrev")) c->value.addListener(this, &ofApp::bankBackward);
 	if (auto c = ::getComponentByRole(dev, "nav.reload")) c->value.addListener(this, &ofApp::updateValues);
 	if (auto c = ::getComponentByRole(dev, "action.back")) c->value.addListener(this, &ofApp::backToCurrent);
-	if (dev->midiComponents.count("arrow_page_left")) dev->midiComponents["arrow_page_left"].value.addListener(this, &ofApp::pageBackward);
-	if (dev->midiComponents.count("arrow_page_right")) dev->midiComponents["arrow_page_right"].value.addListener(this, &ofApp::pageForward);
 
-	const ofJson * mappingOpacity = jsonGet(madmapperJson, { "CONTENTS", "surfaces", "CONTENTS", "Mapping", "CONTENTS", "opacity" });
-	const ofJson * masterVideo = mappingOpacity ? mappingOpacity : jsonGet(madmapperJson, { "CONTENTS", "master", "CONTENTS", "master_video_level" });
+	const ofJson* mappingOpacity =
+		jsonGet(madmapperJson, {"CONTENTS", "surfaces", "CONTENTS", "Mapping", "CONTENTS", "opacity"});
+	const ofJson* masterVideo = mappingOpacity
+									? mappingOpacity
+									: jsonGet(madmapperJson, {"CONTENTS", "master", "CONTENTS", "master_video_level"});
 	if (masterVideo && dev->midiComponents.count("fader_M_video")) {
 		fadeMasterVideo = madOscQuery.createParameter(*masterVideo);
 		fadeMasterVideo->linkMidiComponent(dev->midiComponents["fader_M_video"]);
 	}
-	const ofJson * lightingOpacity = jsonGet(madmapperJson, { "CONTENTS", "surfaces", "CONTENTS", "Lighting", "CONTENTS", "opacity" });
-	const ofJson * masterDMX = lightingOpacity ? lightingOpacity : jsonGet(madmapperJson, { "CONTENTS", "master", "CONTENTS", "master_dmx_level" });
+	const ofJson* lightingOpacity =
+		jsonGet(madmapperJson, {"CONTENTS", "surfaces", "CONTENTS", "Lighting", "CONTENTS", "opacity"});
+	const ofJson* masterDMX = lightingOpacity
+								  ? lightingOpacity
+								  : jsonGet(madmapperJson, {"CONTENTS", "master", "CONTENTS", "master_dmx_level"});
 	if (masterDMX && dev->midiComponents.count("fader_M_dmx")) {
 		fadeMasterDMX = madOscQuery.createParameter(*masterDMX);
 		fadeMasterDMX->linkMidiComponent(dev->midiComponents["fader_M_dmx"]);
 	}
-	const ofJson * engineSpeed = jsonGet(madmapperJson, { "CONTENTS", "master", "CONTENTS", "engine_speed" });
+	const ofJson* engineSpeed = jsonGet(madmapperJson, {"CONTENTS", "master", "CONTENTS", "engine_speed"});
 	if (engineSpeed && dev->midiComponents.count("fader_Speed")) {
 		fadeEngingeSpeed = madOscQuery.createParameter(*engineSpeed);
 		fadeEngingeSpeed->linkMidiComponent(dev->midiComponents["fader_Speed"]);
 	}
-	const ofJson * bpm = jsonGet(madmapperJson, { "CONTENTS", "master", "CONTENTS", "Global_BPM", "CONTENTS", "BPM" });
+	const ofJson* bpm = jsonGet(madmapperJson, {"CONTENTS", "master", "CONTENTS", "Global_BPM", "CONTENTS", "BPM"});
 	if (bpm && dev->midiComponents.count("jog")) {
 		speed = madOscQuery.createParameter(*bpm);
 		speed->linkMidiComponent(dev->midiComponents["jog"]);
@@ -405,30 +430,27 @@ void ofApp::draw() {
 		} else {
 			std::string s = "MADMAPPER HTTP ENDPOINT NOT FOUND - TRY AGAIN!";
 			ofDrawBitmapStringHighlight(s, 15, 15);
-			ofTranslate(ofGetWidth() / 2, ofGetHeight() / 2);
-			errorImage.draw(-errorImage.getWidth() / 2, -errorImage.getHeight() / 2,
-				errorImage.getWidth(), errorImage.getHeight());
+			if (errorImage.isAllocated()) {
+				ofPushMatrix();
+				ofTranslate(ofGetWidth() / 2, ofGetHeight() / 2);
+				errorImage.draw(-errorImage.getWidth() / 2, -errorImage.getHeight() / 2,
+								errorImage.getWidth(), errorImage.getHeight());
+				ofPopMatrix();
+			}
 		}
 		if (showMidiIn && surface) {
-			auto * dev = static_cast<ofxMidiDevice *>(surface.get());
+			auto* dev = static_cast<ofxMidiDevice*>(surface.get());
 			dev->gui.setPosition(10, 10);
 			dev->gui.draw();
 		}
 	}
 
-	// gui.draw();
-
 	stringstream windowInfo;
-	windowInfo << "| MMCntrl | FPS: " << std::fixed
-			   << std::setprecision(1) << ofGetFrameRate();
+	windowInfo << "| MMCntrl | FPS: " << std::fixed << std::setprecision(1) << ofGetFrameRate();
 	windowInfo << " | " << ip << " (" << sendPort << "/" << feedbackPort << "/" << queryPort << ") |";
 	if (noDeviceConnected) windowInfo << " NO MIDI";
 
 	ofSetWindowTitle(windowInfo.str());
-
-	if (ofGetFrameNum() % 10 == 0 && !noDeviceConnected) {
-		updateParameterDisplay();
-	}
 }
 
 //--------------------------------------------------------------
@@ -451,11 +473,11 @@ void ofApp::keyPressed(int key) {
 	}
 
 	if (key == 'l') {
-		//platformM.setupFromFile("platformM.json");
+		// platformM.setupFromFile("platformM.json");
 	}
 
 	if (key == 'o' && !madMapperLoadError) {
-		for (auto & p : *(*currentPage).getParameters()) {
+		for (auto& p : *(*currentPage).getParameters()) {
 			std::cout << p->getParameterValue() << endl;
 		}
 	}
@@ -487,7 +509,7 @@ void ofApp::keyPressed(int key) {
 }
 
 //--------------------------------------------------------------
-void ofApp::setActivePage(MadParameterPage * page, MadParameterPage * prevPage) {
+void ofApp::setActivePage(MadParameterPage* page, MadParameterPage* prevPage) {
 	if (prevPage != nullptr) {
 		prevPage->unlinkDevice();
 	}
@@ -507,7 +529,7 @@ void ofApp::drawStatusString() {
 	s += "\nParameters on page:";
 
 	int parNum = 1;
-	for (auto & p : *(*currentPage).getParameters()) {
+	for (auto& p : *(*currentPage).getParameters()) {
 		s += "\n";
 		if (parNum >= (*currentPage).getRange().first && parNum <= (*currentPage).getRange().second)
 			s += "* ";
@@ -521,9 +543,9 @@ void ofApp::drawStatusString() {
 	ofDrawBitmapString(s, 15, 15);
 }
 //--------------------------------------------------------------
-bool ofApp::reloadFromServer(float & p) {
+bool ofApp::reloadFromServer(float& p) {
 	if (p == 1) {
-		ofLog(OF_LOG_NOTICE) << "Attempting reload from server" << endl;
+		// Removed noisy ofLogNotice("ofApp") reload logs.
 		// Save previous location
 		std::string prevPageName = "";
 		int prevLowerBound = 1;
@@ -549,8 +571,14 @@ bool ofApp::reloadFromServer(float & p) {
 		}
 
 		// Rebuild pages and UI
-		madOscQuery.createCustomPages(static_cast<ofxMidiDevice *>(surface.get()), ofLoadJson("custom_page.json"), madOscQuery.madMapperJson);
+		madOscQuery.createCustomPages(static_cast<ofxMidiDevice*>(surface.get()), ofLoadJson("custom_page.json"),
+									  madOscQuery.madMapperJson);
 		setupUI(madOscQuery.madMapperJson);
+
+		// Only subscribe if we have an active websocket connection.
+		if (madOscQuery.isWebSocketConnected()) {
+			madOscQuery.subscribeAllParameters();
+		}
 
 		// Try to restore previous page
 		for (auto pageIt = madOscQuery.pages.begin(); pageIt != madOscQuery.pages.end(); ++pageIt) {
@@ -568,59 +596,66 @@ bool ofApp::reloadFromServer(float & p) {
 			setActivePage(&(*currentPage), nullptr);
 		}
 		return true;
-	} else {
-		return false;
 	}
+	return false;
 }
 
 //--------------------------------------------------------------
 void ofApp::exit() {
 	if (!madMapperLoadError) removeListeners();
+	madOscQuery.disconnectWebSocket();
 }
 
 //--------------------------------------------------------------
-void ofApp::keyReleased(int key) { }
+void ofApp::keyReleased(int key) {}
 
 //--------------------------------------------------------------
-void ofApp::mouseMoved(int x, int y) { }
+void ofApp::mouseMoved(int x, int y) {}
 
 //--------------------------------------------------------------
-void ofApp::mouseDragged(int x, int y, int button) { }
+void ofApp::mouseDragged(int x, int y, int button) {}
 
 //--------------------------------------------------------------
-void ofApp::mousePressed(int x, int y, int button) { }
+void ofApp::mousePressed(int x, int y, int button) {}
 
 //--------------------------------------------------------------
-void ofApp::mouseReleased(int x, int y, int button) { }
+void ofApp::mouseReleased(int x, int y, int button) {}
 
 //--------------------------------------------------------------
-void ofApp::mouseEntered(int x, int y) { }
+void ofApp::mouseEntered(int x, int y) {}
 
 //--------------------------------------------------------------
-void ofApp::mouseExited(int x, int y) { }
+void ofApp::mouseExited(int x, int y) {}
 
 //--------------------------------------------------------------
-void ofApp::windowResized(int w, int h) { }
+void ofApp::windowResized(int w, int h) {}
 
 //--------------------------------------------------------------
-void ofApp::gotMessage(ofMessage msg) { }
+void ofApp::gotMessage(ofMessage msg) {}
 
 //--------------------------------------------------------------
-void ofApp::dragEvent(ofDragInfo dragInfo) { }
+void ofApp::dragEvent(ofDragInfo dragInfo) {}
 
 void ofApp::updatePageDisplay() {
+	if (!initialised || madOscQuery.pages.empty() || currentPage == madOscQuery.pages.end()) return;
 	if (surface) surface->updatePageDisplay((*currentPage).getName());
 }
 
 void ofApp::updateParameterDisplay() {
+	if (!initialised || madOscQuery.pages.empty() || currentPage == madOscQuery.pages.end()) return;
+	if (!surface) return;
+
 	std::vector<std::string> labels;
 	std::vector<float> values;
+	labels.reserve(static_cast<size_t>((*currentPage).getRange().second - (*currentPage).getRange().first + 1));
+	values.reserve(labels.capacity());
+
 	int parNum = 1;
-	for (auto & p : *(*currentPage).getParameters()) {
+	for (auto& p : *(*currentPage).getParameters()) {
 		if (parNum >= (*currentPage).getRange().first && parNum <= (*currentPage).getRange().second) {
-			string oscAddress = p->oscAddress;
-			auto result = ofSplitString(oscAddress, "/");
-			string name;
+			const std::string& oscAddress = p->oscAddress;
+			auto result = ofSplitString(oscAddress, "/", true, true);
+			std::string name;
 			if (p->isMaster && result.size() >= 2)
 				name = result[result.size() - 2];
 			else if (p->isModuleParameter && result.size() >= 3)
@@ -632,5 +667,5 @@ void ofApp::updateParameterDisplay() {
 		}
 		parNum++;
 	}
-	if (surface) surface->updateParameterDisplay(labels, values);
+	surface->updateParameterDisplay(labels, values);
 }

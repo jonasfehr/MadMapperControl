@@ -49,8 +49,8 @@
 		FF149CBB2F15A8650048BD8C /* LaunchpadSurface.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FF149CB02F15A8650048BD8C /* LaunchpadSurface.cpp */; };
 		FF149CBE2F15BAEC0048BD8C /* Push3Surface.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FF149CBD2F15BAEC0048BD8C /* Push3Surface.cpp */; };
 		FF149CC12F15BF490048BD8C /* PushDisplayTransport.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FF149CC02F15BF490048BD8C /* PushDisplayTransport.cpp */; };
-		FF407DA12F16D564008504FA /* libusb-1.0.0.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = FF407DA02F16D563008504FA /* libusb-1.0.0.dylib */; };
 		"FF40C44E-C85F-4D95-8E03-3404398A486A" /* ofxOscMessage.cpp in Sources */ = {isa = PBXBuildFile; fileRef = "E4489282-8F98-45CC-892E-E73BCAC32A4D" /* ofxOscMessage.cpp */; };
+		FF6C50B82F204DD4006806B6 /* OscQueryWebSocketClient.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FF6C50B72F204DD4006806B6 /* OscQueryWebSocketClient.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -164,7 +164,6 @@
 		"F5CC36D0-6382-4158-976B-EB6D339D73A1" /* ofxMidiIn.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = ofxMidiIn.cpp; path = ../../../addons/ofxMidi/src/ofxMidiIn.cpp; sourceTree = SOURCE_ROOT; };
 		"FB1F82D9-0392-44EB-A324-2A1752625D19" /* ofxMidiClock.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = ofxMidiClock.cpp; path = ../../../addons/ofxMidi/src/ofxMidiClock.cpp; sourceTree = SOURCE_ROOT; };
 		"FE055788-6B53-4F27-BBC2-D95998D150AE" /* ofxBaseMidi.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = ofxBaseMidi.cpp; path = ../../../addons/ofxMidi/src/ofxBaseMidi.cpp; sourceTree = SOURCE_ROOT; };
-		FF149CAB2F15A8650048BD8C /* ChannelStrip.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = ChannelStrip.h; path = /Users/jonasfehr/Documents/openFrameworks/addons/ofxMidiDevice/src/ChannelStrip.h; sourceTree = "<absolute>"; };
 		FF149CAC2F15A8650048BD8C /* Defines.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = Defines.h; path = /Users/jonasfehr/Documents/openFrameworks/addons/ofxMidiDevice/src/Defines.h; sourceTree = "<absolute>"; };
 		FF149CAD2F15A8650048BD8C /* Faderport16Surface.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = Faderport16Surface.h; path = /Users/jonasfehr/Documents/openFrameworks/addons/ofxMidiDevice/src/Faderport16Surface.h; sourceTree = "<absolute>"; };
 		FF149CAE2F15A8650048BD8C /* Faderport16Surface.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Faderport16Surface.cpp; path = /Users/jonasfehr/Documents/openFrameworks/addons/ofxMidiDevice/src/Faderport16Surface.cpp; sourceTree = "<absolute>"; };
@@ -183,6 +182,8 @@
 		FF149CC02F15BF490048BD8C /* PushDisplayTransport.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = PushDisplayTransport.cpp; path = /Users/jonasfehr/Documents/openFrameworks/addons/ofxMidiDevice/src/PushDisplayTransport.cpp; sourceTree = "<absolute>"; };
 		FF30B6A02F1EEEBD0019BC05 /* DeviceProfile.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = DeviceProfile.h; path = /Users/jonasfehr/Documents/openFrameworks/addons/ofxMidiDevice/src/DeviceProfile.h; sourceTree = "<absolute>"; };
 		FF407DA02F16D563008504FA /* libusb-1.0.0.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = "libusb-1.0.0.dylib"; path = "../../../../../../../usr/local/Cellar/libusb/1.0.29/lib/libusb-1.0.0.dylib"; sourceTree = "<group>"; };
+		FF6C50B62F204DD4006806B6 /* OscQueryWebSocketClient.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = OscQueryWebSocketClient.h; path = /Users/jonasfehr/Documents/openFrameworks/addons/ofxMadOscQuery/src/OscQueryWebSocketClient.h; sourceTree = "<absolute>"; };
+		FF6C50B72F204DD4006806B6 /* OscQueryWebSocketClient.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = OscQueryWebSocketClient.cpp; path = /Users/jonasfehr/Documents/openFrameworks/addons/ofxMadOscQuery/src/OscQueryWebSocketClient.cpp; sourceTree = "<absolute>"; };
 		"FFFF8382-77E0-4C53-8331-A7DE2BAF1088" /* OscException.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = OscException.h; path = ../../../addons/ofxOsc/libs/oscpack/src/osc/OscException.h; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
@@ -191,7 +192,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				FF407DA12F16D564008504FA /* libusb-1.0.0.dylib in Frameworks */,
 				FF149CAA2F1597C70048BD8C /* /System/Library/Frameworks/CoreMIDI.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -300,6 +300,8 @@
 		"64A15852-9E11-4A38-9321-9D25630A4DF3" /* src */ = {
 			isa = PBXGroup;
 			children = (
+				FF6C50B62F204DD4006806B6 /* OscQueryWebSocketClient.h */,
+				FF6C50B72F204DD4006806B6 /* OscQueryWebSocketClient.cpp */,
 				"9F3E8314-AB0D-400C-BCE1-4286E622DBE0" /* MadParameter.h */,
 				"B7FC48DD-BFFE-4F35-A1C5-D83918B2D753" /* MadParameterPage.hpp */,
 				"5E204D8E-935A-4835-979B-21D7E64D6CA6" /* ofxMadOscQuery.cpp */,
@@ -330,7 +332,6 @@
 				FF149CC02F15BF490048BD8C /* PushDisplayTransport.cpp */,
 				FF149CBC2F15BAEC0048BD8C /* Push3Surface.h */,
 				FF149CBD2F15BAEC0048BD8C /* Push3Surface.cpp */,
-				FF149CAB2F15A8650048BD8C /* ChannelStrip.h */,
 				FF149CAC2F15A8650048BD8C /* Defines.h */,
 				FF149CAD2F15A8650048BD8C /* Faderport16Surface.h */,
 				FF149CAE2F15A8650048BD8C /* Faderport16Surface.cpp */,
@@ -624,6 +625,7 @@
 				"95C84A76-D7DA-46CC-9ABD-10EC7FE7FA58" /* IpEndpointName.cpp in Sources */,
 				"D0908BE6-075C-4579-A9B3-E465FF5C8699" /* NetworkingUtils.cpp in Sources */,
 				"1500EC11-7B9F-4438-9279-38A0F8C8D5A4" /* UdpSocket.cpp in Sources */,
+				FF6C50B82F204DD4006806B6 /* OscQueryWebSocketClient.cpp in Sources */,
 				"BA193AF6-B653-4E87-B718-9A05AB578EFD" /* OscOutboundPacketStream.cpp in Sources */,
 				"C8715F39-88C8-4EA3-A46E-5F968BBF5525" /* OscPrintReceivedElements.cpp in Sources */,
 				"3AF0C4DD-8B18-42E6-88DA-DC65F4BEDC6E" /* OscReceivedElements.cpp in Sources */,
@@ -709,12 +711,20 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					/usr/local/Cellar/libusb/1.0.29/lib,
-					"/usr/local/lib/**",
+					/usr/local/lib,
 				);
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
 				OTHER_LDFLAGS = (
 					"$(OF_CORE_LIBS)",
 					"$(OF_CORE_FRAMEWORKS)",
 					"$(LIB_OF_DEBUG)",
+					"-lPocoFoundation",
+					"-lPocoNet",
+					"-lPocoUtil",
+					"-lPocoXML",
+					"-lPocoJSON",
+					"-lPocoNetSSL",
+					"-lusb-1.0",
 				);
 			};
 			name = Debug;
@@ -754,12 +764,20 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					/usr/local/Cellar/libusb/1.0.29/lib,
-					"/usr/local/lib/**",
+					/usr/local/lib,
 				);
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
 				OTHER_LDFLAGS = (
 					"$(OF_CORE_LIBS)",
 					"$(OF_CORE_FRAMEWORKS)",
 					"$(LIB_OF_RELEASE)",
+					"-lPocoFoundation",
+					"-lPocoNet",
+					"-lPocoUtil",
+					"-lPocoXML",
+					"-lPocoJSON",
+					"-lPocoNetSSL",
+					"-lusb-1.0",
 				);
 				baseConfigurationReference = E4EB6923138AFD0F00A09F29;
 			};
