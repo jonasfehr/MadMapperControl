@@ -517,6 +517,17 @@ void ofApp::setActivePage(MadParameterPage* page, MadParameterPage* prevPage) {
 
 	ofLog() << "Active page set to " << (*currentPage).getName() << endl;
 
+	if(surface){
+		// per-page websocket subscribe and pull fresh values
+		if(currentPage!=madOscQuery.pages.end()){
+			if(madOscQuery.isWebSocketConnected()){
+				madOscQuery.subscribePageParameters(*currentPage);
+			}
+			madOscQuery.pullPageValues(*currentPage);
+		}
+	}
+	
+	// call updateParameterDisplay() on initial page set
 	updatePageDisplay();
 	updateParameterDisplay();
 }
