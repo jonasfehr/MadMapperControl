@@ -648,35 +648,32 @@ void ofApp::gotMessage(ofMessage msg) {}
 void ofApp::dragEvent(ofDragInfo dragInfo) {}
 
 void ofApp::updatePageDisplay() {
-	if (!initialised || madOscQuery.pages.empty() || currentPage == madOscQuery.pages.end()) return;
-	if (surface) surface->updatePageDisplay((*currentPage).getName());
+	if (!surface) return;
+	if (currentPage == madOscQuery.pages.end()) return;
+	surface->updatePageDisplay(currentPage->getName());
 }
 
 void ofApp::updateParameterDisplay() {
-	if (!initialised || madOscQuery.pages.empty() || currentPage == madOscQuery.pages.end()) return;
 	if (!surface) return;
+	if (currentPage == madOscQuery.pages.end()) return;
 
 	std::vector<std::string> labels;
 	std::vector<float> values;
-	labels.reserve(static_cast<size_t>((*currentPage).getRange().second - (*currentPage).getRange().first + 1));
-	values.reserve(labels.capacity());
-
 	int parNum = 1;
-	for (auto& p : *(*currentPage).getParameters()) {
-		if (parNum >= (*currentPage).getRange().first && parNum <= (*currentPage).getRange().second) {
-			const std::string& oscAddress = p->oscAddress;
-			auto result = ofSplitString(oscAddress, "/", true, true);
-			std::string name;
-			if (p->isMaster && result.size() >= 2)
-				name = result[result.size() - 2];
-			else if (p->isModuleParameter && result.size() >= 3)
-				name = result[result.size() - 3];
-			else if (!result.empty())
-				name = result.back();
-			labels.push_back(name);
-			values.push_back(p->get());
+	auto range = (*currentPage).getRange();
+	for (auto* p : *(*currentPage).getParameters()) {
+		if (parNum >= range.first && parNum <= range.second) {
+			labels.push_back(p->getDisplayParameterName());
+			values.push_back(p->get()); // normalized 0..1
 		}
 		parNum++;
 	}
+	// pad to device page width (8 slots) if needed
+	while (labels.size() < 8) {
+		labels.push_back("");
+		values.push_back(0.f);
+	}
+
 	surface->updateParameterDisplay(labels, values);
 }
+
