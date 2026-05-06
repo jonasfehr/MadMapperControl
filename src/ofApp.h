@@ -87,6 +87,8 @@ class ofApp : public ofBaseApp {
 	void selectMedia(string& name);
 	void showMedia(string& name);
 	void triggerCue(const CueGridItem& cue);
+	void onWebSocketPathUpdate(std::string& path);
+	void subscribeTimelinePaths();
 	void backToCurrent(float& p);
 	bool reloadFromServer(float& p);
 	void reload(float& p);
@@ -113,6 +115,8 @@ class ofApp : public ofBaseApp {
 	std::string cueBankName = "Bank-1";
 	bool cueFollowActiveBank = true;
 	bool cueGridActive = false;
+	bool cueGridRefreshPending = false;
+	uint64_t lastCueGridRefreshMs = 0;
 
 	MidiComponent* getComponentByRole(const std::string& role);
 };

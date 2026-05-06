@@ -362,6 +362,7 @@ void ofApp::setup() {
 				ofLogWarning() << "OSCQuery WebSocket connection failed on port " << queryPort;
 			} else {
 				madOscQuery.subscribeAllParameters();
+				subscribeTimelinePaths();
 				ofLogNotice() << "OSCQuery WebSocket connected on port " << queryPort;
 			}
 		}
@@ -539,6 +540,7 @@ void ofApp::removeListeners() {
 	if (!surface) return;
 	auto* dev = static_cast<ofxMidiDevice*>(surface.get());
 	unbindCueGrid();
+	ofRemoveListener(madOscQuery.webSocketPathE, this, &ofApp::onWebSocketPathUpdate);
 	currentPage->unlinkDevice();
 	if (auto c = ::getComponentByRole(dev, "nav.pageNext")) c->value.removeListener(this, &ofApp::pageForward);
 	if (auto c = ::getComponentByRole(dev, "nav.pagePrev")) c->value.removeListener(this, &ofApp::pageBackward);
@@ -602,6 +604,16 @@ void ofApp::update() {
 	}
 
 	oscParamSync.update();
+
+	if (cueGridRefreshPending && !isLoading && !madMapperLoadError) {
+		const uint64_t now = ofGetElapsedTimeMillis();
+		if (now - lastCueGridRefreshMs >= 120) {
+			madOscQuery.receive();
+			rebuildCueGrid(madOscQuery.madMapperJson);
+			cueGridRefreshPending = false;
+			lastCueGridRefreshMs = now;
+		}
+	}
 
 	// Throttled refresh so displays (e.g. Push3) show value changes even without page navigation.
 	static uint64_t lastDisplayRefreshMs = 0;
@@ -971,6 +983,7 @@ void ofApp::rebuildCueGrid(const ofJson& madMapperJson) {
 
 	availableCueBanks = timelineBankNames(madMapperJson);
 	cueBankName = resolveCueBankName(madMapperJson, availableCueBanks, cueBankName, cueFollowActiveBank);
+	subscribeTimelinePaths();
 	if (cueBankName.empty()) {
 		surface->updateTimelineGrid(timelineGridState);
 		return;
@@ -1071,6 +1084,24 @@ void ofApp::triggerCue(const CueGridItem& cue) {
 	ofxOscMessage message;
 	message.setAddress(cue.oscAddress);
 	madOscQuery.oscSendToMadMapper(message);
+}
+
+void ofApp::onWebSocketPathUpdate(std::string& path) {
+	if (path.rfind("/timelines", 0) != 0 && path.rfind("timelines", 0) != 0) return;
+	cueGridRefreshPending = true;
+}
+
+void ofApp::subscribeTimelinePaths() {
+	if (!madOscQuery.isWebSocketConnected()) return;
+
+	ofRemoveListener(madOscQuery.webSocketPathE, this, &ofApp::onWebSocketPathUpdate);
+	ofAddListener(madOscQuery.webSocketPathE, this, &ofApp::onWebSocketPathUpdate);
+
+	madOscQuery.subscribeParameter("/timelines/active_bank");
+	for (const auto& bank : availableCueBanks) {
+		madOscQuery.subscribeParameter("/timelines/" + bank + "/setup");
+		madOscQuery.subscribeParameter("/timelines/" + bank + "/by_name");
+	}
 }
 
 void ofApp::updateParameterDisplay() {
