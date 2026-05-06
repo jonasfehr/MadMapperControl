@@ -41,13 +41,13 @@ CURRENT_PROJECT_VERSION = 1
 // ICONS
 
 // default oF app icon
-//ICON_NAME = of.icns
+ICON_NAME = of.icns
 ICON_NAME[config=Debug] = of_debug.icns
 ICON_FILE = $(OF_PATH)/libs/openFrameworksCompiled/project/osx/$(ICON_NAME)
 
 // custom app icon, placed in main project folder
-ICON_NAME = MyApp.icns
-ICON_FILE = $(ICON_NAME)
+//ICON_NAME = MyApp.icns
+//ICON_FILE = $(ICON_NAME)
 
 // custom app icon with separate Release and Debug versions placed in bin/data
 //ICON_NAME = icon.icns

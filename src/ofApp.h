@@ -11,6 +11,8 @@
 #include "ofxMidiDevice.h"
 #include "ofxOscParameterSync.h"
 #include <memory>
+#include <optional>
+#include <unordered_map>
 
 #define HOST "localhost"
 #define PORT_RECEIVE 8010
@@ -57,6 +59,10 @@ class ofApp : public ofBaseApp {
 	void setActivePage(MadParameterPage* page, MadParameterPage* prevPage);
 	void setupPages(ofJson madMapperJson);
 	void setupUI(ofJson madMapperJson);
+	void rebuildCueGrid(const ofJson& madMapperJson);
+	void bindCueGrid();
+	void unbindCueGrid();
+	void cycleCueBank(int direction);
 	void drawStatusString();
 	bool madMapperLoadError = true;
 	bool initialised = false;
@@ -80,6 +86,7 @@ class ofApp : public ofBaseApp {
 	void selectGroupContent(string& name);
 	void selectMedia(string& name);
 	void showMedia(string& name);
+	void triggerCue(const CueGridItem& cue);
 	void backToCurrent(float& p);
 	bool reloadFromServer(float& p);
 	void reload(float& p);
@@ -101,6 +108,11 @@ class ofApp : public ofBaseApp {
 	ofxPanel gui;
 
 	vector<MadParameter> madParameters;
+	TimelineGridState timelineGridState;
+	std::vector<std::string> availableCueBanks;
+	std::string cueBankName = "Bank-1";
+	bool cueFollowActiveBank = true;
+	bool cueGridActive = false;
 
 	MidiComponent* getComponentByRole(const std::string& role);
 };

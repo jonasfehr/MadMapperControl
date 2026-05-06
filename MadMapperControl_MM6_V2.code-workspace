@@ -1,0 +1,27 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "${workspaceRoot}/../../../../libs/openFrameworks"
+		},
+		{
+			"path": "${workspaceRoot}/../../../../addons/ofxGui"
+		},
+		{
+			"path": "${workspaceRoot}/../../../../addons/ofxMadOscQuery"
+		},
+		{
+			"path": "${workspaceRoot}/../../../../addons/ofxMidi"
+		},
+		{
+			"path": "${workspaceRoot}/../../../../addons/ofxMidiDevice"
+		},
+		{
+			"path": "${workspaceRoot}/../../../../addons/ofxOsc"
+		}
+	],
+	"openFrameworksProjectGeneratorVersion": "34",
+	"settings": {}
+}
