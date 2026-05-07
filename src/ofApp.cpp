@@ -949,12 +949,6 @@ void ofApp::setActivePage(MadParameterPage* page, MadParameterPage* prevPage) {
 	if(!noDeviceConnected) page->linkDevice();
 
 	ofLog() << "Active page set to " << (*currentPage).getName() << endl;
-
-	if(surface){
-		if(currentPage!=madOscQuery.pages.end()){
-			madOscQuery.updateValues();
-		}
-	}
 	
 	// call updateParameterDisplay() on initial page set
 	updatePageDisplay();
