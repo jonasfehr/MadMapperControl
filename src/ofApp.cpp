@@ -1,5 +1,6 @@
 #include "ofApp.h"
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <optional>
 #include <unordered_map>
@@ -35,6 +36,12 @@ namespace {
 		auto it = node.find("VALUE");
 		if (it == node.end() || !it->is_array() || it->empty() || !(*it)[0].is_string()) return std::string();
 		return (*it)[0].get<std::string>();
+	}
+
+	std::optional<ofJson> firstValueJson(const ofJson& node) {
+		auto it = node.find("VALUE");
+		if (it == node.end() || !it->is_array() || it->empty()) return std::nullopt;
+		return (*it)[0];
 	}
 
 	std::vector<std::string> timelineBankNames(const ofJson& root) {
@@ -279,6 +286,72 @@ namespace {
 			collectCueItems(it.value(), it.key(), addressByName, fallbackOscPrefix, gridRows, flipTopOrigin, cues);
 		}
 	}
+
+	std::string normalizePageKey(std::string value) {
+		std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+			if (c == ' ') return '_';
+			return static_cast<char>(std::tolower(c));
+		});
+		return value;
+	}
+
+	bool pageContainsOscPrefix(MadParameterPage* page, const std::string& prefix) {
+		if (!page) return false;
+		auto* params = page->getParameters();
+		if (!params || params->empty()) return false;
+		for (auto* p : *params) {
+			if (!p) continue;
+			if (p->getOscAddress().rfind(prefix, 0) == 0) return true;
+		}
+		return false;
+	}
+
+	MadParameterPage* findSubPageByNameAndPrefix(std::list<MadParameterPage>& subPages,
+											  const std::string& candidate,
+											  const std::string& preferredPrefix) {
+		MadParameterPage* exactFallback = nullptr;
+		MadParameterPage* normalizedFallback = nullptr;
+		if (candidate.empty()) return nullptr;
+
+		for (auto& page : subPages) {
+			if (page.getName() == candidate) {
+				if (pageContainsOscPrefix(&page, preferredPrefix)) return &page;
+				if (!exactFallback) exactFallback = &page;
+			}
+		}
+
+		const std::string wanted = normalizePageKey(candidate);
+		for (auto& page : subPages) {
+			if (normalizePageKey(page.getName()) == wanted) {
+				if (pageContainsOscPrefix(&page, preferredPrefix)) return &page;
+				if (!normalizedFallback) normalizedFallback = &page;
+			}
+		}
+
+		return exactFallback ? exactFallback : normalizedFallback;
+	}
+
+	MadParameter* visibleParameterAt(MadParameterPage* page, int buttonIndex) {
+		if (!page || buttonIndex <= 0) return nullptr;
+		auto* params = page->getParameters();
+		if (!params || params->empty()) return nullptr;
+		auto range = page->getRange();
+		int absoluteOneBased = range.first + (buttonIndex - 1);
+		if (absoluteOneBased <= 0 || static_cast<size_t>(absoluteOneBased) > params->size()) return nullptr;
+		auto it = params->begin();
+		std::advance(it, absoluteOneBased - 1);
+		return *it;
+	}
+
+	bool isComponentMappedToRole(ofxMidiDevice* dev, const std::string& componentName, const std::string& roleSuffix) {
+		if (!dev || componentName.empty()) return false;
+		for (int i = 1; i <= 16; ++i) {
+			const std::string role = "param." + ofToString(i) + roleSuffix;
+			auto bit = dev->bindings.find(role);
+			if (bit != dev->bindings.end() && bit->second == componentName) return true;
+		}
+		return false;
+	}
 }
 
 static MidiComponent* getComponentByRole(ofxMidiDevice* dev, const std::string& role) {
@@ -319,6 +392,9 @@ void ofApp::setup() {
 
 	if (activeProfile) {
 		noDeviceConnected = false;
+		ofLogNotice() << "Using MIDI profile: " << activeProfile->name
+					  << " (in='" << activeProfile->midiInPort
+					  << "', out='" << activeProfile->midiOutPort << "')";
 		if (activeProfile->name.find("Push") != std::string::npos)
 			surface = std::make_unique<Push3Surface>();
 		else if (activeProfile->name.find("Platform") != std::string::npos)
@@ -374,28 +450,47 @@ void ofApp::setup() {
 // CALBACK FUNCTIONS
 // --------------------------------------------------------
 void ofApp::selectSurface(string& name) {
-	if ((*currentPage).isSubpage()) return;
+	if (surface) {
+		auto* dev = static_cast<ofxMidiDevice*>(surface.get());
+		if (isComponentMappedToRole(dev, name, ".mediaSubpage")) return;
+		auto mit = dev->midiComponents.find(name);
+		if (mit != dev->midiComponents.end() && mit->second.value.get() < 0.5f) return;
+	}
 	auto result = ofSplitString(name, "_");
-	if (result.size() < 2) return;
-	int index = ofToInt(result[1]);
-	if (currentPage->getParameters()->size() < index) return;
-	auto parameter = currentPage->getParameters()->begin();
-	std::advance(parameter, index - 1);
-	if ((*parameter)->isSelectable()) {
-		auto oscAddress = ofSplitString((*parameter)->getOscAddress(), "/");
+	if (result.empty()) return;
+	int index = ofToInt(result.back());
+	MadParameterPage* sourcePage = &(*currentPage);
+	if ((*currentPage).isSubpage() && previousPage != madOscQuery.pages.end()) {
+		sourcePage = &(*previousPage);
+	}
+	MadParameter* parameter = visibleParameterAt(sourcePage, index);
+	if (!parameter) return;
+	if (parameter->isSelectable()) {
+		auto oscAddress = ofSplitString(parameter->getOscAddress(), "/");
 		int i = 0;
 		while (i < (int)oscAddress.size() && oscAddress[i] != "opacity") {
 			i++;
 		}
 		if (i == 0 || i >= (int)oscAddress.size()) return;
 		string subpageName = oscAddress[i - 1];
-		previousPage = currentPage;
-		for (auto pageIt = madOscQuery.subPages.begin(); pageIt != madOscQuery.subPages.end(); ++pageIt) {
-			if (pageIt->getName() == subpageName) {
-				MadParameterPage* prevPage = &(*currentPage);
-				currentPage = pageIt;
-				setActivePage(&(*currentPage), prevPage);
+
+		if ((*currentPage).isSubpage() && normalizePageKey(currentPage->getName()) == normalizePageKey(subpageName)) {
+			if (pageContainsOscPrefix(&(*currentPage), "/surfaces/")) {
+				float p = 1.f;
+				backToCurrent(p);
 				return;
+			}
+		}
+
+		previousPage = currentPage;
+		if (auto* target = findSubPageByNameAndPrefix(madOscQuery.subPages, subpageName, "/surfaces/")) {
+			MadParameterPage* prevPage = &(*currentPage);
+			for (auto pageIt = madOscQuery.subPages.begin(); pageIt != madOscQuery.subPages.end(); ++pageIt) {
+				if (&(*pageIt) == target) {
+					currentPage = pageIt;
+					setActivePage(&(*currentPage), prevPage);
+					return;
+				}
 			}
 		}
 		oscSelectSurface(subpageName);
@@ -403,9 +498,14 @@ void ofApp::selectSurface(string& name) {
 }
 
 void ofApp::selectGroupContent(string& name) {
+	if (surface) {
+		auto* dev = static_cast<ofxMidiDevice*>(surface.get());
+		auto mit = dev->midiComponents.find(name);
+		if (mit != dev->midiComponents.end() && mit->second.value.get() < 0.5f) return;
+	}
 	auto result = ofSplitString(name, "_");
-	if (result.size() < 2) return;
-	int index = ofToInt(result[1]);
+	if (result.empty()) return;
+	int index = ofToInt(result.back());
 	if (currentPage->getParameters()->size() < index) return;
 	auto parameter = currentPage->getParameters()->begin();
 	std::advance(parameter, index - 1);
@@ -428,30 +528,47 @@ void ofApp::selectGroupContent(string& name) {
 }
 
 void ofApp::selectMedia(string& name) {
-	if ((*currentPage).isSubpage()) return;
-
+	if (surface) {
+		auto* dev = static_cast<ofxMidiDevice*>(surface.get());
+		if (isComponentMappedToRole(dev, name, ".surfaceSubpage")) return;
+		auto mit = dev->midiComponents.find(name);
+		if (mit != dev->midiComponents.end() && mit->second.value.get() < 0.5f) return;
+	}
 	// Find the name of the corresponding surface
 	auto result = ofSplitString(name, "_");
-	int index = ofToInt(result[1]);
-	if (currentPage->getParameters()->size() < index) return; // catch if no parameter connected
-	std::list<MadParameter*>::iterator parameter = currentPage->getParameters()->begin();
-	std::advance(parameter, index - 1);
-	if ((*parameter)->isSelectable()) {
-		string subpageName = (*parameter)->getConnectedMediaName();
+	if (result.empty()) return;
+	int index = ofToInt(result.back());
+	MadParameterPage* sourcePage = &(*currentPage);
+	if ((*currentPage).isSubpage() && previousPage != madOscQuery.pages.end()) {
+		sourcePage = &(*previousPage);
+	}
+	MadParameter* parameter = visibleParameterAt(sourcePage, index);
+	if (!parameter) return;
+	if (parameter->isSelectable()) {
+		string subpageName = parameter->getConnectedMediaName();
+		if (subpageName.empty()) return;
 
-		previousPage = currentPage;
-
-		std::list<MadParameterPage>::iterator pageIt;
-		for (pageIt = madOscQuery.subPages.begin(); pageIt != madOscQuery.subPages.end(); pageIt++) {
-			if (pageIt->getName() == subpageName) {
-				MadParameterPage* prevPage = &(*currentPage);
-				currentPage = pageIt;
-				setActivePage(&(*currentPage), prevPage);
+		if ((*currentPage).isSubpage() && normalizePageKey(currentPage->getName()) == normalizePageKey(subpageName)) {
+			if (pageContainsOscPrefix(&(*currentPage), "/media/")) {
+				float p = 1.f;
+				backToCurrent(p);
 				return;
 			}
 		}
 
-		oscSelectSurface(subpageName);
+		previousPage = currentPage;
+		if (auto* target = findSubPageByNameAndPrefix(madOscQuery.subPages, subpageName, "/media/")) {
+			MadParameterPage* prevPage = &(*currentPage);
+			for (auto pageIt = madOscQuery.subPages.begin(); pageIt != madOscQuery.subPages.end(); ++pageIt) {
+				if (&(*pageIt) == target) {
+					currentPage = pageIt;
+					setActivePage(&(*currentPage), prevPage);
+					return;
+				}
+			}
+		}
+
+		oscSelectMedia(subpageName);
 	}
 }
 void ofApp::showMedia(string& name) {
@@ -469,7 +586,7 @@ void ofApp::showMedia(string& name) {
 			return;
 		}
 	}
-	oscSelectSurface(name);
+	oscSelectMedia(name);
 }
 
 void ofApp::backToCurrent(float& p) {
@@ -558,11 +675,9 @@ void ofApp::removeListeners() {
 	if (dev->midiComponents.count("jog")) speed->unlinkMidiComponent(dev->midiComponents["jog"]);
 
 	ofRemoveListener(selectGroup.lastChangedE, this, &ofApp::selectSurface);
-	ofRemoveListener(selectGroup.noneSelectedE, this, &ofApp::backToCurrent);
 	ofRemoveListener(muteGroup.lastChangedE, this, &ofApp::selectSurface);
 	ofRemoveListener(muteGroup.noneSelectedE, this, &ofApp::backToCurrent);
 	ofRemoveListener(soloGroup.lastChangedE, this, &ofApp::selectMedia);
-	ofRemoveListener(soloGroup.noneSelectedE, this, &ofApp::backToCurrent);
 }
 
 // OSC FUNCTIONS
@@ -577,7 +692,7 @@ void ofApp::oscSelectSurface(string name) {
 }
 
 void ofApp::oscSelectMedia(string name) {
-	string oscAddress = "/medias/select_by_name";
+	string oscAddress = "/media/select_by_name";
 
 	ofxOscMessage m;
 	m.setAddress(oscAddress);
@@ -586,7 +701,7 @@ void ofApp::oscSelectMedia(string name) {
 }
 
 void ofApp::oscRequestMediaName() {
-	string oscAddress = "/getControlValues?url=/medias/select_by_name";
+	string oscAddress = "/getControlValues?url=/media/select_by_name";
 	ofxOscMessage m;
 	m.setAddress(oscAddress);
 	m.addFloatArg(1);
@@ -621,6 +736,7 @@ void ofApp::update() {
 	if (!isLoading && initialised && !madMapperLoadError && surface && currentPage != madOscQuery.pages.end()) {
 		if (nowMs - lastDisplayRefreshMs >= 100) {
 			updateParameterDisplay();
+			updateSubpageMediaButtonFeedback();
 			lastDisplayRefreshMs = nowMs;
 		}
 	}
@@ -659,9 +775,11 @@ void ofApp::setupUI(ofJson madmapperJson) {
 	auto* dev = static_cast<ofxMidiDevice*>(surface.get());
 	rebuildCueGrid(madmapperJson);
 	bindCueGrid();
-	auto labelForSlot = [&](const std::string& primaryPrefix, int /*pushRow*/, int index) {
-		std::string primary = primaryPrefix + ofToString(index);
-		if (dev->midiComponents.count(primary)) return primary;
+	auto labelForRoleOrPrefix = [&](const std::string& role, const std::string& fallbackPrefix, int index) {
+		auto bit = dev->bindings.find(role);
+		if (bit != dev->bindings.end() && dev->midiComponents.count(bit->second)) return bit->second;
+		std::string fallback = fallbackPrefix + ofToString(index);
+		if (dev->midiComponents.count(fallback)) return fallback;
 		return std::string();
 	};
 
@@ -703,15 +821,14 @@ void ofApp::setupUI(ofJson madmapperJson) {
 
 	selectGroup.doCheckbox = true;
 	for (int i = 1; i < 17; i++) {
-		std::string lbl = labelForSlot("sel_", 0, i);
+		std::string lbl = labelForRoleOrPrefix("param." + ofToString(i) + ".surfaceSubpage", "sel_", i);
 		if (dev->midiComponents.count(lbl)) selectGroup.add(dev->midiComponents[lbl]);
 	}
 	ofAddListener(selectGroup.lastChangedE, this, &ofApp::selectSurface);
-	ofAddListener(selectGroup.noneSelectedE, this, &ofApp::backToCurrent);
 
 	muteGroup.doCheckbox = false;
 	for (int i = 1; i < 17; i++) {
-		std::string lbl = labelForSlot("mute_", 1, i);
+		std::string lbl = labelForRoleOrPrefix("param." + ofToString(i) + ".groupSubpage", "mute_", i);
 		if (dev->midiComponents.count(lbl)) muteGroup.add(dev->midiComponents[lbl]);
 	}
 	ofAddListener(muteGroup.lastChangedE, this, &ofApp::selectSurface);
@@ -719,11 +836,10 @@ void ofApp::setupUI(ofJson madmapperJson) {
 
 	soloGroup.doCheckbox = true;
 	for (int i = 1; i < 17; i++) {
-		std::string lbl = labelForSlot("solo_", 2, i);
+		std::string lbl = labelForRoleOrPrefix("param." + ofToString(i) + ".mediaSubpage", "solo_", i);
 		if (dev->midiComponents.count(lbl)) soloGroup.add(dev->midiComponents[lbl]);
 	}
 	ofAddListener(soloGroup.lastChangedE, this, &ofApp::selectMedia);
-	ofAddListener(soloGroup.noneSelectedE, this, &ofApp::backToCurrent);
 }
 
 //--------------------------------------------------------------
@@ -843,6 +959,65 @@ void ofApp::setActivePage(MadParameterPage* page, MadParameterPage* prevPage) {
 	// call updateParameterDisplay() on initial page set
 	updatePageDisplay();
 	updateParameterDisplay();
+	updateSubpageMediaButtonFeedback();
+}
+
+void ofApp::updateSubpageMediaButtonFeedback() {
+	if (!surface) return;
+	auto* dev = static_cast<ofxMidiDevice*>(surface.get());
+
+	auto labelForRoleOrPrefix = [&](const std::string& role, const std::string& fallbackPrefix, int index) {
+		auto bit = dev->bindings.find(role);
+		if (bit != dev->bindings.end() && dev->midiComponents.count(bit->second)) return bit->second;
+		std::string fallback = fallbackPrefix + ofToString(index);
+		if (dev->midiComponents.count(fallback)) return fallback;
+		return std::string();
+	};
+
+	auto extractSurfaceSubpageName = [](MadParameter* parameter) {
+		if (!parameter || !parameter->isSelectable()) return std::string();
+		auto oscAddress = ofSplitString(parameter->getOscAddress(), "/");
+		int i = 0;
+		while (i < (int)oscAddress.size() && oscAddress[i] != "opacity") i++;
+		if (i <= 0 || i >= (int)oscAddress.size()) return std::string();
+		return oscAddress[i - 1];
+	};
+
+	MadParameterPage* sourcePage = nullptr;
+	if (currentPage != madOscQuery.pages.end()) {
+		sourcePage = &(*currentPage);
+	}
+	if (sourcePage && sourcePage->isSubpage() && previousPage != madOscQuery.pages.end()) {
+		sourcePage = &(*previousPage);
+	}
+
+	const std::string activeName = (currentPage != madOscQuery.pages.end()) ? currentPage->getName() : std::string();
+
+	for (int i = 1; i < 17; ++i) {
+		auto* parameter = visibleParameterAt(sourcePage, i);
+		std::string surfaceSubpage = extractSurfaceSubpageName(parameter);
+		std::string mediaSubpage = (parameter && parameter->isSelectable()) ? parameter->getConnectedMediaName() : std::string();
+
+		std::string surfaceLabel = labelForRoleOrPrefix("param." + ofToString(i) + ".surfaceSubpage", "sel_", i);
+		if (!surfaceLabel.empty()) {
+			auto& c = dev->midiComponents[surfaceLabel];
+			float v = (!surfaceSubpage.empty() && activeName == surfaceSubpage) ? 1.f : 0.f;
+			c.value.disableEvents();
+			c.value = v;
+			c.update();
+			c.value.enableEvents();
+		}
+
+		std::string mediaLabel = labelForRoleOrPrefix("param." + ofToString(i) + ".mediaSubpage", "solo_", i);
+		if (!mediaLabel.empty()) {
+			auto& c = dev->midiComponents[mediaLabel];
+			float v = (!mediaSubpage.empty() && activeName == mediaSubpage) ? 1.f : 0.f;
+			c.value.disableEvents();
+			c.value = v;
+			c.update();
+			c.value.enableEvents();
+		}
+	}
 }
 
 //--------------------------------------------------------------
@@ -993,6 +1168,10 @@ void ofApp::rebuildCueGrid(const ofJson& madMapperJson) {
 	auto* setupNode = bankContents ? jsonGet(*bankContents, {"setup"}) : nullptr;
 	auto* byNameNode = bankContents ? jsonGet(*bankContents, {"by_name", "CONTENTS"}) : nullptr;
 	if (!bankContents || !setupNode || !byNameNode) {
+		ofLogNotice("ofApp") << "Timeline bank data incomplete for '" << cueBankName << "'"
+			<< " bankContents=" << (bankContents != nullptr)
+			<< " setupNode=" << (setupNode != nullptr)
+			<< " byNameNode=" << (byNameNode != nullptr);
 		surface->updateTimelineGrid(timelineGridState);
 		return;
 	}
@@ -1014,18 +1193,31 @@ void ofApp::rebuildCueGrid(const ofJson& madMapperJson) {
 
 	ofJson setupJson;
 	try {
-		auto setupJsonOpt = parseCueSetupValue(madMapperJson, bankContents, firstValueString(*setupNode));
-		if (!setupJsonOpt) {
+		auto setupValue = firstValueJson(*setupNode);
+		if (!setupValue) {
+			ofLogNotice("ofApp") << "Timeline setup has no VALUE payload for '" << cueBankName << "'";
 			surface->updateTimelineGrid(timelineGridState);
 			return;
 		}
-		setupJson = *setupJsonOpt;
+		if (setupValue->is_string()) {
+			auto setupJsonOpt = parseCueSetupValue(madMapperJson, bankContents, setupValue->get<std::string>());
+			if (!setupJsonOpt) {
+				ofLogNotice("ofApp") << "Timeline setup string could not be resolved for '" << cueBankName << "'";
+				surface->updateTimelineGrid(timelineGridState);
+				return;
+			}
+			setupJson = *setupJsonOpt;
+		} else if (setupValue->is_array() || setupValue->is_object()) {
+			setupJson = *setupValue;
+		} else {
+			surface->updateTimelineGrid(timelineGridState);
+			return;
+		}
 	} catch (const std::exception& exception) {
 		ofLogWarning("ofApp") << "Failed to parse cue setup JSON: " << exception.what();
 		surface->updateTimelineGrid(timelineGridState);
 		return;
 	}
-
 	collectCueItems(setupJson,
 					std::string(),
 					addressByName,
@@ -1114,7 +1306,8 @@ void ofApp::updateParameterDisplay() {
 	auto range = (*currentPage).getRange();
 	for (auto* p : *(*currentPage).getParameters()) {
 		if (parNum >= range.first && parNum <= range.second) {
-			labels.push_back(p->getParameterName());
+			std::string label = p->getDisplayParameterName();
+			labels.push_back(label);
 			values.push_back(p->get()); // normalized 0..1
 		}
 		parNum++;

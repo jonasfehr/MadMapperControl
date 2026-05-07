@@ -4,7 +4,7 @@
       "name": "Testpage",
       "elements": [
         "/surfaces/Grp/*/opacity",
-        "/surfaces/Quad-1/opacity"
+        "/surfaces/*/opacity"
       ],
       "skipKeys": [
         "children"

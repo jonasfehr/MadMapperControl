@@ -71,6 +71,7 @@ class ofApp : public ofBaseApp {
 	// FOR UX
 	void updatePageDisplay();
 	void updateParameterDisplay();
+	void updateSubpageMediaButtonFeedback();
 	void pageForward(float& p);
 	void pageBackward(float& p);
 	void bankForward(float& p);
