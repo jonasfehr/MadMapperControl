@@ -352,6 +352,37 @@ namespace {
 		}
 		return false;
 	}
+
+	std::vector<ofApp::OscServerConfig> parseOscServerConfigs(const ofJson& settings) {
+		std::vector<ofApp::OscServerConfig> configs;
+
+		if (settings.contains("servers") && settings["servers"].is_array()) {
+			size_t index = 0;
+			for (const auto& item : settings["servers"]) {
+				if (!item.is_object()) continue;
+				ofApp::OscServerConfig cfg;
+				cfg.id = item.value("id", "server_" + ofToString(index));
+				cfg.ip = item.value("ip", std::string("127.0.0.1"));
+				cfg.sendPort = item.value("sendPort", PORT_RECEIVE);
+				cfg.feedbackPort = item.value("feedbackPort", PORT_FEEDBACK);
+				cfg.queryPort = item.value("queryPort", cfg.sendPort);
+				configs.push_back(cfg);
+				++index;
+			}
+		}
+
+		if (configs.empty()) {
+			ofApp::OscServerConfig legacy;
+			legacy.id = "server_0";
+			legacy.ip = settings.contains("ip") ? settings["ip"].get<std::string>() : "127.0.0.1";
+			legacy.sendPort = settings.contains("sendPort") ? settings["sendPort"].get<int>() : PORT_RECEIVE;
+			legacy.queryPort = settings.contains("queryPort") ? settings["queryPort"].get<int>() : legacy.sendPort;
+			legacy.feedbackPort = settings.contains("feedbackPort") ? settings["feedbackPort"].get<int>() : PORT_FEEDBACK;
+			configs.push_back(legacy);
+		}
+
+		return configs;
+	}
 }
 
 static MidiComponent* getComponentByRole(ofxMidiDevice* dev, const std::string& role) {
@@ -367,7 +398,11 @@ static MidiComponent* getComponentByRole(ofxMidiDevice* dev, const std::string& 
 void ofApp::setup() {
 	ofSetFrameRate(60);
 	settings = ofLoadJson("settings.json");
-	ip = settings.contains("ip") ? settings["ip"].get<std::string>() : "127.0.0.1";
+	oscServerConfigs = parseOscServerConfigs(settings);
+	ip = oscServerConfigs.front().ip;
+	sendPort = oscServerConfigs.front().sendPort;
+	queryPort = oscServerConfigs.front().queryPort;
+	feedbackPort = oscServerConfigs.front().feedbackPort;
 	if (settings.contains("cueBankName") && settings["cueBankName"].is_string()) {
 		cueBankName = settings["cueBankName"].get<std::string>();
 	}
@@ -411,16 +446,6 @@ void ofApp::setup() {
 		surface.reset();
 	}
 
-	sendPort = PORT_RECEIVE;
-	queryPort = PORT_RECEIVE;
-	feedbackPort = PORT_FEEDBACK;
-	if (settings.contains("sendPort")) {
-		sendPort = settings["sendPort"].get<int>();
-		queryPort = settings["sendPort"].get<int>();
-	}
-	if (settings.contains("queryPort")) queryPort = settings["queryPort"].get<int>();
-	if (settings.contains("feedbackPort")) feedbackPort = settings["feedbackPort"].get<int>();
-
 	madOscQuery.setup(ip, sendPort, feedbackPort, queryPort);
 	gui.setup();
 
@@ -438,13 +463,85 @@ void ofApp::setup() {
 				ofLogWarning() << "OSCQuery WebSocket connection failed on port " << queryPort;
 			} else {
 				madOscQuery.subscribeAllParameters();
+				registerServerPathRouting(0, madOscQuery);
 				subscribeTimelinePaths();
 				ofLogNotice() << "OSCQuery WebSocket connected on port " << queryPort;
 			}
+			setupAdditionalOscServers();
+
+			// Pages were initially built before additional servers existed.
+			// Rebuild once so serverId>0 pages are available at startup.
+			float rebuildAllPages = 1.f;
+			reloadFromServer(rebuildAllPages);
 		}
 		initialised = true;
 	}
 	errorImage.load("debug.png");
+}
+
+ofxMadOscQuery* ofApp::getOscServer(size_t serverId) {
+	if (serverId == 0) return &madOscQuery;
+	const size_t extraIndex = serverId - 1;
+	if (extraIndex >= extraOscQueries.size()) return nullptr;
+	return extraOscQueries[extraIndex].get();
+}
+
+const ofxMadOscQuery* ofApp::getOscServer(size_t serverId) const {
+	if (serverId == 0) return &madOscQuery;
+	const size_t extraIndex = serverId - 1;
+	if (extraIndex >= extraOscQueries.size()) return nullptr;
+	return extraOscQueries[extraIndex].get();
+}
+
+void ofApp::registerServerPathRouting(size_t serverId, const ofxMadOscQuery& server) {
+	for (const auto& kv : server.parameterMap) {
+		oscPathServerRouting.emplace(kv.first, serverId);
+	}
+}
+
+size_t ofApp::serverForOscPath(const std::string& oscPath) const {
+	auto it = oscPathServerRouting.find(oscPath);
+	if (it != oscPathServerRouting.end()) return it->second;
+	return 0;
+}
+
+void ofApp::oscSendToServer(size_t serverId, ofxOscMessage& message) {
+	if (auto* server = getOscServer(serverId)) {
+		server->oscSendToMadMapper(message);
+		return;
+	}
+	madOscQuery.oscSendToMadMapper(message);
+}
+
+void ofApp::setupAdditionalOscServers() {
+	extraOscQueries.clear();
+	if (oscServerConfigs.size() <= 1) return;
+
+	for (size_t i = 1; i < oscServerConfigs.size(); ++i) {
+		const auto& cfg = oscServerConfigs[i];
+		auto server = std::make_unique<ofxMadOscQuery>();
+		server->setup(cfg.ip, cfg.sendPort, cfg.feedbackPort, cfg.queryPort);
+		server->receive();
+
+		if (server->madMapperJson.is_null()) {
+			ofLogWarning("ofApp") << "OSCQuery server '" << cfg.id << "' unreachable at "
+									 << cfg.ip << ":" << cfg.queryPort;
+			extraOscQueries.push_back(std::move(server));
+			continue;
+		}
+
+		if (server->connectWebSocket(cfg.queryPort)) {
+			server->subscribeAllParameters();
+			registerServerPathRouting(i, *server);
+			ofLogNotice("ofApp") << "Additional OSCQuery server connected: " << cfg.id
+									  << " (" << cfg.ip << ":" << cfg.queryPort << ")";
+		} else {
+			ofLogWarning("ofApp") << "Additional OSCQuery WebSocket failed: " << cfg.id
+									 << " (" << cfg.ip << ":" << cfg.queryPort << ")";
+		}
+
+		extraOscQueries.push_back(std::move(server));
+	}
 }
 
 // CALBACK FUNCTIONS
@@ -456,6 +553,14 @@ void ofApp::selectSurface(string& name) {
 		auto mit = dev->midiComponents.find(name);
 		if (mit != dev->midiComponents.end() && mit->second.value.get() < 0.5f) return;
 	}
+	
+	// If already on a subpage and button is pressed, go back to main page
+	if ((*currentPage).isSubpage()) {
+		float p = 1.f;
+		backToCurrent(p);
+		return;
+	}
+	
 	auto result = ofSplitString(name, "_");
 	if (result.empty()) return;
 	int index = ofToInt(result.back());
@@ -534,6 +639,14 @@ void ofApp::selectMedia(string& name) {
 		auto mit = dev->midiComponents.find(name);
 		if (mit != dev->midiComponents.end() && mit->second.value.get() < 0.5f) return;
 	}
+	
+	// If already on a subpage and button is pressed, go back to main page
+	if ((*currentPage).isSubpage()) {
+		float p = 1.f;
+		backToCurrent(p);
+		return;
+	}
+	
 	// Find the name of the corresponding surface
 	auto result = ofSplitString(name, "_");
 	if (result.empty()) return;
@@ -683,29 +796,41 @@ void ofApp::removeListeners() {
 // OSC FUNCTIONS
 // -------------------------------------------------------------
 void ofApp::oscSelectSurface(string name) {
+	oscSelectSurface(name, 0);
+}
+
+void ofApp::oscSelectSurface(string name, size_t serverId) {
 	string oscAddress = "/surfaces/" + name + "/select";
 
 	ofxOscMessage m;
 	m.setAddress(oscAddress);
 	m.addFloatArg(1);
-	madOscQuery.oscSendToMadMapper(m);
+	oscSendToServer(serverId, m);
 }
 
 void ofApp::oscSelectMedia(string name) {
+	oscSelectMedia(name, 0);
+}
+
+void ofApp::oscSelectMedia(string name, size_t serverId) {
 	string oscAddress = "/media/select_by_name";
 
 	ofxOscMessage m;
 	m.setAddress(oscAddress);
 	m.addStringArg(name);
-	madOscQuery.oscSendToMadMapper(m);
+	oscSendToServer(serverId, m);
 }
 
 void ofApp::oscRequestMediaName() {
+	oscRequestMediaName(0);
+}
+
+void ofApp::oscRequestMediaName(size_t serverId) {
 	string oscAddress = "/getControlValues?url=/media/select_by_name";
 	ofxOscMessage m;
 	m.setAddress(oscAddress);
 	m.addFloatArg(1);
-	madOscQuery.oscSendToMadMapper(m);
+	oscSendToServer(serverId, m);
 }
 
 //--------------------------------------------------------------
@@ -1065,8 +1190,28 @@ bool ofApp::reloadFromServer(float& p) {
 		}
 
 		// Rebuild pages and UI
-		madOscQuery.createCustomPages(static_cast<ofxMidiDevice*>(surface.get()), ofLoadJson("custom_page.json"),
-									  madOscQuery.madMapperJson);
+		const ofJson customPageJson = ofLoadJson("custom_page.json");
+		madOscQuery.createCustomPages(static_cast<ofxMidiDevice*>(surface.get()), customPageJson,
+									  madOscQuery.madMapperJson, 0);
+
+		// Build pages for extra servers and splice into the main page list
+		for (size_t i = 0; i < extraOscQueries.size(); ++i) {
+			auto& extraServer = *extraOscQueries[i];
+			extraServer.receive(); // refresh data from server
+			if (extraServer.madMapperJson.is_null()) {
+				ofLogWarning("ofApp") << "Extra server " << i + 1 << " unreachable, skipping page build";
+				continue;
+			}
+			extraServer.pages.clear();
+			extraServer.parameterMap.clear();
+			extraServer.createCustomPages(static_cast<ofxMidiDevice*>(surface.get()), customPageJson,
+										  extraServer.madMapperJson, i + 1);
+			registerServerPathRouting(i + 1, extraServer);
+			const size_t extraPageCount = extraServer.pages.size();
+			madOscQuery.pages.splice(madOscQuery.pages.end(), extraServer.pages);
+			ofLogNotice("ofApp") << "Built " << extraPageCount << " pages for extra server " << i + 1;
+		}
+
 		setupUI(madOscQuery.madMapperJson);
 
 		// Try to restore previous page
@@ -1162,10 +1307,6 @@ void ofApp::rebuildCueGrid(const ofJson& madMapperJson) {
 	auto* setupNode = bankContents ? jsonGet(*bankContents, {"setup"}) : nullptr;
 	auto* byNameNode = bankContents ? jsonGet(*bankContents, {"by_name", "CONTENTS"}) : nullptr;
 	if (!bankContents || !setupNode || !byNameNode) {
-		ofLogNotice("ofApp") << "Timeline bank data incomplete for '" << cueBankName << "'"
-			<< " bankContents=" << (bankContents != nullptr)
-			<< " setupNode=" << (setupNode != nullptr)
-			<< " byNameNode=" << (byNameNode != nullptr);
 		surface->updateTimelineGrid(timelineGridState);
 		return;
 	}
@@ -1189,14 +1330,12 @@ void ofApp::rebuildCueGrid(const ofJson& madMapperJson) {
 	try {
 		auto setupValue = firstValueJson(*setupNode);
 		if (!setupValue) {
-			ofLogNotice("ofApp") << "Timeline setup has no VALUE payload for '" << cueBankName << "'";
 			surface->updateTimelineGrid(timelineGridState);
 			return;
 		}
 		if (setupValue->is_string()) {
 			auto setupJsonOpt = parseCueSetupValue(madMapperJson, bankContents, setupValue->get<std::string>());
 			if (!setupJsonOpt) {
-				ofLogNotice("ofApp") << "Timeline setup string could not be resolved for '" << cueBankName << "'";
 				surface->updateTimelineGrid(timelineGridState);
 				return;
 			}
@@ -1269,7 +1408,7 @@ void ofApp::triggerCue(const CueGridItem& cue) {
 	if (cue.oscAddress.empty()) return;
 	ofxOscMessage message;
 	message.setAddress(cue.oscAddress);
-	madOscQuery.oscSendToMadMapper(message);
+	oscSendToServer(serverForOscPath(cue.oscAddress), message);
 }
 
 void ofApp::onWebSocketPathUpdate(std::string& path) {

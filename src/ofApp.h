@@ -27,6 +27,14 @@ class writeLogToWindow : public ofBaseLoggerChannel {
 
 class ofApp : public ofBaseApp {
   public:
+	struct OscServerConfig {
+		std::string id;
+		std::string ip = "127.0.0.1";
+		int sendPort = PORT_RECEIVE;
+		int feedbackPort = PORT_FEEDBACK;
+		int queryPort = PORT_RECEIVE;
+	};
+
 	void setup();
 	void update();
 	void draw();
@@ -102,8 +110,11 @@ class ofApp : public ofBaseApp {
 
 	// OSC functions
 	void oscSelectSurface(string name);
+	void oscSelectSurface(string name, size_t serverId);
 	void oscSelectMedia(string name);
+	void oscSelectMedia(string name, size_t serverId);
 	void oscRequestMediaName();
+	void oscRequestMediaName(size_t serverId);
 
 	void removeListeners();
 
@@ -120,4 +131,16 @@ class ofApp : public ofBaseApp {
 	uint64_t lastCueGridRefreshMs = 0;
 
 	MidiComponent* getComponentByRole(const std::string& role);
+
+  private:
+	ofxMadOscQuery* getOscServer(size_t serverId);
+	const ofxMadOscQuery* getOscServer(size_t serverId) const;
+	void setupAdditionalOscServers();
+	void registerServerPathRouting(size_t serverId, const ofxMadOscQuery& server);
+	void oscSendToServer(size_t serverId, ofxOscMessage& message);
+	size_t serverForOscPath(const std::string& oscPath) const;
+
+	std::vector<OscServerConfig> oscServerConfigs;
+	std::vector<std::unique_ptr<ofxMadOscQuery>> extraOscQueries;
+	std::unordered_map<std::string, size_t> oscPathServerRouting;
 };

@@ -1,9 +1,9 @@
 {
   "pages": [
     {
-      "name": "Testpage",
+      "name": "ALL MM",
+      "serverId": 0,
       "elements": [
-        "/surfaces/Grp/*/opacity",
         "/surfaces/*/opacity"
       ],
       "skipKeys": [
@@ -11,18 +11,24 @@
       ]
     },
     {
-      "name": "Testp2",
+      "name": "Waves",
+      "serverId": 1,
       "elements": [
-        "/surfaces/Grp/*/opacity"
-      ],
-      "skipKeys": [
-        "children"
+        "/project_waves/Custom/*"
+      ]
+    },
+    {
+      "name": "Physarum",
+      "serverId": 1,
+      "elements": [
+        "/project_physarum/Custom/*"
       ]
     }
   ],
   "subpages": [
     {
       "key": "/surfaces/*",
+      "serverId": 0,
       "elements": [
         "/surfaces/*/fx/*",
         "/surfaces/*/color/blue",
