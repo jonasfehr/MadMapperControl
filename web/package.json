@@ -1,0 +1,22 @@
+{
+  "name": "madmapper-controller-gui",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5173",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs --fix --ignore-path .gitignore"
+  },
+  "dependencies": {
+    "vue": "^3.3.4",
+    "axios": "^1.4.0"
+  },
+  "devDependencies": {
+    "vite": "^4.4.9",
+    "@vitejs/plugin-vue": "^4.3.4",
+    "terser": "^5.19.1",
+    "eslint": "^8.48.0",
+    "eslint-plugin-vue": "^9.17.0"
+  }
+}

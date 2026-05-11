@@ -5,6 +5,7 @@
 #include "MidiControlSurface.h"
 #include "PlatformMSurface.h"
 #include "Push3Surface.h"
+#include "WebServer.h"
 #include "ofMain.h"
 #include "ofxGui.h"
 #include "ofxMadOscQuery.h"
@@ -140,7 +141,15 @@ class ofApp : public ofBaseApp {
 	void oscSendToServer(size_t serverId, ofxOscMessage& message);
 	size_t serverForOscPath(const std::string& oscPath) const;
 
+	// Web Server API methods
+	void setupWebServer();
+	ofJson getPages();
+	void savePages(const ofJson& pages);
+	ofJson getParameters();
+	ofJson getConfig();
+
 	std::vector<OscServerConfig> oscServerConfigs;
 	std::vector<std::unique_ptr<ofxMadOscQuery>> extraOscQueries;
 	std::unordered_map<std::string, size_t> oscPathServerRouting;
+	std::unique_ptr<WebServer> webServer;
 };

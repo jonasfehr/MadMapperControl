@@ -4,6 +4,9 @@
 #include <cmath>
 #include <optional>
 #include <unordered_map>
+#include <unordered_set>
+#include <fstream>
+#include <sstream>
 
 static const ofJson* jsonGet(const ofJson& root, std::initializer_list<const char*> keys);
 
@@ -477,6 +480,9 @@ void ofApp::setup() {
 		initialised = true;
 	}
 	errorImage.load("debug.png");
+
+	// Setup web server for REST API
+	setupWebServer();
 }
 
 ofxMadOscQuery* ofApp::getOscServer(size_t serverId) {
@@ -1236,6 +1242,10 @@ bool ofApp::reloadFromServer(float& p) {
 
 //--------------------------------------------------------------
 void ofApp::exit() {
+	if (webServer) {
+		webServer->stop();
+		webServer.reset();
+	}
 	if (!madMapperLoadError) removeListeners();
 }
 
@@ -1268,6 +1278,446 @@ void ofApp::gotMessage(ofMessage msg) {}
 
 //--------------------------------------------------------------
 void ofApp::dragEvent(ofDragInfo dragInfo) {}
+
+// ============== WebServer API Implementation ==============
+
+void ofApp::setupWebServer() {
+	webServer = std::make_unique<WebServer>(8080);
+	ofLogNotice() << "\n\n### setupWebServer() CALLED - Setting up fetchers ###\n\n";
+
+	// Bind API callbacks
+	webServer->setPagesFetcher([this]() { return getPages(); });
+	webServer->setPagesSaver([this](const ofJson& pages) { savePages(pages); });
+	webServer->setParametersFetcher([this]() { 
+				ofLogNotice() << "\n\n*** LAMBDA EXECUTED: getParameters() called from lambda ***\n\n";
+		ofLogNotice() << "=== LAMBDA: getParameters() Lambda called ===";
+		return getParameters(); 
+	});
+	webServer->setConfigFetcher([this]() { return getConfig(); });
+
+	webServer->start();
+}
+
+ofJson ofApp::getPages() {
+	// Load and return custom_page.json
+	try {
+		return ofLoadJson("custom_page.json");
+	} catch (const std::exception& e) {
+		ofLogError() << "Failed to load custom_page.json: " << e.what();
+		return ofJson::object();
+	}
+}
+
+void ofApp::savePages(const ofJson& pages) {
+	// Save custom_page.json (async, don't reload to avoid crashes)
+	try {
+		// Validate structure: pages should have "pages" array
+		if (!pages.is_object()) {
+			ofLogError() << "savePages: Invalid JSON structure (not an object)";
+			return;
+		}
+		
+		if (!pages.contains("pages") || !pages["pages"].is_array()) {
+			ofLogError() << "savePages: Missing or invalid 'pages' array";
+			return;
+		}
+		
+		// Create a safe copy with validated structure
+		ofJson validated = ofJson::object();
+		validated["pages"] = pages["pages"];
+		if (pages.contains("subpages") && pages["subpages"].is_array()) {
+			validated["subpages"] = pages["subpages"];
+		}
+		
+		// Save the validated json
+		ofSaveJson("custom_page.json", validated);
+		ofLogNotice() << "Saved custom_page.json with " << validated["pages"].size() << " pages";
+	} catch (const std::exception& e) {
+		ofLogError() << "Failed to save custom_page.json: " << e.what();
+	} catch (...) {
+		ofLogError() << "Unknown error saving custom_page.json";
+	}
+}
+
+ofJson ofApp::getParameters() {
+	// Return all parameters organized by server
+	ofJson result = ofJson::object();
+	std::vector<std::unordered_set<std::string>> serverOwnedPaths;
+	serverOwnedPaths.resize(std::max<size_t>(1, oscServerConfigs.size()));
+	for (const auto& kv : madOscQuery.parameterMap) {
+		serverOwnedPaths[0].insert(kv.first);
+	}
+	for (size_t i = 0; i < extraOscQueries.size() && (i + 1) < serverOwnedPaths.size(); ++i) {
+		if (!extraOscQueries[i]) continue;
+		for (const auto& kv : extraOscQueries[i]->parameterMap) {
+			serverOwnedPaths[i + 1].insert(kv.first);
+		}
+	}
+
+	// Build server buckets first.
+	for (size_t i = 0; i < oscServerConfigs.size(); ++i) {
+		std::string serverId = "server_" + std::to_string(i);
+		ofJson serverInfo = ofJson::object();
+		serverInfo["name"] = oscServerConfigs[i].id;
+		serverInfo["id"] = serverId;
+		serverInfo["connected"] = i == 0
+			? (madOscQuery.madMapperJson != nullptr)
+			: ((i - 1) < extraOscQueries.size() && extraOscQueries[i - 1] != nullptr && extraOscQueries[i - 1]->madMapperJson != nullptr);
+		serverInfo["parameters"] = ofJson::array();
+		result[serverId] = serverInfo;
+	}
+
+	if (!result.contains("server_0")) {
+		ofJson server0 = ofJson::object();
+		server0["name"] = "MadMapper";
+		server0["id"] = "server_0";
+		server0["connected"] = madOscQuery.madMapperJson != nullptr;
+		server0["parameters"] = ofJson::array();
+		result["server_0"] = server0;
+	}
+
+	auto appendParameter = [&](MadParameter* param) {
+		if (param == nullptr) return;
+		const std::string path = param->getOscAddress();
+		size_t sid = 0;
+		for (size_t s = 1; s < serverOwnedPaths.size(); ++s) {
+			if (serverOwnedPaths[s].find(path) != serverOwnedPaths[s].end()) {
+				sid = s;
+				break;
+			}
+		}
+		if (sid == 0) {
+			sid = serverForOscPath(path);
+		}
+		const std::string serverId = "server_" + std::to_string(sid);
+		if (!result.contains(serverId)) return;
+
+		ofJson parameter = ofJson::object();
+		parameter["name"] = param->getName();
+		parameter["display"] = param->getDisplayParameterName();
+		parameter["path"] = path;
+		result[serverId]["parameters"].push_back(parameter);
+	};
+
+	for (auto& page : madOscQuery.pages) {
+		const auto* params = page.getParameters();
+		if (params == nullptr) continue;
+		for (const auto& param : *params) {
+			appendParameter(param);
+		}
+	}
+
+	for (auto& subpage : madOscQuery.subPages) {
+		const auto* params = subpage.getParameters();
+		if (params == nullptr) continue;
+		for (const auto& param : *params) {
+			appendParameter(param);
+		}
+	}
+	
+	// Add current state info
+	result["current_page"] = currentPage != madOscQuery.pages.end() ? currentPage->getName() : "";
+	
+	return result;
+}
+
+ofJson ofApp::getConfig() {
+	// Return current configuration
+	ofJson config = ofJson::object();
+
+	config["servers"] = ofJson::array();
+	for (const auto& serverConfig : oscServerConfigs) {
+		ofJson sc = ofJson::object();
+		sc["id"] = serverConfig.id;
+		sc["ip"] = serverConfig.ip;
+		sc["sendPort"] = serverConfig.sendPort;
+		sc["feedbackPort"] = serverConfig.feedbackPort;
+		sc["queryPort"] = serverConfig.queryPort;
+		config["servers"].push_back(sc);
+	}
+
+	config["currentPage"] = currentPage != madOscQuery.pages.end() ? currentPage->getName() : "";
+	config["initialized"] = initialised;
+	config["noDeviceConnected"] = noDeviceConnected;
+
+	if (activeProfile) {
+		config["activeProfile"] = activeProfile->name;
+	}
+
+	return config;
+}
+
+// ============== WebServer Class Implementation ==============
+
+#include "Poco/Net/HTTPServer.h"
+#include "Poco/Net/HTTPRequestHandlerFactory.h"
+#include "Poco/Net/HTTPRequestHandler.h"
+#include "Poco/Net/HTTPServerRequest.h"
+#include "Poco/Net/HTTPServerResponse.h"
+#include "Poco/Net/HTTPServerParams.h"
+#include "Poco/Net/ServerSocket.h"
+#include "Poco/Exception.h"
+#include <sstream>
+
+using Poco::Net::HTTPServer;
+using Poco::Net::HTTPRequestHandler;
+using Poco::Net::HTTPRequestHandlerFactory;
+using Poco::Net::HTTPServerRequest;
+using Poco::Net::HTTPServerResponse;
+using Poco::Net::ServerSocket;
+
+// API Request Handler
+class APIRequestHandler : public HTTPRequestHandler {
+  public:
+	APIRequestHandler(WebServer* server) : webServer(server) {}
+
+	void handleRequest(HTTPServerRequest& request, HTTPServerResponse& response) override {
+		response.setContentType("application/json");
+		response.add("Access-Control-Allow-Origin", "*");
+		response.add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+		response.add("Access-Control-Allow-Headers", "Content-Type");
+
+		std::string path = request.getURI();
+		std::string method = request.getMethod();
+
+		if (method == "OPTIONS") {
+			response.setStatus(HTTPServerResponse::HTTP_OK);
+			response.send();
+			return;
+		}
+
+		if (path == "/api/pages" && method == "GET") {
+			try {
+				if (webServer->pagesFetcher) {
+					ofJson pages = webServer->pagesFetcher();
+					response.setStatus(HTTPServerResponse::HTTP_OK);
+					std::string jsonStr = pages.dump();
+					response.setContentLength(jsonStr.size());
+					response.send() << jsonStr;
+				} else {
+					response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
+					response.send() << R"({"error":"pagesFetcher not set"})";
+				}
+			} catch (const std::exception& e) {
+				ofLogError() << "Exception in /api/pages GET: " << e.what();
+				response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
+				std::stringstream ss;
+				ss << R"({"error":")" << e.what() << R"("})";
+				response.send() << ss.str();
+			}
+		}
+		else if (path == "/api/pages" && method == "POST") {
+			std::istream& is = request.stream();
+			std::stringstream buffer;
+			buffer << is.rdbuf();
+			std::string bodyStr = buffer.str();
+
+			try {
+				ofJson updated = ofJson::parse(bodyStr);
+				if (webServer->pagesSaver) {
+					webServer->pagesSaver(updated);
+					response.setStatus(HTTPServerResponse::HTTP_OK);
+					response.send() << R"({"status":"saved"})";
+				} else {
+					response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
+					response.send() << R"({"error":"pagesSaver not set"})";
+				}
+			} catch (const std::exception& e) {
+				response.setStatus(HTTPServerResponse::HTTP_BAD_REQUEST);
+				std::stringstream ss;
+				ss << R"({"error":")" << e.what() << R"("})";
+				response.send() << ss.str();
+			}
+		}
+		else if (path == "/api/parameters" && method == "GET") {
+			try {
+				ofLogNotice() << "=== HANDLER: /api/parameters GET request received ===";
+				if (webServer->parametersFetcher) {
+					ofLogNotice() << "=== HANDLER: parametersFetcher is set, calling it ===";
+					ofJson params = webServer->parametersFetcher();
+					ofLogNotice() << "=== HANDLER: parametersFetcher returned ===";
+					response.setStatus(HTTPServerResponse::HTTP_OK);
+					std::string jsonStr = params.dump();
+					response.setContentLength(jsonStr.size());
+					response.send() << jsonStr;
+				} else {
+					ofLogError() << "=== HANDLER: parametersFetcher NOT set ===";
+					response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
+					response.send() << R"({"error":"parametersFetcher not set"})";
+				}
+			} catch (const std::exception& e) {
+				ofLogError() << "Exception in /api/parameters: " << e.what();
+				response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
+				std::stringstream ss;
+				ss << R"({"error":")" << e.what() << R"("})";
+				response.send() << ss.str();
+			}
+		}
+		else if (path == "/api/config" && method == "GET") {
+			try {
+				if (webServer->configFetcher) {
+					ofJson config = webServer->configFetcher();
+					response.setStatus(HTTPServerResponse::HTTP_OK);
+					std::string jsonStr = config.dump();
+					response.setContentLength(jsonStr.size());
+					response.send() << jsonStr;
+				} else {
+					response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
+					response.send() << R"({"error":"configFetcher not set"})";
+				}
+			} catch (const std::exception& e) {
+				ofLogError() << "Exception in /api/config: " << e.what();
+				response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
+				std::stringstream ss;
+				ss << R"({"error":")" << e.what() << R"("})";
+				response.send() << ss.str();
+			}
+		}
+		else {
+			response.setStatus(HTTPServerResponse::HTTP_NOT_FOUND);
+			response.send() << R"({"error":"not found"})";
+		}
+	}
+
+  private:
+	WebServer* webServer;
+};
+
+// Static File Handler
+class StaticFileHandler : public HTTPRequestHandler {
+  public:
+	StaticFileHandler(const std::string& baseDir) : basePath(baseDir) {
+		ofLogNotice() << "StaticFileHandler: basePath = " << basePath;
+	}
+
+	void handleRequest(HTTPServerRequest& request, HTTPServerResponse& response) override {
+		std::string resourcePath = request.getURI();
+		if (resourcePath == "/") resourcePath = "/index.html";
+
+		std::string filePath = basePath + resourcePath;
+		ofLogNotice() << "StaticFileHandler: requesting " << resourcePath << " - trying: " << filePath;
+
+		// Try to open the file
+		std::ifstream file(filePath, std::ios::binary);
+		if (file.good()) {
+			ofLogNotice() << "StaticFileHandler: found file at " << filePath;
+			response.setStatus(HTTPServerResponse::HTTP_OK);
+			
+			if (filePath.find(".js") != std::string::npos) {
+				response.setContentType("application/javascript");
+			} else if (filePath.find(".css") != std::string::npos) {
+				response.setContentType("text/css");
+			} else if (filePath.find(".json") != std::string::npos) {
+				response.setContentType("application/json");
+			} else {
+				response.setContentType("text/html");
+			}
+			
+			response.send() << file.rdbuf();
+		} else {
+			ofLogWarning() << "StaticFileHandler: file not found at " << filePath << ", trying index.html fallback";
+			// Try index.html as fallback
+			std::string indexPath = basePath + "/index.html";
+			std::ifstream indexFile(indexPath, std::ios::binary);
+			if (indexFile.good()) {
+				ofLogNotice() << "StaticFileHandler: found index.html at " << indexPath;
+				response.setStatus(HTTPServerResponse::HTTP_OK);
+				response.setContentType("text/html");
+				response.send() << indexFile.rdbuf();
+			} else {
+				ofLogError() << "StaticFileHandler: index.html not found at " << indexPath;
+				response.setStatus(HTTPServerResponse::HTTP_NOT_FOUND);
+				response.send() << "File not found";
+			}
+		}
+	}
+
+  private:
+	std::string basePath;
+};
+
+// Request Handler Factory
+class WebServerFactory : public HTTPRequestHandlerFactory {
+  public:
+	WebServerFactory(WebServer* server) : webServer(server) {
+		// Use absolute path to web files - works regardless of working directory
+		basePath = "/Users/jonasfehr/Documents/openFrameworks/apps/myApps/MadMapperControl_MM6_V2/bin/data/web";
+		ofLogNotice() << "WebServerFactory: Using web directory: " << basePath;
+	}
+
+	HTTPRequestHandler* createRequestHandler(const HTTPServerRequest& request) override {
+		std::string path = request.getURI();
+		ofLogNotice() << "=== FACTORY: Request URI: '" << path << "' ===";
+		if (path.find("/api/") == 0) {
+			ofLogNotice() << "=== FACTORY: Routing to APIRequestHandler ===";
+			return new APIRequestHandler(webServer);
+		} else {
+			ofLogNotice() << "=== FACTORY: Routing to StaticFileHandler ===";
+			return new StaticFileHandler(basePath);
+		}
+	}
+
+  private:
+	WebServer* webServer;
+	std::string basePath;
+};
+
+WebServer::WebServer(int port)
+	: port(port), running(false), httpServer(nullptr) {}
+
+WebServer::~WebServer() {
+	stop();
+}
+
+void WebServer::start() {
+	if (running) return;
+
+	try {
+		ofLogNotice() << "WebServer: Creating ServerSocket on port " << port;
+		ServerSocket svs(port);
+		
+		ofLogNotice() << "WebServer: Creating request handler factory";
+		WebServerFactory* factory = new WebServerFactory(this);
+		
+		ofLogNotice() << "WebServer: Creating HTTPServer instance";
+		Poco::Net::HTTPServerParams* params = new Poco::Net::HTTPServerParams();
+		params->setMaxQueued(100);
+		params->setMaxThreads(4);
+		
+		httpServer = std::make_unique<HTTPServer>(factory, svs, params);
+		
+		ofLogNotice() << "WebServer: Starting HTTPServer";
+		httpServer->start();
+		
+		running = true;
+		ofLogNotice() << "WebServer started successfully on port " << port;
+	} catch (const Poco::Exception& e) {
+		ofLogError() << "Poco Exception in WebServer::start(): " << e.what();
+		running = false;
+	} catch (const std::exception& e) {
+		ofLogError() << "std::exception in WebServer::start(): " << e.what();
+		running = false;
+	} catch (...) {
+		ofLogError() << "Unknown exception in WebServer::start()";
+		running = false;
+	}
+}
+
+void WebServer::stop() {
+	if (running && httpServer) {
+		httpServer->stop();
+		running = false;
+		ofLogNotice() << "WebServer stopped";
+	}
+}
+
+bool WebServer::isRunning() const {
+	return running;
+}
+
+void WebServer::broadcastParameterUpdate(const std::string& path, float value, int serverId) {
+	// TODO: Implement WebSocket broadcasting
+}
 
 void ofApp::updatePageDisplay() {
 	if (!surface) return;
@@ -1453,4 +1903,5 @@ void ofApp::updateParameterDisplay() {
 
 	surface->updateParameterDisplay(labels, values);
 }
+
 
