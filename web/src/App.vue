@@ -1,10 +1,16 @@
 <template>
   <div id="app" class="app-container">
     <header class="header">
-      <h1>MadMapper Controller Config</h1>
+      <div class="title-group">
+        <span class="eyebrow">MadMapper Controller</span>
+        <h1>Page Config</h1>
+      </div>
       <div class="header-info">
         <span v-if="config" class="status">
           Status: {{ config.initialized ? '✓ Ready' : '⏳ Loading' }}
+        </span>
+        <span v-if="config?.currentPage" class="status current-page">
+          Live: {{ config.currentPage }}
         </span>
       </div>
     </header>
@@ -18,29 +24,31 @@
       </div>
 
       <div v-else class="editor-layout">
-        <!-- Left sidebar: Parameter tree -->
-        <aside class="sidebar parameters-panel">
-          <h2>Parameters</h2>
-          <div class="search">
-            <input
-              v-model="parameterSearch"
-              type="text"
-              placeholder="Search parameters..."
-            />
-          </div>
-          <div class="param-tree">
-            <ul v-if="filteredParameters.length">
-              <li v-for="(param, idx) in filteredParameters" :key="idx">
-                {{ param }}
-              </li>
-            </ul>
-            <p v-else class="empty">No parameters found</p>
-          </div>
-        </aside>
+        <div class="view-tabs">
+          <button class="view-tab" :class="{ active: activeView === 'pages' }" @click="activeView = 'pages'">
+            Pages
+          </button>
+          <button class="view-tab" :class="{ active: activeView === 'endpoints' }" @click="activeView = 'endpoints'">
+            Endpoints
+          </button>
+        </div>
 
         <!-- Main content: Page manager -->
-        <section class="main-panel">
-          <PageManager :pages="pages" :allParameters="allParameterEntries" @save="savePages" />
+        <section v-if="activeView === 'pages'" class="main-panel full-width">
+          <PageManager
+            :pages="pages"
+            :allParameters="allParameterEntries"
+            @save="savePages"
+            @activate-page="activatePage"
+          />
+        </section>
+
+        <section v-else class="main-panel full-width">
+          <EndpointConfig
+            :config="config || {}"
+            :announced-endpoints="bonjourAnnouncements"
+            @save-config="saveConfig"
+          />
         </section>
       </div>
     </main>
@@ -51,11 +59,13 @@
 import { reactive, ref, computed, onMounted } from 'vue'
 import { apiClient } from './api'
 import PageManager from './components/PageManager.vue'
+import EndpointConfig from './components/EndpointConfig.vue'
 
 export default {
   name: 'App',
   components: {
-    PageManager
+    PageManager,
+    EndpointConfig
   },
   setup() {
     const pages = reactive({ pages: [], subpages: [] })
@@ -64,6 +74,7 @@ export default {
     const loading = ref(true)
     const error = ref(null)
     const parameterSearch = ref('')
+    const activeView = ref('pages')
 
     function wildcardToRegExp(pattern) {
       const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&')
@@ -127,6 +138,24 @@ export default {
         .map(p => p.label)
     })
 
+    const bonjourAnnouncements = computed(() => {
+      const announced = Array.isArray(config.value?.bonjourAnnouncements)
+        ? config.value.bonjourAnnouncements
+        : []
+      if (announced.length) return announced
+
+      const servers = Array.isArray(config.value?.servers) ? config.value.servers : []
+      return servers
+        .filter(server => server && server.discovery === 'bonjour')
+        .map(server => ({
+          id: server.id,
+          ip: server.ip,
+          queryPort: server.queryPort,
+          sendPort: server.sendPort,
+          feedbackPort: server.feedbackPort
+        }))
+    })
+
     async function loadData() {
       try {
         loading.value = true
@@ -161,10 +190,32 @@ export default {
       }
     }
 
+    async function activatePage(pageName) {
+      try {
+        await apiClient.activatePage(pageName)
+        config.value = { ...(config.value || {}), currentPage: pageName }
+      } catch (err) {
+        console.error('Failed to activate page:', err)
+        error.value = err.message || 'Failed to activate page'
+      }
+    }
+
+    async function saveConfig(updatedConfig) {
+      try {
+        await apiClient.saveConfig(updatedConfig)
+        await loadData()
+      } catch (err) {
+        console.error('Failed to save config:', err)
+        error.value = err.message || 'Failed to save config'
+        throw err
+      }
+    }
+
     onMounted(() => {
       loadData()
       // Refresh config every 5 seconds
       setInterval(() => {
+        if (activeView.value === 'endpoints') return
         apiClient.fetchConfig().then(data => (config.value = data))
       }, 5000)
     })
@@ -176,10 +227,14 @@ export default {
       config,
       loading,
       error,
+      activeView,
       parameterSearch,
       filteredParameters,
+      bonjourAnnouncements,
       loadData,
-      savePages
+      savePages,
+      activatePage,
+      saveConfig
     }
   }
 }
@@ -190,47 +245,67 @@ export default {
   box-sizing: border-box;
 }
 
-body,
-html {
-  margin: 0;
-  padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
-    Ubuntu, Cantarell, sans-serif;
-  background: #f5f5f5;
-}
-
 .app-container {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  min-height: 100vh;
+  padding: 0.75rem;
+  gap: 0.75rem;
 }
 
 .header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 1.5rem 2rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 1rem;
+  padding: 0.9rem 1.2rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(45, 45, 45, 0.96), rgba(27, 27, 27, 0.96));
+  box-shadow: var(--shadow-panel);
+}
+
+.title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.eyebrow {
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
 }
 
 .header h1 {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.4rem;
+  line-height: 1.1;
+  font-weight: 700;
+  color: var(--text-main);
 }
 
 .header-info {
   display: flex;
-  gap: 1rem;
+  gap: 0.6rem;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .status {
-  font-size: 0.9rem;
-  background: rgba(255, 255, 255, 0.2);
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
+  font-size: 0.82rem;
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+  color: var(--text-main);
+  border: 1px solid var(--border-soft);
+  background: linear-gradient(180deg, rgba(62, 62, 62, 0.95), rgba(47, 47, 47, 0.95));
+}
+
+.current-page {
+  border-color: rgba(24, 200, 218, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(24, 200, 218, 0.15);
 }
 
 .main-content {
@@ -239,112 +314,101 @@ html {
   overflow: hidden;
 }
 
-.loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.2rem;
-  color: #666;
-  flex: 1;
-}
-
+.loading,
 .error {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  flex: 1;
   gap: 1rem;
+  flex: 1;
+  border: 1px solid var(--border-strong);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(40, 40, 40, 0.96), rgba(28, 28, 28, 0.96));
+  box-shadow: var(--shadow-panel);
+}
+
+.loading {
+  color: var(--text-muted);
+  font-size: 1rem;
 }
 
 .error p {
-  color: #d32f2f;
+  color: var(--error-text);
   margin: 0;
 }
 
 .error button {
-  padding: 0.5rem 1rem;
-  background: #667eea;
-  color: white;
-  border: none;
-  border-radius: 4px;
+  padding: 0.7rem 1.2rem;
+  border: 1px solid rgba(24, 200, 218, 0.35);
+  border-radius: 10px;
+  color: #071316;
+  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
   cursor: pointer;
-}
-
-.error button:hover {
-  background: #764ba2;
+  font-weight: 700;
 }
 
 .editor-layout {
   display: flex;
-  flex: 1;
-  gap: 0;
-  overflow: hidden;
-}
-
-.sidebar {
-  width: 250px;
-  background: white;
-  border-right: 1px solid #e0e0e0;
-  display: flex;
   flex-direction: column;
+  gap: 0.65rem;
+  flex: 1;
   overflow: hidden;
 }
 
-.sidebar h2 {
-  margin: 0;
-  padding: 1rem;
-  border-bottom: 1px solid #e0e0e0;
-  font-size: 1rem;
+.view-tabs {
+  display: inline-flex;
+  gap: 0.45rem;
+  align-self: flex-start;
+  padding: 0.35rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(56, 56, 56, 0.9), rgba(37, 37, 37, 0.96));
 }
 
-.search {
-  padding: 0.5rem;
-}
-
-.search input {
-  width: 100%;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  font-size: 0.9rem;
-}
-
-.param-tree {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0.5rem;
-}
-
-.param-tree ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.param-tree li {
-  padding: 0.5rem;
-  border-radius: 4px;
+.view-tab {
+  min-width: 120px;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-muted);
   cursor: pointer;
-  font-size: 0.85rem;
-  word-break: break-all;
-  transition: background 0.2s;
+  font-weight: 700;
 }
 
-.param-tree li:hover {
-  background: #f0f0f0;
-}
-
-.empty {
-  color: #999;
-  font-size: 0.9rem;
-  text-align: center;
-  padding: 1rem;
+.view-tab.active {
+  color: #061518;
+  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
+  border-color: rgba(24, 200, 218, 0.35);
 }
 
 .main-panel {
   flex: 1;
-  background: white;
+  width: 100%;
   overflow: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(36, 36, 36, 0.98), rgba(26, 26, 26, 0.98));
+  box-shadow: var(--shadow-panel);
+}
+
+.main-panel.full-width {
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .app-container {
+    padding: 0.5rem;
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .header-info {
+    justify-content: flex-start;
+  }
 }
 </style>

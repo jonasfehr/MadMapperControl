@@ -29,9 +29,7 @@
               <button class="delete-btn" @click.stop="deletePage(idx)">✕</button>
             </div>
             <div class="page-info">
-              {{ page.surfaces?.length || 0 }} surfaces,
-              {{ page.fixtures?.length || 0 }} fixtures,
-              {{ page.medias?.length || 0 }} medias
+              {{ pageItemCount(page) }} items · {{ resolvedParameterCount(page) }} parameters
             </div>
           </div>
         </div>
@@ -64,12 +62,39 @@
               </option>
             </select>
           </div>
-          <div class="filter-search">
-            <input
-              v-model="parameterFilter"
-              type="text"
-              placeholder="Filter by path or name (supports * wildcard)..."
-            />
+
+          <div class="path-builder">
+            <h4>Path Selection</h4>
+            <div class="selected-path">
+              <button class="crumb" @click="resetPathSelection">/</button>
+              <button
+                v-for="(segment, idx) in selectedPathSegments"
+                :key="`${segment}-${idx}`"
+                class="crumb"
+                @click="truncatePathSelection(idx)"
+              >
+                {{ segment }}
+              </button>
+            </div>
+            <div class="next-options">
+              <button
+                v-for="option in nextPathOptions"
+                :key="option"
+                class="chip"
+                @click="selectNextPathOption(option)"
+              >
+                {{ option }}
+              </button>
+            </div>
+            <button
+              v-if="selectedPathSegments.length"
+              class="wildcard-btn"
+              @click="insertWildcardSegment"
+              title="Insert wildcard segment *"
+            >
+              Insert <code>*</code> Segment
+            </button>
+            <p v-if="!nextPathOptions.length" class="hint">No further path parts. Choose a parameter below or go one step back.</p>
           </div>
 
           <div class="filter-builder">
@@ -82,10 +107,12 @@
               />
             </div>
             <div class="builder-actions">
+              <button class="mini-btn secondary" @click="useSelectedPathAsFilter">Use Selected Path</button>
+              <button class="mini-btn secondary" @click="useSelectedPathAsPrefix">Add Trailing *</button>
               <button class="mini-btn" @click="addManualFilterLine">Add Filter Line</button>
               <button class="mini-btn secondary" @click="clearManualFilterLine">Clear</button>
             </div>
-            <p class="hint">Tip: Click one of the subpath chips below to auto-compose wildcard filters.</p>
+            <p class="hint">Tip: You can build filters like <code>/surfaces/*/opacity</code> by inserting <code>*</code> between path segments.</p>
           </div>
 
           <div class="param-selector">
@@ -94,19 +121,7 @@
               :key="param.key"
               class="param-option"
             >
-              <div class="param-option-header">
-                <span class="param-label" @click="addParameterToPage(param)">+ {{ param.label }}</span>
-              </div>
-              <div class="path-chips">
-                <button
-                  v-for="(seg, sidx) in pathSegments(param.path)"
-                  :key="`${param.key}-${sidx}`"
-                  class="chip"
-                  @click="buildFilterFromSubpath(param.path, sidx)"
-                >
-                  {{ seg }}
-                </button>
-              </div>
+              <span class="param-label" @click="addParameterToPage(param)">+ {{ param.path }}</span>
             </div>
             <p v-if="!filteredAvailableParams.length" class="empty">
               No parameters available
@@ -186,25 +201,21 @@ export default {
       default: () => []
     }
   },
-  emits: ['save'],
+  emits: ['save', 'activate-page'],
   setup(props, { emit }) {
     const activeTab = ref(0)
     const selectedPageIdx = ref(null)
     const newPageName = ref('')
     const selectedPageServerId = ref('server_0')
-    const parameterFilter = ref('')
+    const selectedPathSegments = ref([])
     const manualElementFilter = ref('')
     const editedJson = ref('')
     const jsonError = ref('')
     const saveStatus = ref(null)
     const originalData = ref(null)
+    let autoSaveTimer = null
 
     const tabs = ['builder', 'editor']
-
-    function wildcardToRegExp(pattern) {
-      const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&')
-      return new RegExp(`^${escaped.replace(/\*/g, '.*')}$`, 'i')
-    }
 
     const availableServerOptions = computed(() => {
       const map = new Map()
@@ -236,23 +247,105 @@ export default {
       ]
     })
 
-    // Computed: Verfügbare Parameter (nicht bereits in der page)
-    const filteredAvailableParams = computed(() => {
+    const availableParamsForServer = computed(() => {
       const current = new Set(currentPageParams.value)
-      const query = parameterFilter.value.trim()
-      const hasWildcard = query.includes('*')
-      const wildcardRegex = hasWildcard ? wildcardToRegExp(query) : null
-
       return props.allParameters
         .filter(p => p && p.serverId === selectedPageServerId.value)
         .filter(p => !current.has(p.path))
-        .filter(p => {
-          if (!query) return true
-          const haystack = `${p.label} ${p.path}`
-          if (wildcardRegex) return wildcardRegex.test(p.path) || wildcardRegex.test(haystack)
-          return haystack.toLowerCase().includes(query.toLowerCase())
-        })
         .sort((a, b) => a.path.localeCompare(b.path))
+    })
+
+    function pathSegments(path) {
+      if (!path) return []
+      return path.split('/').filter(Boolean)
+    }
+
+    function startsWithSegments(path, segments) {
+      const parts = pathSegments(path)
+      if (segments.length > parts.length) return false
+      return segments.every((seg, idx) => seg === '*' || parts[idx] === seg)
+    }
+
+    function joinSelectedSegments() {
+      if (!selectedPathSegments.value.length) return ''
+      return `/${selectedPathSegments.value.join('/')}`
+    }
+
+    const nextPathOptions = computed(() => {
+      const options = new Set()
+      const depth = selectedPathSegments.value.length
+      availableParamsForServer.value.forEach(param => {
+        const segments = pathSegments(param.path)
+        if (segments.length <= depth) return
+        if (!startsWithSegments(param.path, selectedPathSegments.value)) return
+        options.add(segments[depth])
+      })
+      return [...options].sort((a, b) => a.localeCompare(b))
+    })
+
+    function matchesWildcardFilter(path, filter) {
+      if (!filter) return true
+      const filterSegments = pathSegments(filter)
+      const pathParts = pathSegments(path)
+      if (filterSegments.length > pathParts.length) return false
+      return filterSegments.every((seg, idx) => seg === '*' || pathParts[idx] === seg)
+    }
+
+    function pageItemCount(page) {
+      if (!page) return 0
+      if (Array.isArray(page.elements)) return page.elements.length
+      return (page.surfaces?.length || 0) + (page.fixtures?.length || 0) + (page.medias?.length || 0)
+    }
+
+    function pagePatterns(page) {
+      if (!page) return []
+      if (Array.isArray(page.elements)) return page.elements
+
+      const patterns = []
+      if (Array.isArray(page.surfaces)) {
+        page.surfaces.forEach(surface => patterns.push(`/surfaces/${surface}/*`))
+      }
+      if (Array.isArray(page.fixtures)) {
+        page.fixtures.forEach(fixture => patterns.push(`/fixtures/${fixture}/*`))
+      }
+      if (Array.isArray(page.medias)) {
+        page.medias.forEach(media => patterns.push(`/media/${media}/*`))
+      }
+      return patterns
+    }
+
+    function resolvedParameterCount(page) {
+      if (!page || !props.allParameters.length) return 0
+
+      const pageServerId = typeof page.serverId === 'number' ? `server_${page.serverId}` : 'server_0'
+      const patterns = pagePatterns(page)
+      if (!patterns.length) return 0
+
+      const resolved = new Set()
+      props.allParameters.forEach(param => {
+        if (!param || param.serverId !== pageServerId) return
+        if (patterns.some(pattern => matchesWildcardFilter(param.path, pattern))) {
+          resolved.add(param.path)
+        }
+      })
+      return resolved.size
+    }
+
+    const filteredAvailableParams = computed(() => {
+      let result = availableParamsForServer.value
+
+      // Filter by path selection
+      if (selectedPathSegments.value.length) {
+        result = result.filter(param => startsWithSegments(param.path, selectedPathSegments.value))
+      }
+
+      // Filter by manual filter input
+      const manualFilter = manualElementFilter.value.trim()
+      if (manualFilter) {
+        result = result.filter(param => matchesWildcardFilter(param.path, manualFilter))
+      }
+
+      return result
     })
 
     // Watch: Wenn props.pages ändert, JSON aktualisieren
@@ -269,9 +362,13 @@ export default {
 
     function selectPage(idx) {
       selectedPageIdx.value = idx
-      parameterFilter.value = ''
+      selectedPathSegments.value = []
+      manualElementFilter.value = ''
       const page = props.pages.pages[idx]
       selectedPageServerId.value = page?.serverId ? `server_${page.serverId}` : 'server_0'
+      if (page?.name) {
+        emit('activate-page', page.name)
+      }
     }
 
     function setSelectedPageServer() {
@@ -280,6 +377,99 @@ export default {
       if (!page) return
       const parsed = String(selectedPageServerId.value).replace('server_', '')
       page.serverId = Number.parseInt(parsed, 10) || 0
+      selectedPathSegments.value = []
+      manualElementFilter.value = ''
+      scheduleAutoSave()
+    }
+
+    function buildSavePayload(liveReload = true) {
+      const convertedPages = props.pages.pages.map(page => {
+        if (Array.isArray(page.elements)) {
+          return {
+            ...page,
+            serverId: typeof page.serverId === 'number' ? page.serverId : 0,
+            skipKeys: page.skipKeys || ['children']
+          }
+        }
+
+        const elements = []
+        if (page.surfaces) {
+          page.surfaces.forEach(surface => {
+            elements.push(`/surfaces/${surface}/*`)
+          })
+        }
+        if (page.fixtures) {
+          page.fixtures.forEach(fixture => {
+            elements.push(`/fixtures/${fixture}/*`)
+          })
+        }
+        if (page.medias) {
+          page.medias.forEach(media => {
+            elements.push(`/media/${media}/*`)
+          })
+        }
+
+        return {
+          name: page.name,
+          elements: elements.length > 0 ? elements : ["/surfaces/*/opacity"],
+          serverId: page.serverId || 0,
+          skipKeys: page.skipKeys || ["children"]
+        }
+      })
+
+      return {
+        pages: convertedPages,
+        subpages: props.pages.subpages || [],
+        liveReload,
+        currentPage: selectedPageIdx.value !== null && props.pages.pages[selectedPageIdx.value]
+          ? props.pages.pages[selectedPageIdx.value].name
+          : ''
+      }
+    }
+
+    function scheduleAutoSave(liveReload = false) {
+      if (selectedPageIdx.value === null) return
+      clearTimeout(autoSaveTimer)
+      autoSaveTimer = setTimeout(() => {
+        emit('save', buildSavePayload(liveReload))
+      }, 300)
+    }
+
+    function syncSelectedPathToFilter() {
+      manualElementFilter.value = joinSelectedSegments()
+    }
+
+    function selectNextPathOption(option) {
+      selectedPathSegments.value.push(option)
+      syncSelectedPathToFilter()
+    }
+
+    function insertWildcardSegment() {
+      selectedPathSegments.value.push('*')
+      syncSelectedPathToFilter()
+    }
+
+    function truncatePathSelection(index) {
+      selectedPathSegments.value = selectedPathSegments.value.slice(0, index + 1)
+      syncSelectedPathToFilter()
+    }
+
+    function resetPathSelection() {
+      selectedPathSegments.value = []
+      syncSelectedPathToFilter()
+    }
+
+    function useSelectedPathAsFilter() {
+      syncSelectedPathToFilter()
+    }
+
+    function useSelectedPathAsPrefix() {
+      const path = joinSelectedSegments()
+      if (!path) {
+        manualElementFilter.value = ''
+        return
+      }
+      manualElementFilter.value = `${path}/*`
     }
 
     function normalizeFilterPath(value) {
@@ -299,6 +489,7 @@ export default {
       if (!Array.isArray(page.elements)) page.elements = []
       if (!page.elements.includes(normalized)) {
         page.elements.push(normalized)
+        scheduleAutoSave(true)
         saveStatus.value = {
           type: 'success',
           message: `✓ Filter line added: ${normalized}`
@@ -309,18 +500,6 @@ export default {
 
     function clearManualFilterLine() {
       manualElementFilter.value = ''
-    }
-
-    function pathSegments(path) {
-      if (!path) return []
-      return path.split('/').filter(Boolean)
-    }
-
-    function buildFilterFromSubpath(path, segmentIndex) {
-      const segments = pathSegments(path)
-      if (!segments.length) return
-      const prefix = segments.slice(0, segmentIndex + 1).join('/')
-      manualElementFilter.value = `/${prefix}/*`
     }
 
     function createNewPage() {
@@ -346,6 +525,7 @@ export default {
       }
       props.pages.pages.push(newPage)
       newPageName.value = ''
+      scheduleAutoSave()
 
       saveStatus.value = {
         type: 'success',
@@ -357,6 +537,7 @@ export default {
     function deletePage(idx) {
       const pageName = props.pages.pages[idx]?.name
       props.pages.pages.splice(idx, 1)
+      scheduleAutoSave()
       if (selectedPageIdx.value === idx) {
         selectedPageIdx.value = null
       }
@@ -380,6 +561,7 @@ export default {
 
       if (!page.elements.includes(param.path)) {
         page.elements.push(param.path)
+        scheduleAutoSave()
       }
     }
 
@@ -400,6 +582,7 @@ export default {
             const paramIdx = page[type].indexOf(removedParam)
             if (paramIdx !== -1) {
               page[type].splice(paramIdx, 1)
+              scheduleAutoSave()
             }
           }
         })
@@ -407,49 +590,8 @@ export default {
     }
 
     function savePageChanges() {
-      // Convert internal format to backend format before saving
-      const convertedPages = props.pages.pages.map(page => {
-        // If page already has 'elements', keep it (it's in old format)
-        if (Array.isArray(page.elements)) {
-          return {
-            ...page,
-            serverId: typeof page.serverId === 'number' ? page.serverId : 0,
-            skipKeys: page.skipKeys || ['children']
-          }
-        }
-        
-        // Otherwise, convert from new format to old format
-        const elements = []
-        if (page.surfaces) {
-          page.surfaces.forEach(surface => {
-            elements.push(`/surfaces/${surface}/*`)
-          })
-        }
-        if (page.fixtures) {
-          page.fixtures.forEach(fixture => {
-            elements.push(`/fixtures/${fixture}/*`)
-          })
-        }
-        if (page.medias) {
-          page.medias.forEach(media => {
-            elements.push(`/media/${media}/*`)
-          })
-        }
-        
-        return {
-          name: page.name,
-          elements: elements.length > 0 ? elements : ["/surfaces/*/opacity"],
-          serverId: page.serverId || 0,
-          skipKeys: page.skipKeys || ["children"]
-        }
-      })
-
-      const convertedData = {
-        pages: convertedPages,
-        subpages: props.pages.subpages || []
-      }
-
-      emit('save', convertedData)
+      clearTimeout(autoSaveTimer)
+      emit('save', buildSavePayload(true))
 
       saveStatus.value = {
         type: 'success',
@@ -501,20 +643,27 @@ export default {
       selectedPageIdx,
       newPageName,
       selectedPageServerId,
-      parameterFilter,
+      selectedPathSegments,
       manualElementFilter,
       editedJson,
       jsonError,
       saveStatus,
+      pageItemCount,
+      resolvedParameterCount,
       availableServerOptions,
       currentPageParams,
+      nextPathOptions,
       filteredAvailableParams,
       selectPage,
       setSelectedPageServer,
+      selectNextPathOption,
+      insertWildcardSegment,
+      truncatePathSelection,
+      resetPathSelection,
+      useSelectedPathAsFilter,
+      useSelectedPathAsPrefix,
       addManualFilterLine,
       clearManualFilterLine,
-      pathSegments,
-      buildFilterFromSubpath,
       createNewPage,
       deletePage,
       addParameterToPage,
@@ -537,517 +686,466 @@ export default {
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 1.5rem;
+  padding: 1rem;
   gap: 1rem;
+  color: var(--text-main);
 }
 
 .manager-tabs {
-  display: flex;
-  gap: 0.5rem;
-  border-bottom: 2px solid #e0e0e0;
+  display: inline-flex;
+  gap: 0.45rem;
+  align-self: flex-start;
+  padding: 0.35rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(56, 56, 56, 0.9), rgba(37, 37, 37, 0.96));
 }
 
 .tab {
-  padding: 0.75rem 1.5rem;
+  min-width: 160px;
+  padding: 0.7rem 1rem;
+  border: 1px solid transparent;
+  border-radius: 10px;
   background: transparent;
-  border: none;
-  border-bottom: 3px solid transparent;
+  color: var(--text-muted);
   cursor: pointer;
-  font-weight: 500;
-  color: #666;
-  transition: all 0.2s;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
 }
 
 .tab:hover {
-  color: #333;
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .tab.active {
-  color: #667eea;
-  border-bottom-color: #667eea;
+  color: #061518;
+  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
+  border-color: rgba(24, 200, 218, 0.35);
 }
 
-/* Page Builder Styles */
 .page-builder {
-  display: flex;
-  gap: 2rem;
+  display: grid;
+  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+  gap: 1rem;
   flex: 1;
-  overflow: hidden;
+  min-height: 0;
 }
 
 .builder-section {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  background: white;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
+  gap: 0.9rem;
+  min-height: 0;
   padding: 1rem;
-  overflow: hidden;
-}
-
-.builder-section:first-child {
-  width: 300px;
-  flex-shrink: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(42, 42, 42, 0.98), rgba(30, 30, 30, 0.98));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .builder-section.parameters {
-  flex: 1;
   overflow: auto;
 }
 
 .builder-section h3 {
   margin: 0;
-  font-size: 1rem;
-  color: #333;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 0.98rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--text-main);
 }
 
-.builder-section > h4 {
-  margin: 1rem 0 0.5rem 0;
-  font-size: 0.9rem;
-  color: #666;
-}
-
-.pages-list {
-  flex: 1;
-  overflow-y: auto;
+.pages-list,
+.param-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.45rem;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.page-item,
+.param-item,
+.param-option {
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(55, 55, 55, 0.96), rgba(42, 42, 42, 0.96));
 }
 
 .page-item {
-  padding: 0.75rem;
-  background: #f5f5f5;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
+  padding: 0.8rem 0.85rem;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
 }
 
-.page-item:hover {
-  background: #efefef;
+.page-item:hover,
+.param-option:hover {
+  background: linear-gradient(180deg, rgba(63, 63, 63, 0.96), rgba(46, 46, 46, 0.96));
+  border-color: #5a5a5a;
 }
 
 .page-item.selected {
-  background: #e3f2fd;
-  border-color: #667eea;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+  background: linear-gradient(180deg, rgba(14, 130, 145, 0.95), rgba(10, 99, 112, 0.95));
+  border-color: rgba(24, 200, 218, 0.5);
+  transform: translateY(-1px);
+  box-shadow: inset 0 0 0 1px rgba(24, 200, 218, 0.15);
 }
 
 .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.25rem;
+  gap: 0.75rem;
+  margin-bottom: 0.3rem;
 }
 
 .page-name {
-  font-weight: 500;
-  font-size: 0.9rem;
+  font-weight: 700;
+  font-size: 0.92rem;
 }
 
-.delete-btn {
-  background: transparent;
-  border: none;
-  color: #999;
-  cursor: pointer;
-  font-size: 1rem;
-  padding: 0;
+.page-info,
+.hint,
+.empty {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+}
+
+.empty {
+  margin: 0;
+  text-align: center;
+  padding: 1rem 0.6rem;
+}
+
+.delete-btn,
+.remove-btn {
   width: 24px;
   height: 24px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 2px;
-  transition: all 0.2s;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
 }
 
-.delete-btn:hover {
-  background: #ffebee;
-  color: #c62828;
+.delete-btn:hover,
+.remove-btn:hover {
+  color: var(--error-text);
+  border-color: rgba(198, 40, 40, 0.35);
+  background: rgba(198, 40, 40, 0.14);
 }
 
-.page-info {
-  font-size: 0.75rem;
-  color: #999;
+.new-page-form,
+.filter-search,
+.builder-actions,
+.action-buttons,
+.button-group {
+  display: flex;
+  gap: 0.6rem;
 }
 
 .new-page-form {
-  display: flex;
-  gap: 0.5rem;
-  padding-top: 1rem;
-  border-top: 1px solid #e0e0e0;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border-soft);
 }
 
-.new-page-form input {
-  flex: 1;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  font-size: 0.85rem;
-}
-
-.add-btn {
-  padding: 0.5rem 1rem;
-  background: #667eea;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: 500;
-  white-space: nowrap;
-  transition: all 0.2s;
-}
-
-.add-btn:hover {
-  background: #764ba2;
-}
-
-/* Parameters Section */
 .add-parameters,
-.current-parameters {
+.current-parameters,
+.filter-builder,
+.path-builder {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid #e0e0e0;
+  gap: 0.7rem;
+}
+
+.add-parameters,
+.current-parameters {
+  margin-bottom: 0.4rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .add-parameters:last-child,
 .current-parameters:last-child {
-  border-bottom: none;
   margin-bottom: 0;
   padding-bottom: 0;
+  border-bottom: none;
 }
 
 .add-parameters h4,
-.current-parameters h4 {
-  margin: 0;
-  font-size: 0.9rem;
-  color: #666;
-}
-
-.filter-builder {
-  border: 1px solid #e6e6e6;
-  border-radius: 4px;
-  padding: 0.65rem;
-  background: #fcfcfc;
-}
-
+.current-parameters h4,
+.path-builder h4,
 .filter-builder h4 {
-  margin: 0 0 0.5rem 0;
-  font-size: 0.85rem;
-  color: #666;
-}
-
-.builder-actions {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-}
-
-.mini-btn {
-  border: none;
-  background: #667eea;
-  color: white;
-  border-radius: 4px;
-  padding: 0.45rem 0.75rem;
-  cursor: pointer;
-  font-size: 0.8rem;
-}
-
-.mini-btn.secondary {
-  background: #e0e0e0;
-  color: #333;
-}
-
-.hint {
-  margin: 0.5rem 0 0 0;
-  color: #777;
-  font-size: 0.78rem;
-}
-
-.filter-search {
-  display: flex;
-}
-
-.filter-search input {
-  flex: 1;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  font-size: 0.85rem;
-}
-
-.filter-search select {
-  flex: 1;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  font-size: 0.85rem;
-  background: white;
-}
-
-.param-selector {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  max-height: 200px;
-  overflow-y: auto;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  background: #fafafa;
-}
-
-.param-option {
-  padding: 0.5rem 0.75rem;
-  font-size: 0.85rem;
-  transition: all 0.2s;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.param-option:last-child {
-  border-bottom: none;
-}
-
-.param-option:hover {
-  background: #e8f4f8;
-  color: #667eea;
-}
-
-.param-option-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.param-label {
-  cursor: pointer;
-  font-weight: 500;
-}
-
-.path-chips {
-  display: flex;
-  gap: 0.35rem;
-  flex-wrap: wrap;
-  margin-top: 0.4rem;
-}
-
-.chip {
-  border: 1px solid #d9e2ff;
-  background: #eef2ff;
-  color: #445;
-  border-radius: 999px;
-  padding: 0.2rem 0.5rem;
-  font-size: 0.72rem;
-  cursor: pointer;
-}
-
-.chip:hover {
-  background: #dde5ff;
-}
-
-.param-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  max-height: 250px;
-  overflow-y: auto;
-}
-
-.param-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem 0.75rem;
-  background: #f5f5f5;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  font-size: 0.85rem;
-}
-
-.remove-btn {
-  background: transparent;
-  border: none;
-  color: #999;
-  cursor: pointer;
-  font-size: 0.9rem;
-  padding: 0;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 2px;
-  transition: all 0.2s;
-}
-
-.remove-btn:hover {
-  background: #ffebee;
-  color: #c62828;
-}
-
-.empty {
-  color: #999;
-  font-size: 0.85rem;
-  text-align: center;
-  padding: 1rem 0.5rem;
   margin: 0;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
-.action-buttons {
+.filter-builder,
+.path-builder,
+.param-selector,
+.json-editor textarea {
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(35, 35, 35, 0.95), rgba(28, 28, 28, 0.98));
+}
+
+.filter-builder,
+.path-builder {
+  padding: 0.8rem;
+}
+
+.selected-path,
+.next-options {
   display: flex;
-  gap: 0.75rem;
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid #e0e0e0;
+  gap: 0.45rem;
+  flex-wrap: wrap;
 }
 
+.selected-path {
+  margin-bottom: 0.2rem;
+}
+
+.crumb,
+.chip,
+.wildcard-btn,
+.mini-btn,
+.add-btn,
 .save-btn,
-.cancel-btn {
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 4px;
-  font-weight: 500;
+.cancel-btn,
+.reset-btn {
+  border-radius: 10px;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.crumb,
+.chip {
+  padding: 0.34rem 0.65rem;
+  border: 1px solid var(--border-soft);
+  background: linear-gradient(180deg, rgba(65, 65, 65, 0.95), rgba(50, 50, 50, 0.95));
+  color: var(--text-main);
   cursor: pointer;
-  transition: all 0.2s;
-  font-size: 0.9rem;
+  font-size: 0.76rem;
+}
+
+.crumb:hover,
+.chip:hover,
+.wildcard-btn:hover,
+.mini-btn:hover,
+.add-btn:hover,
+.save-btn:hover,
+.cancel-btn:hover,
+.reset-btn:hover {
+  transform: translateY(-1px);
+}
+
+.crumb:hover,
+.chip:hover {
+  border-color: rgba(24, 200, 218, 0.35);
+  background: linear-gradient(180deg, rgba(71, 71, 71, 0.96), rgba(56, 56, 56, 0.96));
+}
+
+.wildcard-btn,
+.mini-btn.secondary,
+.cancel-btn,
+.reset-btn {
+  border: 1px solid var(--border-soft);
+  background: linear-gradient(180deg, rgba(73, 73, 73, 0.94), rgba(56, 56, 56, 0.94));
+  color: var(--text-main);
+}
+
+.mini-btn,
+.add-btn,
+.save-btn {
+  border: 1px solid rgba(24, 200, 218, 0.35);
+  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
+  color: #061518;
+  font-weight: 800;
+}
+
+.mini-btn,
+.wildcard-btn {
+  padding: 0.55rem 0.85rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.add-btn,
+.save-btn,
+.cancel-btn,
+.reset-btn {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 700;
 }
 
 .save-btn {
-  background: #667eea;
-  color: white;
   flex: 1;
 }
 
-.save-btn:hover {
-  background: #764ba2;
+.hint {
+  margin: 0;
+  line-height: 1.45;
 }
 
-.cancel-btn {
-  background: #f5f5f5;
-  color: #333;
-  border: 1px solid #e0e0e0;
+.hint code,
+.wildcard-btn code {
+  padding: 0.08rem 0.32rem;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--accent);
 }
 
-.cancel-btn:hover {
-  background: #e0e0e0;
+.filter-search input,
+.filter-search select,
+.json-editor textarea {
+  width: 100%;
+  padding: 0.72rem 0.85rem;
+  border: 1px solid var(--border-soft);
+  color: var(--text-main);
+  background: var(--bg-input);
 }
 
-/* JSON Editor Section */
+.filter-search input::placeholder,
+.json-editor textarea::placeholder {
+  color: var(--text-dim);
+}
+
+.filter-search input:focus,
+.filter-search select:focus,
+.json-editor textarea:focus {
+  outline: none;
+  border-color: rgba(24, 200, 218, 0.55);
+  box-shadow: 0 0 0 3px rgba(24, 200, 218, 0.12);
+}
+
+.param-selector {
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 0.35rem;
+}
+
+.param-option {
+  padding: 0.55rem 0.7rem;
+}
+
+.param-option + .param-option {
+  margin-top: 0.35rem;
+}
+
+.param-label {
+  display: block;
+  cursor: pointer;
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+.param-item {
+  padding: 0.62rem 0.75rem;
+  gap: 0.75rem;
+}
+
+.param-item span {
+  overflow-wrap: anywhere;
+}
+
+.action-buttons {
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-soft);
+}
+
 .json-editor-section {
   display: flex;
   flex-direction: column;
   gap: 1rem;
   flex: 1;
-  overflow: hidden;
+  min-height: 0;
 }
 
 .json-editor {
   flex: 1;
   display: flex;
-  overflow: hidden;
+  min-height: 0;
 }
 
 .json-editor textarea {
-  flex: 1;
-  padding: 1rem;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 0.85rem;
   resize: none;
-  background: #fafafa;
+  font-family: "SFMono-Regular", "Menlo", monospace;
+  font-size: 0.84rem;
 }
 
-.json-editor textarea:focus {
-  outline: none;
-  border-color: #667eea;
-  background: white;
+.validation-message,
+.save-status {
+  padding: 0.75rem 0.9rem;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  font-size: 0.84rem;
+  font-weight: 700;
 }
 
-.validation-message {
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  font-size: 0.85rem;
-  color: #2e7d32;
-  background: #e8f5e9;
+.validation-message,
+.save-status.success {
+  color: var(--success-text);
+  background: var(--success-bg);
+  border-color: rgba(46, 125, 50, 0.28);
 }
 
-.validation-message.error {
-  color: #c62828;
-  background: #ffebee;
-}
-
-.button-group {
-  display: flex;
-  gap: 0.75rem;
-}
-
-.button-group .save-btn,
-.button-group .reset-btn {
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 4px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.button-group .save-btn {
-  background: #667eea;
-  color: white;
-  flex: 1;
-}
-
-.button-group .save-btn:hover:not(:disabled) {
-  background: #764ba2;
+.validation-message.error,
+.save-status.error {
+  color: var(--error-text);
+  background: var(--error-bg);
+  border-color: rgba(198, 40, 40, 0.34);
 }
 
 .button-group .save-btn:disabled {
-  background: #ccc;
+  opacity: 0.55;
   cursor: not-allowed;
-}
-
-.button-group .reset-btn {
-  background: #f5f5f5;
-  color: #333;
-  border: 1px solid #e0e0e0;
-}
-
-.button-group .reset-btn:hover {
-  background: #e0e0e0;
+  transform: none;
 }
 
 .save-status {
-  padding: 0.75rem 1rem;
-  border-radius: 4px;
-  font-weight: 500;
-  animation: slideIn 0.3s ease-out;
-}
-
-.save-status.success {
-  background: #e8f5e9;
-  color: #2e7d32;
-}
-
-.save-status.error {
-  background: #ffebee;
-  color: #c62828;
+  animation: slideIn 0.22s ease-out;
 }
 
 @keyframes slideIn {
   from {
-    transform: translateY(-10px);
+    transform: translateY(-8px);
     opacity: 0;
   }
   to {
     transform: translateY(0);
     opacity: 1;
+  }
+}
+
+@media (max-width: 1000px) {
+  .page-builder {
+    grid-template-columns: 1fr;
+  }
+
+  .builder-section {
+    min-height: auto;
+  }
+
+  .builder-actions,
+  .action-buttons,
+  .new-page-form,
+  .button-group {
+    flex-wrap: wrap;
   }
 }
 </style>

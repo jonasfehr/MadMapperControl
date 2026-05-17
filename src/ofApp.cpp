@@ -7,10 +7,86 @@
 #include <unordered_set>
 #include <fstream>
 #include <sstream>
+#include "Poco/Net/SocketAddress.h"
+#include "Poco/Net/StreamSocket.h"
+#include "Poco/Timespan.h"
+#include "Poco/Exception.h"
 
 static const ofJson* jsonGet(const ofJson& root, std::initializer_list<const char*> keys);
 
 namespace {
+	std::string resolveCustomPagesPath() {
+		const std::string dataPath = ofToDataPath("custom_page.json", true);
+		if (ofFile::doesFileExist(dataPath, false)) return dataPath;
+
+		const std::string cwdPath = ofFilePath::join(ofFilePath::getCurrentWorkingDirectory(), "bin/data/custom_page.json");
+		if (ofFile::doesFileExist(cwdPath, false)) return cwdPath;
+
+		return dataPath;
+	}
+
+	std::string resolveSettingsPath() {
+		const std::string dataPath = ofToDataPath("settings.json", true);
+		if (ofFile::doesFileExist(dataPath, false)) return dataPath;
+
+		const std::string cwdPath = ofFilePath::join(ofFilePath::getCurrentWorkingDirectory(), "bin/data/settings.json");
+		if (ofFile::doesFileExist(cwdPath, false)) return cwdPath;
+
+		return dataPath;
+	}
+
+	ofJson ensurePagesShape(const ofJson& data) {
+		ofJson shaped = ofJson::object();
+		shaped["pages"] = (data.is_object() && data.contains("pages") && data["pages"].is_array())
+			? data["pages"]
+			: ofJson::array();
+		shaped["subpages"] = (data.is_object() && data.contains("subpages") && data["subpages"].is_array())
+			? data["subpages"]
+			: ofJson::array();
+		return shaped;
+	}
+
+	ofJson sanitizeServersArray(const ofJson& servers) {
+		ofJson sanitized = ofJson::array();
+		if (!servers.is_array()) return sanitized;
+
+		std::unordered_set<std::string> seenHostPort;
+		size_t index = 0;
+		for (const auto& item : servers) {
+			if (!item.is_object()) continue;
+			const std::string ip = item.value("ip", std::string());
+			const int query = item.value("queryPort", PORT_RECEIVE);
+			if (ip.empty() || query <= 0 || query > 65535) continue;
+
+			const std::string dedupeKey = ofToLower(ip) + ":" + ofToString(query);
+			if (seenHostPort.count(dedupeKey)) continue;
+			seenHostPort.insert(dedupeKey);
+
+			ofJson out = ofJson::object();
+			out["id"] = item.value("id", "server_" + ofToString(index));
+			out["ip"] = ip;
+			out["queryPort"] = query;
+			out["sendPort"] = item.value("sendPort", query);
+			out["feedbackPort"] = item.value("feedbackPort", PORT_FEEDBACK);
+			out["discovery"] = item.value("discovery", std::string("manual"));
+			sanitized.push_back(out);
+			++index;
+		}
+
+		if (sanitized.empty()) {
+			ofJson fallback = ofJson::object();
+			fallback["id"] = "MadMapper";
+			fallback["ip"] = "127.0.0.1";
+			fallback["queryPort"] = PORT_RECEIVE;
+			fallback["sendPort"] = PORT_RECEIVE;
+			fallback["feedbackPort"] = PORT_FEEDBACK;
+			fallback["discovery"] = "manual";
+			sanitized.push_back(fallback);
+		}
+
+		return sanitized;
+	}
+
 	std::optional<int> jsonIntValue(const ofJson& node, std::initializer_list<const char*> keys) {
 		for (auto key : keys) {
 			auto it = node.find(key);
@@ -45,6 +121,23 @@ namespace {
 		auto it = node.find("VALUE");
 		if (it == node.end() || !it->is_array() || it->empty()) return std::nullopt;
 		return (*it)[0];
+	}
+
+	bool isBindableOscType(const ofJson& node) {
+		auto itType = node.find("TYPE");
+		if (itType == node.end() || !itType->is_string()) return false;
+		const std::string type = itType->get<std::string>();
+		return type == "f" || type == "d" || type == "i" || type == "h" || type == "T" || type == "F";
+	}
+
+	std::string oscNodeDisplayName(const ofJson& node, const std::string& path) {
+		auto itDescription = node.find("DESCRIPTION");
+		if (itDescription != node.end() && itDescription->is_string()) {
+			const auto description = itDescription->get<std::string>();
+			if (!description.empty()) return description;
+		}
+		auto tokens = ofSplitString(path, "/", true, true);
+		return tokens.empty() ? path : tokens.back();
 	}
 
 	std::vector<std::string> timelineBankNames(const ofJson& root) {
@@ -369,6 +462,7 @@ namespace {
 				cfg.sendPort = item.value("sendPort", PORT_RECEIVE);
 				cfg.feedbackPort = item.value("feedbackPort", PORT_FEEDBACK);
 				cfg.queryPort = item.value("queryPort", cfg.sendPort);
+				cfg.discovery = item.value("discovery", std::string("manual"));
 				configs.push_back(cfg);
 				++index;
 			}
@@ -381,6 +475,7 @@ namespace {
 			legacy.sendPort = settings.contains("sendPort") ? settings["sendPort"].get<int>() : PORT_RECEIVE;
 			legacy.queryPort = settings.contains("queryPort") ? settings["queryPort"].get<int>() : legacy.sendPort;
 			legacy.feedbackPort = settings.contains("feedbackPort") ? settings["feedbackPort"].get<int>() : PORT_FEEDBACK;
+			legacy.discovery = "manual";
 			configs.push_back(legacy);
 		}
 
@@ -402,6 +497,7 @@ void ofApp::setup() {
 	ofSetFrameRate(60);
 	settings = ofLoadJson("settings.json");
 	oscServerConfigs = parseOscServerConfigs(settings);
+	endpointReachability.assign(oscServerConfigs.size(), false);
 	ip = oscServerConfigs.front().ip;
 	sendPort = oscServerConfigs.front().sendPort;
 	queryPort = oscServerConfigs.front().queryPort;
@@ -450,11 +546,20 @@ void ofApp::setup() {
 	}
 
 	madOscQuery.setup(ip, sendPort, feedbackPort, queryPort);
+	currentPage = madOscQuery.pages.end();
+	previousPage = madOscQuery.pages.end();
+	{
+		std::lock_guard<std::mutex> lock(activePageMutex);
+		activePageName.clear();
+	}
 	gui.setup();
+	refreshEndpointHealth(true);
 
-	madOscQuery.receive();
-	ofSleepMillis(100);
-	if (madOscQuery.madMapperJson == nullptr) {
+	if (endpointReachability.empty() || endpointReachability[0]) {
+		madOscQuery.receive();
+		ofSleepMillis(100);
+	}
+	if (endpointReachability.empty() || !endpointReachability[0] || madOscQuery.madMapperJson == nullptr) {
 		ofLog(OF_LOG_WARNING) << "Load unsuccessful!";
 	} else {
 		float p = 1;
@@ -520,11 +625,20 @@ void ofApp::oscSendToServer(size_t serverId, ofxOscMessage& message) {
 }
 
 void ofApp::setupAdditionalOscServers() {
+	std::lock_guard<std::mutex> lock(oscStateMutex);
 	extraOscQueries.clear();
 	if (oscServerConfigs.size() <= 1) return;
 
 	for (size_t i = 1; i < oscServerConfigs.size(); ++i) {
 		const auto& cfg = oscServerConfigs[i];
+		if (i >= endpointReachability.size() || !endpointReachability[i]) {
+			ofLogWarning("ofApp") << "Skipping unreachable OSCQuery server '" << cfg.id << "' at "
+								 << cfg.ip << ":" << cfg.queryPort;
+			// Don't call setup() for unreachable servers: it would trigger a blocking DNS lookup
+			// and produce a spurious 'ofxOscSender: bad host?' error if hostname can't be resolved.
+			extraOscQueries.push_back(std::make_unique<ofxMadOscQuery>());
+			continue;
+		}
 		auto server = std::make_unique<ofxMadOscQuery>();
 		server->setup(cfg.ip, cfg.sendPort, cfg.feedbackPort, cfg.queryPort);
 		server->receive();
@@ -841,6 +955,42 @@ void ofApp::oscRequestMediaName(size_t serverId) {
 
 //--------------------------------------------------------------
 void ofApp::update() {
+	applyPendingServerConfig();
+	// Health check runs async to avoid blocking main thread on slow DNS lookups (e.g. madmapper.local via mDNS)
+	if (!healthCheckInProgress.load()) {
+		healthCheckInProgress.store(true);
+		std::thread([this]() {
+			refreshEndpointHealth(false);
+			healthCheckInProgress.store(false);
+		}).detach();
+	}
+
+	if (hasPendingReload.exchange(false)) {
+		reloadRequested = true;
+	}
+
+	const uint64_t nowMs = ofGetElapsedTimeMillis();
+	if (reloadRequested && !reloadInProgress.load() && (nowMs - lastReloadMs >= 3000)) {
+		reloadInProgress.store(true);
+		float reloadButton = 1.f;
+		reloadFromServer(reloadButton);
+		lastReloadMs = nowMs;
+		reloadRequested = false;
+		reloadInProgress.store(false);
+	}
+
+	std::string pageToActivate;
+	{
+		std::lock_guard<std::mutex> lock(pendingPageMutex);
+		if (hasPendingPageActivation) {
+			pageToActivate = pendingPageName;
+			hasPendingPageActivation = false;
+		}
+	}
+	if (!pageToActivate.empty()) {
+		activatePageByName(pageToActivate);
+	}
+
 	if (!isLoading) {
 		if (!madMapperLoadError) {
 			ofSetWindowTitle("MADMAPPER MIDI MAPPER");
@@ -861,14 +1011,14 @@ void ofApp::update() {
 		}
 	}
 
-	// Throttled refresh so displays (e.g. Push3) show value changes even without page navigation.
+	// Throttled refresh so displays (e.g. Push3) show value changes without saturating USB/CPU.
 	static uint64_t lastDisplayRefreshMs = 0;
-	const uint64_t nowMs = ofGetElapsedTimeMillis();
+	const uint64_t nowMsDisplay = ofGetElapsedTimeMillis();
 	if (!isLoading && initialised && !madMapperLoadError && surface && currentPage != madOscQuery.pages.end()) {
-		if (nowMs - lastDisplayRefreshMs >= 100) {
+		if (nowMsDisplay - lastDisplayRefreshMs >= 32) {
 			updateParameterDisplay();
 			updateSubpageMediaButtonFeedback();
-			lastDisplayRefreshMs = nowMs;
+			lastDisplayRefreshMs = nowMsDisplay;
 		}
 	}
 }
@@ -1074,12 +1224,21 @@ void ofApp::keyPressed(int key) {
 
 //--------------------------------------------------------------
 void ofApp::setActivePage(MadParameterPage* page, MadParameterPage* prevPage) {
+	if (page == nullptr) {
+		std::lock_guard<std::mutex> lock(activePageMutex);
+		activePageName.clear();
+		return;
+	}
 	if (prevPage != nullptr) {
 		prevPage->unlinkDevice();
 	}
 	if(!noDeviceConnected) page->linkDevice();
+	{
+		std::lock_guard<std::mutex> lock(activePageMutex);
+		activePageName = page->getName();
+	}
 
-	ofLog() << "Active page set to " << (*currentPage).getName() << endl;
+	ofLog() << "Active page set to " << page->getName() << endl;
 	
 	// call updateParameterDisplay() on initial page set
 	updatePageDisplay();
@@ -1170,6 +1329,13 @@ void ofApp::drawStatusString() {
 //--------------------------------------------------------------
 bool ofApp::reloadFromServer(float& p) {
 	if (p == 1) {
+		std::lock_guard<std::mutex> lock(oscStateMutex);
+		if (!endpointReachability.empty() && !endpointReachability[0]) {
+			ofLogWarning("ofApp") << "Primary endpoint unreachable - skipping reload";
+			madMapperLoadError = true;
+			return false;
+		}
+
 		// Removed noisy ofLogNotice("ofApp") reload logs.
 		// Save previous location
 		std::string prevPageName = "";
@@ -1193,6 +1359,12 @@ bool ofApp::reloadFromServer(float& p) {
 			soloGroup.clear();
 			madOscQuery.pages.clear();
 			madOscQuery.subPages.clear();
+			currentPage = madOscQuery.pages.end();
+			previousPage = madOscQuery.pages.end();
+			{
+				std::lock_guard<std::mutex> activePageLock(activePageMutex);
+				activePageName.clear();
+			}
 		}
 
 		// Rebuild pages and UI
@@ -1202,6 +1374,10 @@ bool ofApp::reloadFromServer(float& p) {
 
 		// Build pages for extra servers and splice into the main page list
 		for (size_t i = 0; i < extraOscQueries.size(); ++i) {
+			if (i + 1 >= endpointReachability.size() || !endpointReachability[i + 1]) {
+				ofLogWarning("ofApp") << "Extra server " << i + 1 << " unreachable, skipping page build";
+				continue;
+			}
 			auto& extraServer = *extraOscQueries[i];
 			extraServer.receive(); // refresh data from server
 			if (extraServer.madMapperJson.is_null()) {
@@ -1288,12 +1464,10 @@ void ofApp::setupWebServer() {
 	// Bind API callbacks
 	webServer->setPagesFetcher([this]() { return getPages(); });
 	webServer->setPagesSaver([this](const ofJson& pages) { savePages(pages); });
-	webServer->setParametersFetcher([this]() { 
-				ofLogNotice() << "\n\n*** LAMBDA EXECUTED: getParameters() called from lambda ***\n\n";
-		ofLogNotice() << "=== LAMBDA: getParameters() Lambda called ===";
-		return getParameters(); 
-	});
+	webServer->setPageActivator([this](const std::string& pageName) { requestActivatePageByName(pageName); });
+	webServer->setParametersFetcher([this]() { return getParameters(); });
 	webServer->setConfigFetcher([this]() { return getConfig(); });
+	webServer->setConfigSaver([this](const ofJson& config) { saveConfig(config); });
 
 	webServer->start();
 }
@@ -1301,11 +1475,34 @@ void ofApp::setupWebServer() {
 ofJson ofApp::getPages() {
 	// Load and return custom_page.json
 	try {
-		return ofLoadJson("custom_page.json");
+		const std::string filepath = resolveCustomPagesPath();
+		ofJson data = ofLoadJson(filepath);
+		return ensurePagesShape(data);
 	} catch (const std::exception& e) {
 		ofLogError() << "Failed to load custom_page.json: " << e.what();
-		return ofJson::object();
+		return ensurePagesShape(ofJson::object());
 	}
+}
+
+bool ofApp::activatePageByName(const std::string& pageName) {
+	if (pageName.empty() || madOscQuery.pages.empty()) return false;
+	for (auto pageIt = madOscQuery.pages.begin(); pageIt != madOscQuery.pages.end(); ++pageIt) {
+		if (pageIt->getName() != pageName) continue;
+		MadParameterPage* prevPage = currentPage != madOscQuery.pages.end() ? &(*currentPage) : nullptr;
+		currentPage = pageIt;
+		previousPage = currentPage;
+		setActivePage(&(*currentPage), prevPage);
+		return true;
+	}
+	ofLogWarning("ofApp") << "activatePageByName: page not found: " << pageName;
+	return false;
+}
+
+void ofApp::requestActivatePageByName(const std::string& pageName) {
+	if (pageName.empty()) return;
+	std::lock_guard<std::mutex> lock(pendingPageMutex);
+	pendingPageName = pageName;
+	hasPendingPageActivation = true;
 }
 
 void ofApp::savePages(const ofJson& pages) {
@@ -1330,8 +1527,26 @@ void ofApp::savePages(const ofJson& pages) {
 		}
 		
 		// Save the validated json
-		ofSaveJson("custom_page.json", validated);
+		bool contentChanged = true;
+		try {
+			ofJson current = ofLoadJson(resolveCustomPagesPath());
+			ofJson currentNormalized = ensurePagesShape(current);
+			ofJson validatedNormalized = ensurePagesShape(validated);
+			contentChanged = (currentNormalized != validatedNormalized);
+		} catch (...) {
+			contentChanged = true;
+		}
+
+		ofSaveJson(resolveCustomPagesPath(), validated);
 		ofLogNotice() << "Saved custom_page.json with " << validated["pages"].size() << " pages";
+
+		const bool liveReload = !pages.contains("liveReload") || !pages["liveReload"].is_boolean() || pages["liveReload"].get<bool>();
+		if (initialised && liveReload && contentChanged) {
+			hasPendingReload.store(true);
+		}
+		if (pages.contains("currentPage") && pages["currentPage"].is_string()) {
+			requestActivatePageByName(pages["currentPage"].get<std::string>());
+		}
 	} catch (const std::exception& e) {
 		ofLogError() << "Failed to save custom_page.json: " << e.what();
 	} catch (...) {
@@ -1340,19 +1555,11 @@ void ofApp::savePages(const ofJson& pages) {
 }
 
 ofJson ofApp::getParameters() {
+	std::lock_guard<std::mutex> lock(oscStateMutex);
 	// Return all parameters organized by server
 	ofJson result = ofJson::object();
-	std::vector<std::unordered_set<std::string>> serverOwnedPaths;
-	serverOwnedPaths.resize(std::max<size_t>(1, oscServerConfigs.size()));
-	for (const auto& kv : madOscQuery.parameterMap) {
-		serverOwnedPaths[0].insert(kv.first);
-	}
-	for (size_t i = 0; i < extraOscQueries.size() && (i + 1) < serverOwnedPaths.size(); ++i) {
-		if (!extraOscQueries[i]) continue;
-		for (const auto& kv : extraOscQueries[i]->parameterMap) {
-			serverOwnedPaths[i + 1].insert(kv.first);
-		}
-	}
+	std::vector<std::unordered_set<std::string>> emittedPaths;
+	emittedPaths.resize(std::max<size_t>(1, oscServerConfigs.size()));
 
 	// Build server buckets first.
 	for (size_t i = 0; i < oscServerConfigs.size(); ++i) {
@@ -1360,9 +1567,11 @@ ofJson ofApp::getParameters() {
 		ofJson serverInfo = ofJson::object();
 		serverInfo["name"] = oscServerConfigs[i].id;
 		serverInfo["id"] = serverId;
-		serverInfo["connected"] = i == 0
+		const bool reachable = i < endpointReachability.size() ? endpointReachability[i] : false;
+		serverInfo["connected"] = reachable && (i == 0
 			? (madOscQuery.madMapperJson != nullptr)
-			: ((i - 1) < extraOscQueries.size() && extraOscQueries[i - 1] != nullptr && extraOscQueries[i - 1]->madMapperJson != nullptr);
+			: ((i - 1) < extraOscQueries.size() && extraOscQueries[i - 1] != nullptr && extraOscQueries[i - 1]->madMapperJson != nullptr));
+		serverInfo["reachable"] = reachable;
 		serverInfo["parameters"] = ofJson::array();
 		result[serverId] = serverInfo;
 	}
@@ -1376,67 +1585,93 @@ ofJson ofApp::getParameters() {
 		result["server_0"] = server0;
 	}
 
-	auto appendParameter = [&](MadParameter* param) {
-		if (param == nullptr) return;
-		const std::string path = param->getOscAddress();
-		size_t sid = 0;
-		for (size_t s = 1; s < serverOwnedPaths.size(); ++s) {
-			if (serverOwnedPaths[s].find(path) != serverOwnedPaths[s].end()) {
-				sid = s;
-				break;
-			}
-		}
-		if (sid == 0) {
-			sid = serverForOscPath(path);
-		}
+	auto appendParameter = [&](size_t sid, const ofJson& node) {
+		if (sid >= emittedPaths.size()) return;
+		auto itFullPath = node.find("FULL_PATH");
+		if (itFullPath == node.end() || !itFullPath->is_string()) return;
+		const std::string path = itFullPath->get<std::string>();
+		if (path.empty()) return;
 		const std::string serverId = "server_" + std::to_string(sid);
 		if (!result.contains(serverId)) return;
+		if (emittedPaths[sid].find(path) != emittedPaths[sid].end()) return;
+		emittedPaths[sid].insert(path);
 
 		ofJson parameter = ofJson::object();
-		parameter["name"] = param->getName();
-		parameter["display"] = param->getDisplayParameterName();
+		parameter["name"] = oscNodeDisplayName(node, path);
+		parameter["display"] = oscNodeDisplayName(node, path);
 		parameter["path"] = path;
 		result[serverId]["parameters"].push_back(parameter);
 	};
 
-	for (auto& page : madOscQuery.pages) {
-		const auto* params = page.getParameters();
-		if (params == nullptr) continue;
-		for (const auto& param : *params) {
-			appendParameter(param);
+	auto collectParameters = [&](auto&& self, size_t sid, const ofJson& node) -> void {
+		if (!node.is_object()) return;
+		if (isBindableOscType(node)) appendParameter(sid, node);
+		auto itContents = node.find("CONTENTS");
+		if (itContents == node.end() || !itContents->is_object()) return;
+		for (auto it = itContents->begin(); it != itContents->end(); ++it) {
+			self(self, sid, it.value());
 		}
+	};
+
+	if (endpointReachability.empty() || endpointReachability[0]) {
+		madOscQuery.receive();
+	}
+	if ((endpointReachability.empty() || endpointReachability[0]) && madOscQuery.madMapperJson.is_object()) {
+		collectParameters(collectParameters, 0, madOscQuery.madMapperJson);
 	}
 
-	for (auto& subpage : madOscQuery.subPages) {
-		const auto* params = subpage.getParameters();
-		if (params == nullptr) continue;
-		for (const auto& param : *params) {
-			appendParameter(param);
+	for (size_t i = 0; i < extraOscQueries.size(); ++i) {
+		if (i + 1 < endpointReachability.size() && !endpointReachability[i + 1]) continue;
+		if (!extraOscQueries[i]) continue;
+		extraOscQueries[i]->receive();
+		if (extraOscQueries[i]->madMapperJson.is_object()) {
+			collectParameters(collectParameters, i + 1, extraOscQueries[i]->madMapperJson);
 		}
 	}
 	
-	// Add current state info
-	result["current_page"] = currentPage != madOscQuery.pages.end() ? currentPage->getName() : "";
+	// Add current state info without touching potentially invalid iterators.
+	{
+		std::lock_guard<std::mutex> pageLock(activePageMutex);
+		result["current_page"] = activePageName;
+	}
 	
 	return result;
 }
 
 ofJson ofApp::getConfig() {
+	std::lock_guard<std::mutex> lock(oscStateMutex);
 	// Return current configuration
 	ofJson config = ofJson::object();
 
 	config["servers"] = ofJson::array();
-	for (const auto& serverConfig : oscServerConfigs) {
+	config["bonjourAnnouncements"] = ofJson::array();
+	for (size_t i = 0; i < oscServerConfigs.size(); ++i) {
+		const auto& serverConfig = oscServerConfigs[i];
 		ofJson sc = ofJson::object();
 		sc["id"] = serverConfig.id;
 		sc["ip"] = serverConfig.ip;
 		sc["sendPort"] = serverConfig.sendPort;
 		sc["feedbackPort"] = serverConfig.feedbackPort;
 		sc["queryPort"] = serverConfig.queryPort;
+		sc["discovery"] = serverConfig.discovery;
+		sc["reachable"] = i < endpointReachability.size() ? endpointReachability[i] : false;
 		config["servers"].push_back(sc);
+		if (serverConfig.discovery == "bonjour") {
+			ofJson announced = ofJson::object();
+			announced["id"] = serverConfig.id;
+			announced["ip"] = serverConfig.ip;
+			announced["queryPort"] = serverConfig.queryPort;
+			announced["sendPort"] = serverConfig.sendPort;
+			announced["feedbackPort"] = serverConfig.feedbackPort;
+			announced["reachable"] = i < endpointReachability.size() ? endpointReachability[i] : false;
+			config["bonjourAnnouncements"].push_back(announced);
+		}
 	}
 
-	config["currentPage"] = currentPage != madOscQuery.pages.end() ? currentPage->getName() : "";
+	{
+		std::lock_guard<std::mutex> pageLock(activePageMutex);
+		config["currentPage"] = activePageName;
+	}
 	config["initialized"] = initialised;
 	config["noDeviceConnected"] = noDeviceConnected;
 
@@ -1445,6 +1680,156 @@ ofJson ofApp::getConfig() {
 	}
 
 	return config;
+}
+
+void ofApp::saveConfig(const ofJson& config) {
+	if (!config.is_object() || !config.contains("servers") || !config["servers"].is_array()) {
+		ofLogError("ofApp") << "saveConfig: invalid payload";
+		return;
+	}
+
+	{
+		std::lock_guard<std::mutex> lock(pendingConfigMutex);
+		pendingConfig = config;
+		hasPendingConfigUpdate = true;
+	}
+}
+
+void ofApp::applyPendingServerConfig() {
+	ofJson configToApply;
+	{
+		std::lock_guard<std::mutex> lock(pendingConfigMutex);
+		if (!hasPendingConfigUpdate) return;
+		configToApply = pendingConfig;
+		hasPendingConfigUpdate = false;
+	}
+
+	if (!configToApply.is_object() || !configToApply.contains("servers") || !configToApply["servers"].is_array()) {
+		ofLogError("ofApp") << "applyPendingServerConfig: invalid payload";
+		return;
+	}
+
+	settings["servers"] = sanitizeServersArray(configToApply["servers"]);
+	if (!settings["servers"].empty()) {
+		auto first = settings["servers"][0];
+		settings["ip"] = first.value("ip", std::string("127.0.0.1"));
+		settings["sendPort"] = first.value("sendPort", PORT_RECEIVE);
+		settings["queryPort"] = first.value("queryPort", first.value("sendPort", PORT_RECEIVE));
+		settings["feedbackPort"] = first.value("feedbackPort", PORT_FEEDBACK);
+	}
+
+	ofSavePrettyJson(resolveSettingsPath(), settings);
+
+	std::vector<OscServerConfig> newConfigs = parseOscServerConfigs(settings);
+	if (newConfigs.empty()) {
+		ofLogError("ofApp") << "applyPendingServerConfig: no valid servers";
+		return;
+	}
+
+	{
+		std::lock_guard<std::mutex> lock(oscStateMutex);
+		oscServerConfigs = std::move(newConfigs);
+		endpointReachability.assign(oscServerConfigs.size(), false);
+		extraOscQueries.clear();
+		oscPathServerRouting.clear();
+
+		ip = oscServerConfigs.front().ip;
+		sendPort = oscServerConfigs.front().sendPort;
+		queryPort = oscServerConfigs.front().queryPort;
+		feedbackPort = oscServerConfigs.front().feedbackPort;
+
+		madOscQuery.disconnectWebSocket();
+		madOscQuery.setup(ip, sendPort, feedbackPort, queryPort);
+	}
+
+	refreshEndpointHealth(true);
+	bool primaryReachable = false;
+	{
+		std::lock_guard<std::mutex> lock(oscStateMutex);
+		primaryReachable = !endpointReachability.empty() && endpointReachability[0];
+	}
+	if (primaryReachable) {
+		std::lock_guard<std::mutex> lock(oscStateMutex);
+		madOscQuery.receive();
+		if (madOscQuery.connectWebSocket(queryPort)) {
+			madOscQuery.subscribeAllParameters();
+			registerServerPathRouting(0, madOscQuery);
+			subscribeTimelinePaths();
+		}
+	}
+
+	setupAdditionalOscServers();
+	hasPendingReload.store(true);
+	requestActivatePageByName(configToApply.value("currentPage", std::string()));
+}
+
+bool ofApp::endpointReachable(const OscServerConfig& cfg, std::string* error) const {
+	try {
+		Poco::Net::SocketAddress address(cfg.ip, cfg.queryPort);
+		Poco::Net::StreamSocket socket;
+		Poco::Timespan timeout(0, 0, 0, 0, 350000);
+		socket.connect(address, timeout);
+		socket.close();
+		return true;
+	} catch (const Poco::Exception& e) {
+		if (error) *error = e.displayText();
+		return false;
+	} catch (const std::exception& e) {
+		if (error) *error = e.what();
+		return false;
+	} catch (...) {
+		if (error) *error = "unknown error";
+		return false;
+	}
+}
+
+void ofApp::refreshEndpointHealth(bool force) {
+	const uint64_t nowMs = ofGetElapsedTimeMillis();
+	if (!force && (nowMs - lastEndpointHealthCheckMs) < 3000) return;
+	lastEndpointHealthCheckMs = nowMs;
+
+	std::vector<OscServerConfig> configsSnapshot;
+	{
+		std::lock_guard<std::mutex> lock(oscStateMutex);
+		configsSnapshot = oscServerConfigs;
+		if (endpointReachability.size() < configsSnapshot.size()) {
+			endpointReachability.resize(configsSnapshot.size(), false);
+		}
+	}
+	if (configsSnapshot.empty()) return;
+	std::vector<bool> probed(configsSnapshot.size(), false);
+	std::vector<std::string> errors(configsSnapshot.size());
+
+	for (size_t i = 0; i < configsSnapshot.size(); ++i) {
+		probed[i] = endpointReachable(configsSnapshot[i], &errors[i]);
+	}
+
+	std::vector<std::string> becameReachable;
+	std::vector<std::string> becameUnreachable;
+	{
+		std::lock_guard<std::mutex> lock(oscStateMutex);
+		for (size_t i = 0; i < configsSnapshot.size(); ++i) {
+			const bool reachable = probed[i];
+			const bool oldValue = endpointReachability[i];
+			endpointReachability[i] = reachable;
+
+			if (reachable != oldValue) {
+				if (reachable) {
+					becameReachable.push_back(configsSnapshot[i].id + " (" + configsSnapshot[i].ip + ":" + ofToString(configsSnapshot[i].queryPort) + ")");
+				} else {
+					becameUnreachable.push_back(configsSnapshot[i].id + " (" + configsSnapshot[i].ip + ":" + ofToString(configsSnapshot[i].queryPort) + ") reason=" + errors[i]);
+				}
+			}
+		}
+	}
+
+	for (const auto& msg : becameReachable) {
+		ofLogNotice("ofApp") << "Endpoint reachable again: " << msg;
+	}
+	for (const auto& msg : becameUnreachable) {
+		ofLogWarning("ofApp") << "Endpoint unreachable: " << msg;
+	}
+
 }
 
 // ============== WebServer Class Implementation ==============
@@ -1514,14 +1899,21 @@ class APIRequestHandler : public HTTPRequestHandler {
 
 			try {
 				ofJson updated = ofJson::parse(bodyStr);
-				if (webServer->pagesSaver) {
-					webServer->pagesSaver(updated);
-					response.setStatus(HTTPServerResponse::HTTP_OK);
-					response.send() << R"({"status":"saved"})";
-				} else {
-					response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
-					response.send() << R"({"error":"pagesSaver not set"})";
+				const bool hasPages = updated.contains("pages") && updated["pages"].is_array();
+				const bool hasCurrentPage = updated.contains("currentPage") && updated["currentPage"].is_string();
+				if (!hasPages && !hasCurrentPage) {
+					response.setStatus(HTTPServerResponse::HTTP_BAD_REQUEST);
+					response.send() << R"({"error":"missing pages or currentPage"})";
+					return;
 				}
+				if (webServer->pagesSaver && hasPages) {
+					webServer->pagesSaver(updated);
+				}
+				if (webServer->pageActivator && hasCurrentPage) {
+					webServer->pageActivator(updated["currentPage"].get<std::string>());
+				}
+				response.setStatus(HTTPServerResponse::HTTP_OK);
+				response.send() << R"({"status":"saved"})";
 			} catch (const std::exception& e) {
 				response.setStatus(HTTPServerResponse::HTTP_BAD_REQUEST);
 				std::stringstream ss;
@@ -1531,17 +1923,13 @@ class APIRequestHandler : public HTTPRequestHandler {
 		}
 		else if (path == "/api/parameters" && method == "GET") {
 			try {
-				ofLogNotice() << "=== HANDLER: /api/parameters GET request received ===";
 				if (webServer->parametersFetcher) {
-					ofLogNotice() << "=== HANDLER: parametersFetcher is set, calling it ===";
 					ofJson params = webServer->parametersFetcher();
-					ofLogNotice() << "=== HANDLER: parametersFetcher returned ===";
 					response.setStatus(HTTPServerResponse::HTTP_OK);
 					std::string jsonStr = params.dump();
 					response.setContentLength(jsonStr.size());
 					response.send() << jsonStr;
 				} else {
-					ofLogError() << "=== HANDLER: parametersFetcher NOT set ===";
 					response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
 					response.send() << R"({"error":"parametersFetcher not set"})";
 				}
@@ -1573,6 +1961,34 @@ class APIRequestHandler : public HTTPRequestHandler {
 				response.send() << ss.str();
 			}
 		}
+		else if (path == "/api/config" && method == "POST") {
+			std::istream& is = request.stream();
+			std::stringstream buffer;
+			buffer << is.rdbuf();
+			std::string bodyStr = buffer.str();
+
+			try {
+				ofJson updated = ofJson::parse(bodyStr);
+				if (!updated.is_object() || !updated.contains("servers") || !updated["servers"].is_array()) {
+					response.setStatus(HTTPServerResponse::HTTP_BAD_REQUEST);
+					response.send() << R"({"error":"missing servers array"})";
+					return;
+				}
+				if (!webServer->configSaver) {
+					response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
+					response.send() << R"({"error":"configSaver not set"})";
+					return;
+				}
+				webServer->configSaver(updated);
+				response.setStatus(HTTPServerResponse::HTTP_OK);
+				response.send() << R"({"status":"config update queued"})";
+			} catch (const std::exception& e) {
+				response.setStatus(HTTPServerResponse::HTTP_BAD_REQUEST);
+				std::stringstream ss;
+				ss << R"({"error":")" << e.what() << R"("})";
+				response.send() << ss.str();
+			}
+		}
 		else {
 			response.setStatus(HTTPServerResponse::HTTP_NOT_FOUND);
 			response.send() << R"({"error":"not found"})";
@@ -1586,21 +2002,17 @@ class APIRequestHandler : public HTTPRequestHandler {
 // Static File Handler
 class StaticFileHandler : public HTTPRequestHandler {
   public:
-	StaticFileHandler(const std::string& baseDir) : basePath(baseDir) {
-		ofLogNotice() << "StaticFileHandler: basePath = " << basePath;
-	}
+	StaticFileHandler(const std::string& baseDir) : basePath(baseDir) {}
 
 	void handleRequest(HTTPServerRequest& request, HTTPServerResponse& response) override {
 		std::string resourcePath = request.getURI();
 		if (resourcePath == "/") resourcePath = "/index.html";
 
 		std::string filePath = basePath + resourcePath;
-		ofLogNotice() << "StaticFileHandler: requesting " << resourcePath << " - trying: " << filePath;
 
 		// Try to open the file
 		std::ifstream file(filePath, std::ios::binary);
 		if (file.good()) {
-			ofLogNotice() << "StaticFileHandler: found file at " << filePath;
 			response.setStatus(HTTPServerResponse::HTTP_OK);
 			
 			if (filePath.find(".js") != std::string::npos) {
@@ -1615,12 +2027,10 @@ class StaticFileHandler : public HTTPRequestHandler {
 			
 			response.send() << file.rdbuf();
 		} else {
-			ofLogWarning() << "StaticFileHandler: file not found at " << filePath << ", trying index.html fallback";
 			// Try index.html as fallback
 			std::string indexPath = basePath + "/index.html";
 			std::ifstream indexFile(indexPath, std::ios::binary);
 			if (indexFile.good()) {
-				ofLogNotice() << "StaticFileHandler: found index.html at " << indexPath;
 				response.setStatus(HTTPServerResponse::HTTP_OK);
 				response.setContentType("text/html");
 				response.send() << indexFile.rdbuf();
@@ -1647,12 +2057,9 @@ class WebServerFactory : public HTTPRequestHandlerFactory {
 
 	HTTPRequestHandler* createRequestHandler(const HTTPServerRequest& request) override {
 		std::string path = request.getURI();
-		ofLogNotice() << "=== FACTORY: Request URI: '" << path << "' ===";
 		if (path.find("/api/") == 0) {
-			ofLogNotice() << "=== FACTORY: Routing to APIRequestHandler ===";
 			return new APIRequestHandler(webServer);
 		} else {
-			ofLogNotice() << "=== FACTORY: Routing to StaticFileHandler ===";
 			return new StaticFileHandler(basePath);
 		}
 	}
@@ -1722,7 +2129,9 @@ void WebServer::broadcastParameterUpdate(const std::string& path, float value, i
 void ofApp::updatePageDisplay() {
 	if (!surface) return;
 	if (currentPage == madOscQuery.pages.end()) return;
-	surface->updatePageDisplay(currentPage->getName());
+	const std::string pageName = currentPage->getName();
+	if (pageName.empty()) return;
+	surface->updatePageDisplay(pageName);
 }
 
 void ofApp::rebuildCueGrid(const ofJson& madMapperJson) {

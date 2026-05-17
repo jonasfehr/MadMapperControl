@@ -15,6 +15,12 @@ export const apiClient = {
     return response.data
   },
 
+  // Activate a page on the controller without editing the file
+  async activatePage(pageName) {
+    const response = await axios.post(`${API_BASE}/pages`, { currentPage: pageName })
+    return response.data
+  },
+
   // Fetch OSCQuery parameter tree from all servers
   async fetchParameters() {
     const response = await axios.get(`${API_BASE}/parameters`)
@@ -24,6 +30,12 @@ export const apiClient = {
   // Fetch current app configuration
   async fetchConfig() {
     const response = await axios.get(`${API_BASE}/config`)
+    return response.data
+  },
+
+  // Save endpoint/server configuration
+  async saveConfig(config) {
+    const response = await axios.post(`${API_BASE}/config`, config)
     return response.data
   }
 }

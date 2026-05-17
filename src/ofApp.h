@@ -12,7 +12,10 @@
 #include "ofxMidiDevice.h"
 #include "ofxOscParameterSync.h"
 #include <memory>
+#include <mutex>
 #include <optional>
+#include <atomic>
+#include <thread>
 #include <unordered_map>
 
 #define HOST "localhost"
@@ -34,6 +37,7 @@ class ofApp : public ofBaseApp {
 		int sendPort = PORT_RECEIVE;
 		int feedbackPort = PORT_FEEDBACK;
 		int queryPort = PORT_RECEIVE;
+		std::string discovery = "manual";
 	};
 
 	void setup();
@@ -66,6 +70,8 @@ class ofApp : public ofBaseApp {
 	std::list<MadParameterPage>::iterator previousPage;
 
 	void setActivePage(MadParameterPage* page, MadParameterPage* prevPage);
+	bool activatePageByName(const std::string& pageName);
+	void requestActivatePageByName(const std::string& pageName);
 	void setupPages(ofJson madMapperJson);
 	void setupUI(ofJson madMapperJson);
 	void rebuildCueGrid(const ofJson& madMapperJson);
@@ -147,9 +153,29 @@ class ofApp : public ofBaseApp {
 	void savePages(const ofJson& pages);
 	ofJson getParameters();
 	ofJson getConfig();
+	void saveConfig(const ofJson& config);
+	void applyPendingServerConfig();
+	void refreshEndpointHealth(bool force = false);
+	bool endpointReachable(const OscServerConfig& cfg, std::string* error = nullptr) const;
 
 	std::vector<OscServerConfig> oscServerConfigs;
 	std::vector<std::unique_ptr<ofxMadOscQuery>> extraOscQueries;
+	std::vector<bool> endpointReachability;
 	std::unordered_map<std::string, size_t> oscPathServerRouting;
 	std::unique_ptr<WebServer> webServer;
+	std::mutex pendingPageMutex;
+	std::mutex pendingConfigMutex;
+	std::mutex oscStateMutex;
+	std::mutex activePageMutex;
+	std::string pendingPageName;
+	std::string activePageName;
+	ofJson pendingConfig;
+	bool hasPendingPageActivation = false;
+	std::atomic_bool hasPendingReload{false};
+	std::atomic_bool reloadInProgress{false};
+	bool reloadRequested = false;
+	uint64_t lastReloadMs = 0;
+	bool hasPendingConfigUpdate = false;
+	uint64_t lastEndpointHealthCheckMs = 0;
+	std::atomic_bool healthCheckInProgress{false};
 };
