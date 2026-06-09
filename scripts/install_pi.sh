@@ -101,19 +101,27 @@ fi
 section "3 · Addons"
 # ════════════════════════════════════════════════════════════════════
 clone_or_update() {
-  local url="$1" dir="$2"
+  local url="$1" dir="$2" branch="${3:-}"
   if [[ -d "$dir/.git" ]]; then
-    info "$(basename "$dir") already exists — pulling latest"
-    git -C "$dir" pull --ff-only || warn "Could not pull $dir (uncommitted changes?)"
+    info "$(basename "$dir") already exists — updating"
+    git -C "$dir" fetch --all
+    if [[ -n "$branch" ]]; then
+      git -C "$dir" checkout "$branch" 2>/dev/null || git -C "$dir" checkout -b "$branch" "origin/$branch"
+    fi
+    git -C "$dir" pull --ff-only || warn "Could not fast-forward $dir (local changes?)"
   else
-    info "Cloning $(basename "$url")…"
-    git clone --depth=1 "$url" "$dir"
+    info "Cloning $(basename "$url")${branch:+ (branch: $branch)}…"
+    if [[ -n "$branch" ]]; then
+      git clone --depth=1 --branch "$branch" "$url" "$dir"
+    else
+      git clone --depth=1 "$url" "$dir"
+    fi
   fi
 }
 
 mkdir -p "$ADDONS_DIR"
-clone_or_update "https://github.com/jonasfehr/ofxMadOscQuery.git" "$ADDONS_DIR/ofxMadOscQuery"
-clone_or_update "https://github.com/jonasfehr/ofxMidiDevice.git"   "$ADDONS_DIR/ofxMidiDevice"
+clone_or_update "https://github.com/jonasfehr/ofxMadOscQuery.git" "$ADDONS_DIR/ofxMadOscQuery" "multiServer"
+clone_or_update "https://github.com/jonasfehr/ofxMidiDevice.git"   "$ADDONS_DIR/ofxMidiDevice"   "faderport16"
 clone_or_update "https://github.com/d3cod3/ofxMidi.git"            "$ADDONS_DIR/ofxMidi"
 ok "Addons ready"
 
