@@ -1,75 +1,70 @@
 <template>
   <div class="endpoint-config">
-    <div class="panel-header">
-      <h3>Endpoint Configuration</h3>
-      <p>Manuelle Endpoints und Bonjour-Hosts (.local) konfigurieren.</p>
-    </div>
+
+    <div class="section-header">Endpoints</div>
 
     <div class="endpoint-list">
       <div v-for="(server, idx) in draftServers" :key="server.localKey" class="endpoint-card">
         <div class="card-head">
-          <strong>Endpoint {{ idx + 1 }}</strong>
+          <span class="card-index">{{ idx + 1 }}</span>
           <span class="reachability" :class="{ up: server.reachable, down: !server.reachable }">
             {{ server.reachable ? 'reachable' : 'unreachable' }}
           </span>
+          <button class="btn-remove" @click="removeServer(idx)">✕</button>
         </div>
 
-        <div class="grid">
-          <label>
-            Name
+        <div class="field-grid">
+          <label class="field">
+            <span class="field-label">Name</span>
             <input v-model="server.id" type="text" placeholder="MadMapper" />
           </label>
-          <label>
-            Host / IP
-            <input v-model="server.ip" type="text" placeholder="127.0.0.1 oder madmapper.local" />
+          <label class="field">
+            <span class="field-label">Host / IP</span>
+            <input v-model="server.ip" type="text" placeholder="127.0.0.1" />
           </label>
-          <label>
-            Query Port
+          <label class="field">
+            <span class="field-label">Query Port</span>
             <input v-model.number="server.queryPort" type="number" min="1" max="65535" />
           </label>
-          <label>
-            Send Port
+          <label class="field">
+            <span class="field-label">Send Port</span>
             <input v-model.number="server.sendPort" type="number" min="1" max="65535" />
           </label>
-          <label>
-            Feedback Port
+          <label class="field">
+            <span class="field-label">Feedback Port</span>
             <input v-model.number="server.feedbackPort" type="number" min="1" max="65535" />
           </label>
-          <label>
-            Source
+          <label class="field">
+            <span class="field-label">Discovery</span>
             <select v-model="server.discovery">
               <option value="manual">Manual</option>
               <option value="bonjour">Bonjour</option>
             </select>
           </label>
         </div>
-
-        <div class="actions">
-          <button class="danger" @click="removeServer(idx)">Remove</button>
-        </div>
       </div>
     </div>
 
-    <div class="bonjour-section" v-if="availableAnnouncements.length">
-      <h4>Bonjour Announcements</h4>
-      <p>Gefundene Endpoints koennen direkt zur Konfiguration hinzugefuegt werden.</p>
+    <div v-if="availableAnnouncements.length" class="bonjour-section">
+      <div class="section-header">Bonjour Discovered</div>
       <div class="announcement-list">
-        <div v-for="item in availableAnnouncements" :key="item.localKey" class="announcement-item">
-          <div>
-            <strong>{{ item.id }}</strong>
-            <div class="announcement-meta">{{ item.ip }}:{{ item.queryPort }}</div>
+        <div v-for="item in availableAnnouncements" :key="item.localKey" class="announcement-row">
+          <div class="announcement-info">
+            <span class="announcement-id">{{ item.id }}</span>
+            <span class="announcement-meta">{{ item.ip }}:{{ item.queryPort }}</span>
           </div>
-          <button class="secondary" @click="addAnnounced(item)">Add to config</button>
+          <button class="btn-secondary" @click="addAnnounced(item)">Add</button>
         </div>
       </div>
     </div>
 
     <div class="footer-actions">
-      <button class="secondary" @click="addManual">+ Add Endpoint</button>
-      <button class="primary" @click="save" :disabled="saving">{{ saving ? 'Saving...' : 'Save Endpoints' }}</button>
+      <button class="btn-secondary" @click="addManual">+ Add Endpoint</button>
+      <button class="btn-primary" @click="save" :disabled="saving">{{ saving ? 'Saving…' : 'Save' }}</button>
     </div>
 
-    <div v-if="status" class="status" :class="status.type">{{ status.message }}</div>
+    <div v-if="status" class="status-bar" :class="status.type">{{ status.message }}</div>
+
   </div>
 </template>
 
@@ -175,16 +170,14 @@ export default {
     function save() {
       const payload = toPayload()
       if (!payload.servers.length) {
-        status.value = { type: 'error', message: 'Mindestens ein valider Endpoint ist erforderlich.' }
+        status.value = { type: 'error', message: 'At least one valid endpoint is required.' }
         return
       }
 
       saving.value = true
       emit('save-config', payload)
-      status.value = { type: 'success', message: 'Endpoints gespeichert. Reconnect wird angewendet.' }
-      setTimeout(() => {
-        saving.value = false
-      }, 350)
+      status.value = { type: 'success', message: 'Saved — reconnecting.' }
+      setTimeout(() => { saving.value = false }, 350)
     }
 
     return {
@@ -202,195 +195,254 @@ export default {
 </script>
 
 <style scoped>
+* { box-sizing: border-box; }
+
 .endpoint-config {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  padding: 1rem;
+  height: 100%;
+  overflow: hidden;
 }
 
-.panel-header h3 {
-  margin: 0;
-}
-
-.panel-header p {
-  margin: 0.35rem 0 0 0;
+/* ── Section header — matches PageManager style ── */
+.section-header {
+  padding: 5px 12px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   color: var(--text-dim);
+  background: var(--bg-shell);
+  border-bottom: 1px solid var(--border-strong);
+  flex-shrink: 0;
 }
 
-.bonjour-section {
-  border: 1px solid var(--border-soft);
-  border-radius: 14px;
-  padding: 0.85rem;
-  background: linear-gradient(180deg, rgba(39, 39, 39, 0.98), rgba(30, 30, 30, 0.98));
-}
-
-.bonjour-section h4 {
-  margin: 0;
-}
-
-.bonjour-section p {
-  margin: 0.3rem 0 0.75rem 0;
-  color: var(--text-dim);
-  font-size: 0.82rem;
-}
-
-.announcement-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.announcement-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
-  border: 1px solid var(--border-soft);
-  border-radius: 10px;
-  padding: 0.6rem 0.7rem;
-  background: linear-gradient(180deg, rgba(55, 55, 55, 0.96), rgba(42, 42, 42, 0.96));
-}
-
-.announcement-meta {
-  color: var(--text-dim);
-  font-size: 0.78rem;
-}
-
+/* ── Endpoint list ── */
 .endpoint-list {
+  flex: 1;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.8rem;
-  max-height: 62vh;
-  overflow: auto;
+  gap: 0;
 }
 
 .endpoint-card {
-  border: 1px solid var(--border-soft);
-  border-radius: 14px;
-  padding: 0.9rem;
-  background: linear-gradient(180deg, rgba(44, 44, 44, 0.98), rgba(31, 31, 31, 0.98));
+  border-bottom: 1px solid var(--border-strong);
+  padding: 8px 12px 10px;
+  background: var(--bg-panel);
 }
 
+.endpoint-card:hover {
+  background: var(--bg-hover);
+}
+
+/* ── Card header row ── */
 .card-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.7rem;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.card-index {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-dim);
+  letter-spacing: 0.06em;
+  width: 16px;
+  text-align: center;
 }
 
 .reachability {
-  padding: 0.25rem 0.55rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 1px 6px;
   border: 1px solid transparent;
+  border-radius: var(--radius-xs);
 }
 
 .reachability.up {
-  color: var(--success-text);
-  background: var(--success-bg);
-  border-color: rgba(46, 125, 50, 0.35);
+  color: #4caf50;
+  border-color: rgba(76, 175, 80, 0.3);
+  background: rgba(76, 175, 80, 0.08);
 }
 
 .reachability.down {
-  color: var(--error-text);
-  background: var(--error-bg);
-  border-color: rgba(198, 40, 40, 0.35);
+  color: var(--text-dim);
+  border-color: var(--border-soft);
+  background: transparent;
 }
 
-.grid {
+.btn-remove {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  line-height: 1;
+}
+
+.btn-remove:hover {
+  color: var(--error-text);
+  background: rgba(198, 40, 40, 0.12);
+}
+
+/* ── Field grid ── */
+.field-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.7rem;
+  gap: 6px 12px;
 }
 
-label {
+.field {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  color: var(--text-muted);
-  font-size: 0.84rem;
+  gap: 3px;
+  cursor: default;
+}
+
+.field-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-dim);
 }
 
 input,
 select {
   width: 100%;
+  height: 26px;
+  padding: 0 7px;
   border: 1px solid var(--border-soft);
-  border-radius: 10px;
-  padding: 0.6rem 0.75rem;
-  color: var(--text-main);
+  border-radius: var(--radius-xs);
   background: var(--bg-input);
+  color: var(--text-main);
+  font-size: 11px;
 }
 
 input:focus,
 select:focus {
   outline: none;
-  border-color: rgba(24, 200, 218, 0.55);
-  box-shadow: 0 0 0 3px rgba(24, 200, 218, 0.12);
+  border-color: var(--accent-dim);
+  box-shadow: 0 0 0 2px rgba(24, 200, 218, 0.1);
 }
 
-.actions {
+/* ── Bonjour section ── */
+.bonjour-section {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-strong);
+}
+
+.announcement-list {
   display: flex;
-  justify-content: flex-end;
-  margin-top: 0.8rem;
+  flex-direction: column;
 }
 
+.announcement-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.announcement-row:last-child { border-bottom: none; }
+
+.announcement-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.announcement-id {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.announcement-meta {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+/* ── Footer ── */
 .footer-actions {
   display: flex;
-  gap: 0.6rem;
-  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-strong);
+  background: var(--bg-shell);
+  flex-shrink: 0;
 }
 
-button {
-  border-radius: 10px;
-  padding: 0.65rem 0.95rem;
+.btn-secondary {
+  height: 28px;
+  padding: 0 10px;
   border: 1px solid var(--border-soft);
-  background: linear-gradient(180deg, rgba(73, 73, 73, 0.94), rgba(56, 56, 56, 0.94));
-  color: var(--text-main);
+  border-radius: var(--radius-xs);
+  background: var(--bg-panel-soft);
+  color: var(--text-muted);
   cursor: pointer;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
 }
 
-button.primary {
-  border-color: rgba(24, 200, 218, 0.35);
-  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
-  color: #061518;
+.btn-secondary:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
 }
 
-button.danger {
-  border-color: rgba(198, 40, 40, 0.35);
-  background: rgba(198, 40, 40, 0.2);
-  color: var(--error-text);
+.btn-primary {
+  height: 28px;
+  padding: 0 14px;
+  border: 1px solid var(--accent-dim);
+  border-radius: var(--radius-xs);
+  background: var(--bg-active);
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: auto;
 }
 
-button:disabled {
-  opacity: 0.6;
+.btn-primary:hover {
+  background: rgba(18, 200, 218, 0.2);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
-.status {
-  padding: 0.75rem 0.9rem;
-  border-radius: 12px;
-  border: 1px solid transparent;
-  font-size: 0.84rem;
-  font-weight: 700;
+/* ── Status bar ── */
+.status-bar {
+  padding: 6px 12px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
 }
 
-.status.success {
-  color: var(--success-text);
-  background: var(--success-bg);
-  border-color: rgba(46, 125, 50, 0.28);
+.status-bar.success {
+  color: #4caf50;
+  background: rgba(76, 175, 80, 0.08);
+  border-top: 1px solid rgba(76, 175, 80, 0.2);
 }
 
-.status.error {
+.status-bar.error {
   color: var(--error-text);
   background: var(--error-bg);
-  border-color: rgba(198, 40, 40, 0.34);
+  border-top: 1px solid rgba(198, 40, 40, 0.2);
 }
 
-@media (max-width: 900px) {
-  .grid {
-    grid-template-columns: 1fr;
-  }
+@media (max-width: 560px) {
+  .field-grid { grid-template-columns: 1fr; }
 }
 </style>

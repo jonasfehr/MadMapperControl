@@ -154,44 +154,42 @@ export default {
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 1rem;
-  gap: 1rem;
   color: var(--text-main);
 }
 
+/* ── Tab strip (matches MM's flat tab bar) ── */
 .editor-tabs {
-  display: inline-flex;
-  gap: 0.45rem;
-  align-self: flex-start;
-  padding: 0.35rem;
-  border: 1px solid var(--border-strong);
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgba(56, 56, 56, 0.9), rgba(37, 37, 37, 0.96));
+  display: flex;
+  background: var(--bg-shell);
+  border-bottom: 1px solid var(--border-soft);
+  padding: 0 8px;
+  flex-shrink: 0;
 }
 
 .tab {
-  min-width: 120px;
-  padding: 0.7rem 1rem;
-  border: 1px solid transparent;
-  border-radius: 10px;
+  padding: 0 16px;
+  height: 32px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--text-dim);
   cursor: pointer;
-  font-weight: 700;
-  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transition: color 0.1s, border-color 0.1s;
 }
 
-.tab:hover {
-  color: var(--text-main);
-  background: rgba(255, 255, 255, 0.04);
-}
+.tab:hover { color: var(--text-muted); }
 
 .tab.active {
-  color: #061518;
-  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
-  border-color: rgba(24, 200, 218, 0.35);
+  color: var(--accent);
+  border-bottom-color: var(--accent);
 }
 
+/* ── Content area ── */
 .editor-content,
 .pages-section,
 .subpages-section {
@@ -199,17 +197,23 @@ export default {
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  padding: 12px;
+  gap: 8px;
 }
 
 .pages-section h3,
 .subpages-section h3 {
-  margin: 0 0 0.9rem 0;
-  padding-bottom: 0.7rem;
+  margin: 0 0 4px;
+  padding-bottom: 6px;
   border-bottom: 1px solid var(--border-soft);
-  font-size: 0.96rem;
-  color: var(--text-main);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
 }
 
+/* ── JSON textarea ── */
 .json-editor {
   flex: 1;
   display: flex;
@@ -218,154 +222,89 @@ export default {
 
 .json-editor textarea {
   flex: 1;
-  padding: 1rem;
+  padding: 10px;
   border: 1px solid var(--border-soft);
-  border-radius: 14px;
+  border-radius: var(--radius-xs);
   color: var(--text-main);
   font-family: "SFMono-Regular", "Menlo", monospace;
-  font-size: 0.84rem;
+  font-size: 11px;
+  line-height: 1.55;
   resize: none;
-  background: linear-gradient(180deg, rgba(35, 35, 35, 0.95), rgba(28, 28, 28, 0.98));
+  background: var(--bg-app);
 }
 
 .json-editor textarea:focus {
   outline: none;
-  border-color: rgba(24, 200, 218, 0.55);
-  box-shadow: 0 0 0 3px rgba(24, 200, 218, 0.12);
+  border-color: var(--accent-dim);
 }
 
+/* ── Status messages ── */
 .validation-message,
 .save-status {
-  padding: 0.75rem 0.9rem;
+  padding: 5px 10px;
   border: 1px solid transparent;
-  border-radius: 12px;
-  font-size: 0.84rem;
-  font-weight: 700;
+  border-radius: var(--radius-xs);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .validation-message,
 .save-status.success {
   color: var(--success-text);
   background: var(--success-bg);
-  border-color: rgba(46, 125, 50, 0.28);
+  border-color: rgba(46, 125, 50, 0.25);
 }
 
 .validation-message.error,
 .save-status.error {
   color: var(--error-text);
   background: var(--error-bg);
-  border-color: rgba(198, 40, 40, 0.34);
+  border-color: rgba(198, 40, 40, 0.3);
 }
 
+/* ── Action buttons ── */
 .button-group {
   display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .save-btn,
 .reset-btn {
-  padding: 0.75rem 1rem;
-  border-radius: 10px;
-  font-weight: 700;
+  padding: 5px 14px;
+  border-radius: var(--radius-xs);
+  font-size: 11px;
+  font-weight: 600;
   cursor: pointer;
-  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+  transition: background 0.1s, opacity 0.1s;
 }
 
 .save-btn {
-  border: 1px solid rgba(24, 200, 218, 0.35);
-  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
-  color: #061518;
+  border: 1px solid var(--accent-dim);
+  background: var(--accent);
+  color: #071316;
   flex: 1;
 }
 
-.save-btn:hover:not(:disabled),
-.reset-btn:hover {
-  transform: translateY(-1px);
-}
-
-.save-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
+.save-btn:hover:not(:disabled) { background: var(--accent-strong); }
+.save-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .reset-btn {
   border: 1px solid var(--border-soft);
-  background: linear-gradient(180deg, rgba(73, 73, 73, 0.94), rgba(56, 56, 56, 0.94));
-  color: var(--text-main);
+  background: var(--bg-panel-soft);
+  color: var(--text-muted);
 }
 
-.save-status {
-  animation: slideIn 0.22s ease-out;
-}
+.reset-btn:hover { background: var(--bg-hover); color: var(--text-main); }
 
-@keyframes slideIn {
-  from {
-    transform: translateY(-8px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
+.save-status { animation: fadeIn 0.15s ease-out; }
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 @media (max-width: 700px) {
-  .save-btn,
-  .reset-btn,
-  .tab {
-    width: 100%;
-  }
-}
-  background: #667eea;
-  color: white;
-  flex: 1;
-}
-
-.save-btn:hover:not(:disabled) {
-  background: #764ba2;
-}
-
-.save-btn:disabled {
-  background: #ccc;
-  cursor: not-allowed;
-}
-
-.reset-btn {
-  background: #f5f5f5;
-  color: #333;
-  border: 1px solid #e0e0e0;
-}
-
-.reset-btn:hover {
-  background: #e0e0e0;
-}
-
-.save-status {
-  padding: 0.75rem 1rem;
-  border-radius: 4px;
-  font-weight: 500;
-  animation: slideIn 0.3s ease-out;
-}
-
-.save-status.success {
-  background: #e8f5e9;
-  color: #2e7d32;
-}
-
-.save-status.error {
-  background: #ffebee;
-  color: #c62828;
-}
-
-@keyframes slideIn {
-  from {
-    transform: translateY(-10px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
+  .save-btn, .reset-btn { width: 100%; }
 }
 </style>

@@ -383,6 +383,14 @@ namespace {
 		}
 	}
 
+	std::string labelForRoleOrPrefix(ofxMidiDevice* dev, const std::string& role, const std::string& fallbackPrefix, int index) {
+		auto bit = dev->bindings.find(role);
+		if (bit != dev->bindings.end() && dev->midiComponents.count(bit->second)) return bit->second;
+		std::string fallback = fallbackPrefix + ofToString(index);
+		if (dev->midiComponents.count(fallback)) return fallback;
+		return std::string();
+	}
+
 	std::string normalizePageKey(std::string value) {
 		std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
 			if (c == ' ') return '_';
@@ -674,13 +682,15 @@ void ofApp::selectSurface(string& name) {
 		if (mit != dev->midiComponents.end() && mit->second.value.get() < 0.5f) return;
 	}
 	
+	if (currentPage == madOscQuery.pages.end()) return;
+
 	// If already on a subpage and button is pressed, go back to main page
 	if ((*currentPage).isSubpage()) {
 		float p = 1.f;
 		backToCurrent(p);
 		return;
 	}
-	
+
 	auto result = ofSplitString(name, "_");
 	if (result.empty()) return;
 	int index = ofToInt(result.back());
@@ -753,13 +763,14 @@ void ofApp::selectGroupContent(string& name) {
 }
 
 void ofApp::selectMedia(string& name) {
+	if (currentPage == madOscQuery.pages.end()) return;
 	if (surface) {
 		auto* dev = static_cast<ofxMidiDevice*>(surface.get());
 		if (isComponentMappedToRole(dev, name, ".surfaceSubpage")) return;
 		auto mit = dev->midiComponents.find(name);
 		if (mit != dev->midiComponents.end() && mit->second.value.get() < 0.5f) return;
 	}
-	
+
 	// If already on a subpage and button is pressed, go back to main page
 	if ((*currentPage).isSubpage()) {
 		float p = 1.f;
@@ -904,7 +915,7 @@ void ofApp::removeListeners() {
 	if (dev->midiComponents.count("fader_M_dmx"))
 		fadeMasterDMX->unlinkMidiComponent(dev->midiComponents["fader_M_dmx"]);
 	if (dev->midiComponents.count("fader_Speed"))
-		fadeEngingeSpeed->unlinkMidiComponent(dev->midiComponents["fader_Speed"]);
+		fadeEngineSpeed->unlinkMidiComponent(dev->midiComponents["fader_Speed"]);
 	if (dev->midiComponents.count("jog")) speed->unlinkMidiComponent(dev->midiComponents["jog"]);
 
 	ofRemoveListener(selectGroup.lastChangedE, this, &ofApp::selectSurface);
@@ -956,13 +967,17 @@ void ofApp::oscRequestMediaName(size_t serverId) {
 //--------------------------------------------------------------
 void ofApp::update() {
 	applyPendingServerConfig();
-	// Health check runs async to avoid blocking main thread on slow DNS lookups (e.g. madmapper.local via mDNS)
-	if (!healthCheckInProgress.load()) {
-		healthCheckInProgress.store(true);
-		std::thread([this]() {
-			refreshEndpointHealth(false);
-			healthCheckInProgress.store(false);
-		}).detach();
+	// Health check runs async to avoid blocking main thread on slow DNS lookups (e.g. madmapper.local via mDNS).
+	// Guard with a time check before spawning so we don't create threads at 60fps when idle.
+	{
+		const uint64_t nowCheck = ofGetElapsedTimeMillis();
+		if (!healthCheckInProgress.load() && (nowCheck - lastEndpointHealthCheckMs >= 3000)) {
+			healthCheckInProgress.store(true);
+			std::thread([this]() {
+				refreshEndpointHealth(false);
+				healthCheckInProgress.store(false);
+			}).detach();
+		}
 	}
 
 	if (hasPendingReload.exchange(false)) {
@@ -970,13 +985,11 @@ void ofApp::update() {
 	}
 
 	const uint64_t nowMs = ofGetElapsedTimeMillis();
-	if (reloadRequested && !reloadInProgress.load() && (nowMs - lastReloadMs >= 3000)) {
-		reloadInProgress.store(true);
+	if (reloadRequested && (nowMs - lastReloadMs >= 3000)) {
 		float reloadButton = 1.f;
 		reloadFromServer(reloadButton);
 		lastReloadMs = nowMs;
 		reloadRequested = false;
-		reloadInProgress.store(false);
 	}
 
 	std::string pageToActivate;
@@ -989,14 +1002,6 @@ void ofApp::update() {
 	}
 	if (!pageToActivate.empty()) {
 		activatePageByName(pageToActivate);
-	}
-
-	if (!isLoading) {
-		if (!madMapperLoadError) {
-			ofSetWindowTitle("MADMAPPER MIDI MAPPER");
-		} else {
-			ofSetWindowTitle("MADMAPPER LOAD ERROR");
-		}
 	}
 
 	oscParamSync.update();
@@ -1024,16 +1029,6 @@ void ofApp::update() {
 }
 
 void ofApp::setupPages(ofJson madmapperJson) {
-	//    // Custom
-	//    madOscQuery.createCustomPage(pages, &platformM,
-	//    ofLoadJson("custom_page.json"));
-	//
-	//    // One for each possible Subpage
-	//    madOscQuery.createSubPages(subPages, &platformM, madmapperJson);
-
-	//    cout << "subPages " << subPages.size() << endl;
-
-	// Set initial page
 	currentPage = madOscQuery.pages.begin();
 	previousPage = currentPage;
 
@@ -1056,13 +1051,6 @@ void ofApp::setupUI(ofJson madmapperJson) {
 	auto* dev = static_cast<ofxMidiDevice*>(surface.get());
 	rebuildCueGrid(madmapperJson);
 	bindCueGrid();
-	auto labelForRoleOrPrefix = [&](const std::string& role, const std::string& fallbackPrefix, int index) {
-		auto bit = dev->bindings.find(role);
-		if (bit != dev->bindings.end() && dev->midiComponents.count(bit->second)) return bit->second;
-		std::string fallback = fallbackPrefix + ofToString(index);
-		if (dev->midiComponents.count(fallback)) return fallback;
-		return std::string();
-	};
 
 	if (auto c = ::getComponentByRole(dev, "nav.pageNext")) c->value.addListener(this, &ofApp::pageForward);
 	if (auto c = ::getComponentByRole(dev, "nav.pagePrev")) c->value.addListener(this, &ofApp::pageBackward);
@@ -1091,8 +1079,8 @@ void ofApp::setupUI(ofJson madmapperJson) {
 	}
 	const ofJson* engineSpeed = jsonGet(madmapperJson, {"CONTENTS", "master", "CONTENTS", "engine_speed"});
 	if (engineSpeed && dev->midiComponents.count("fader_Speed")) {
-		fadeEngingeSpeed = madOscQuery.createParameter(*engineSpeed);
-		fadeEngingeSpeed->linkMidiComponent(dev->midiComponents["fader_Speed"]);
+		fadeEngineSpeed = madOscQuery.createParameter(*engineSpeed);
+		fadeEngineSpeed->linkMidiComponent(dev->midiComponents["fader_Speed"]);
 	}
 	const ofJson* bpm = jsonGet(madmapperJson, {"CONTENTS", "master", "CONTENTS", "Global_BPM", "CONTENTS", "BPM"});
 	if (bpm && dev->midiComponents.count("jog")) {
@@ -1102,14 +1090,14 @@ void ofApp::setupUI(ofJson madmapperJson) {
 
 	selectGroup.doCheckbox = true;
 	for (int i = 1; i < 17; i++) {
-		std::string lbl = labelForRoleOrPrefix("param." + ofToString(i) + ".surfaceSubpage", "sel_", i);
+		std::string lbl = labelForRoleOrPrefix(dev, "param." + ofToString(i) + ".surfaceSubpage", "sel_", i);
 		if (dev->midiComponents.count(lbl)) selectGroup.add(dev->midiComponents[lbl]);
 	}
 	ofAddListener(selectGroup.lastChangedE, this, &ofApp::selectSurface);
 
 	muteGroup.doCheckbox = false;
 	for (int i = 1; i < 17; i++) {
-		std::string lbl = labelForRoleOrPrefix("param." + ofToString(i) + ".groupSubpage", "mute_", i);
+		std::string lbl = labelForRoleOrPrefix(dev, "param." + ofToString(i) + ".groupSubpage", "mute_", i);
 		if (dev->midiComponents.count(lbl)) muteGroup.add(dev->midiComponents[lbl]);
 	}
 	ofAddListener(muteGroup.lastChangedE, this, &ofApp::selectSurface);
@@ -1117,7 +1105,7 @@ void ofApp::setupUI(ofJson madmapperJson) {
 
 	soloGroup.doCheckbox = true;
 	for (int i = 1; i < 17; i++) {
-		std::string lbl = labelForRoleOrPrefix("param." + ofToString(i) + ".mediaSubpage", "solo_", i);
+		std::string lbl = labelForRoleOrPrefix(dev, "param." + ofToString(i) + ".mediaSubpage", "solo_", i);
 		if (dev->midiComponents.count(lbl)) soloGroup.add(dev->midiComponents[lbl]);
 	}
 	ofAddListener(soloGroup.lastChangedE, this, &ofApp::selectMedia);
@@ -1250,14 +1238,6 @@ void ofApp::updateSubpageMediaButtonFeedback() {
 	if (!surface) return;
 	auto* dev = static_cast<ofxMidiDevice*>(surface.get());
 
-	auto labelForRoleOrPrefix = [&](const std::string& role, const std::string& fallbackPrefix, int index) {
-		auto bit = dev->bindings.find(role);
-		if (bit != dev->bindings.end() && dev->midiComponents.count(bit->second)) return bit->second;
-		std::string fallback = fallbackPrefix + ofToString(index);
-		if (dev->midiComponents.count(fallback)) return fallback;
-		return std::string();
-	};
-
 	auto extractSurfaceSubpageName = [](MadParameter* parameter) {
 		if (!parameter || !parameter->isSelectable()) return std::string();
 		auto oscAddress = ofSplitString(parameter->getOscAddress(), "/");
@@ -1282,7 +1262,7 @@ void ofApp::updateSubpageMediaButtonFeedback() {
 		std::string surfaceSubpage = extractSurfaceSubpageName(parameter);
 		std::string mediaSubpage = (parameter && parameter->isSelectable()) ? parameter->getConnectedMediaName() : std::string();
 
-		std::string surfaceLabel = labelForRoleOrPrefix("param." + ofToString(i) + ".surfaceSubpage", "sel_", i);
+		std::string surfaceLabel = labelForRoleOrPrefix(dev, "param." + ofToString(i) + ".surfaceSubpage", "sel_", i);
 		if (!surfaceLabel.empty()) {
 			auto& c = dev->midiComponents[surfaceLabel];
 			float v = (!surfaceSubpage.empty() && activeName == surfaceSubpage) ? 1.f : 0.f;
@@ -1292,7 +1272,7 @@ void ofApp::updateSubpageMediaButtonFeedback() {
 			c.value.enableEvents();
 		}
 
-		std::string mediaLabel = labelForRoleOrPrefix("param." + ofToString(i) + ".mediaSubpage", "solo_", i);
+		std::string mediaLabel = labelForRoleOrPrefix(dev, "param." + ofToString(i) + ".mediaSubpage", "solo_", i);
 		if (!mediaLabel.empty()) {
 			auto& c = dev->midiComponents[mediaLabel];
 			float v = (!mediaSubpage.empty() && activeName == mediaSubpage) ? 1.f : 0.f;
@@ -1459,8 +1439,6 @@ void ofApp::dragEvent(ofDragInfo dragInfo) {}
 
 void ofApp::setupWebServer() {
 	webServer = std::make_unique<WebServer>(8080);
-	ofLogNotice() << "\n\n### setupWebServer() CALLED - Setting up fetchers ###\n\n";
-
 	// Bind API callbacks
 	webServer->setPagesFetcher([this]() { return getPages(); });
 	webServer->setPagesSaver([this](const ofJson& pages) { savePages(pages); });
@@ -1613,20 +1591,14 @@ ofJson ofApp::getParameters() {
 		}
 	};
 
-	if (endpointReachability.empty() || endpointReachability[0]) {
-		madOscQuery.receive();
-	}
 	if ((endpointReachability.empty() || endpointReachability[0]) && madOscQuery.madMapperJson.is_object()) {
 		collectParameters(collectParameters, 0, madOscQuery.madMapperJson);
 	}
 
 	for (size_t i = 0; i < extraOscQueries.size(); ++i) {
 		if (i + 1 < endpointReachability.size() && !endpointReachability[i + 1]) continue;
-		if (!extraOscQueries[i]) continue;
-		extraOscQueries[i]->receive();
-		if (extraOscQueries[i]->madMapperJson.is_object()) {
-			collectParameters(collectParameters, i + 1, extraOscQueries[i]->madMapperJson);
-		}
+		if (!extraOscQueries[i] || !extraOscQueries[i]->madMapperJson.is_object()) continue;
+		collectParameters(collectParameters, i + 1, extraOscQueries[i]->madMapperJson);
 	}
 	
 	// Add current state info without touching potentially invalid iterators.
@@ -1832,299 +1804,6 @@ void ofApp::refreshEndpointHealth(bool force) {
 
 }
 
-// ============== WebServer Class Implementation ==============
-
-#include "Poco/Net/HTTPServer.h"
-#include "Poco/Net/HTTPRequestHandlerFactory.h"
-#include "Poco/Net/HTTPRequestHandler.h"
-#include "Poco/Net/HTTPServerRequest.h"
-#include "Poco/Net/HTTPServerResponse.h"
-#include "Poco/Net/HTTPServerParams.h"
-#include "Poco/Net/ServerSocket.h"
-#include "Poco/Exception.h"
-#include <sstream>
-
-using Poco::Net::HTTPServer;
-using Poco::Net::HTTPRequestHandler;
-using Poco::Net::HTTPRequestHandlerFactory;
-using Poco::Net::HTTPServerRequest;
-using Poco::Net::HTTPServerResponse;
-using Poco::Net::ServerSocket;
-
-// API Request Handler
-class APIRequestHandler : public HTTPRequestHandler {
-  public:
-	APIRequestHandler(WebServer* server) : webServer(server) {}
-
-	void handleRequest(HTTPServerRequest& request, HTTPServerResponse& response) override {
-		response.setContentType("application/json");
-		response.add("Access-Control-Allow-Origin", "*");
-		response.add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-		response.add("Access-Control-Allow-Headers", "Content-Type");
-
-		std::string path = request.getURI();
-		std::string method = request.getMethod();
-
-		if (method == "OPTIONS") {
-			response.setStatus(HTTPServerResponse::HTTP_OK);
-			response.send();
-			return;
-		}
-
-		if (path == "/api/pages" && method == "GET") {
-			try {
-				if (webServer->pagesFetcher) {
-					ofJson pages = webServer->pagesFetcher();
-					response.setStatus(HTTPServerResponse::HTTP_OK);
-					std::string jsonStr = pages.dump();
-					response.setContentLength(jsonStr.size());
-					response.send() << jsonStr;
-				} else {
-					response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
-					response.send() << R"({"error":"pagesFetcher not set"})";
-				}
-			} catch (const std::exception& e) {
-				ofLogError() << "Exception in /api/pages GET: " << e.what();
-				response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
-				std::stringstream ss;
-				ss << R"({"error":")" << e.what() << R"("})";
-				response.send() << ss.str();
-			}
-		}
-		else if (path == "/api/pages" && method == "POST") {
-			std::istream& is = request.stream();
-			std::stringstream buffer;
-			buffer << is.rdbuf();
-			std::string bodyStr = buffer.str();
-
-			try {
-				ofJson updated = ofJson::parse(bodyStr);
-				const bool hasPages = updated.contains("pages") && updated["pages"].is_array();
-				const bool hasCurrentPage = updated.contains("currentPage") && updated["currentPage"].is_string();
-				if (!hasPages && !hasCurrentPage) {
-					response.setStatus(HTTPServerResponse::HTTP_BAD_REQUEST);
-					response.send() << R"({"error":"missing pages or currentPage"})";
-					return;
-				}
-				if (webServer->pagesSaver && hasPages) {
-					webServer->pagesSaver(updated);
-				}
-				if (webServer->pageActivator && hasCurrentPage) {
-					webServer->pageActivator(updated["currentPage"].get<std::string>());
-				}
-				response.setStatus(HTTPServerResponse::HTTP_OK);
-				response.send() << R"({"status":"saved"})";
-			} catch (const std::exception& e) {
-				response.setStatus(HTTPServerResponse::HTTP_BAD_REQUEST);
-				std::stringstream ss;
-				ss << R"({"error":")" << e.what() << R"("})";
-				response.send() << ss.str();
-			}
-		}
-		else if (path == "/api/parameters" && method == "GET") {
-			try {
-				if (webServer->parametersFetcher) {
-					ofJson params = webServer->parametersFetcher();
-					response.setStatus(HTTPServerResponse::HTTP_OK);
-					std::string jsonStr = params.dump();
-					response.setContentLength(jsonStr.size());
-					response.send() << jsonStr;
-				} else {
-					response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
-					response.send() << R"({"error":"parametersFetcher not set"})";
-				}
-			} catch (const std::exception& e) {
-				ofLogError() << "Exception in /api/parameters: " << e.what();
-				response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
-				std::stringstream ss;
-				ss << R"({"error":")" << e.what() << R"("})";
-				response.send() << ss.str();
-			}
-		}
-		else if (path == "/api/config" && method == "GET") {
-			try {
-				if (webServer->configFetcher) {
-					ofJson config = webServer->configFetcher();
-					response.setStatus(HTTPServerResponse::HTTP_OK);
-					std::string jsonStr = config.dump();
-					response.setContentLength(jsonStr.size());
-					response.send() << jsonStr;
-				} else {
-					response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
-					response.send() << R"({"error":"configFetcher not set"})";
-				}
-			} catch (const std::exception& e) {
-				ofLogError() << "Exception in /api/config: " << e.what();
-				response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
-				std::stringstream ss;
-				ss << R"({"error":")" << e.what() << R"("})";
-				response.send() << ss.str();
-			}
-		}
-		else if (path == "/api/config" && method == "POST") {
-			std::istream& is = request.stream();
-			std::stringstream buffer;
-			buffer << is.rdbuf();
-			std::string bodyStr = buffer.str();
-
-			try {
-				ofJson updated = ofJson::parse(bodyStr);
-				if (!updated.is_object() || !updated.contains("servers") || !updated["servers"].is_array()) {
-					response.setStatus(HTTPServerResponse::HTTP_BAD_REQUEST);
-					response.send() << R"({"error":"missing servers array"})";
-					return;
-				}
-				if (!webServer->configSaver) {
-					response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
-					response.send() << R"({"error":"configSaver not set"})";
-					return;
-				}
-				webServer->configSaver(updated);
-				response.setStatus(HTTPServerResponse::HTTP_OK);
-				response.send() << R"({"status":"config update queued"})";
-			} catch (const std::exception& e) {
-				response.setStatus(HTTPServerResponse::HTTP_BAD_REQUEST);
-				std::stringstream ss;
-				ss << R"({"error":")" << e.what() << R"("})";
-				response.send() << ss.str();
-			}
-		}
-		else {
-			response.setStatus(HTTPServerResponse::HTTP_NOT_FOUND);
-			response.send() << R"({"error":"not found"})";
-		}
-	}
-
-  private:
-	WebServer* webServer;
-};
-
-// Static File Handler
-class StaticFileHandler : public HTTPRequestHandler {
-  public:
-	StaticFileHandler(const std::string& baseDir) : basePath(baseDir) {}
-
-	void handleRequest(HTTPServerRequest& request, HTTPServerResponse& response) override {
-		std::string resourcePath = request.getURI();
-		if (resourcePath == "/") resourcePath = "/index.html";
-
-		std::string filePath = basePath + resourcePath;
-
-		// Try to open the file
-		std::ifstream file(filePath, std::ios::binary);
-		if (file.good()) {
-			response.setStatus(HTTPServerResponse::HTTP_OK);
-			
-			if (filePath.find(".js") != std::string::npos) {
-				response.setContentType("application/javascript");
-			} else if (filePath.find(".css") != std::string::npos) {
-				response.setContentType("text/css");
-			} else if (filePath.find(".json") != std::string::npos) {
-				response.setContentType("application/json");
-			} else {
-				response.setContentType("text/html");
-			}
-			
-			response.send() << file.rdbuf();
-		} else {
-			// Try index.html as fallback
-			std::string indexPath = basePath + "/index.html";
-			std::ifstream indexFile(indexPath, std::ios::binary);
-			if (indexFile.good()) {
-				response.setStatus(HTTPServerResponse::HTTP_OK);
-				response.setContentType("text/html");
-				response.send() << indexFile.rdbuf();
-			} else {
-				ofLogError() << "StaticFileHandler: index.html not found at " << indexPath;
-				response.setStatus(HTTPServerResponse::HTTP_NOT_FOUND);
-				response.send() << "File not found";
-			}
-		}
-	}
-
-  private:
-	std::string basePath;
-};
-
-// Request Handler Factory
-class WebServerFactory : public HTTPRequestHandlerFactory {
-  public:
-	WebServerFactory(WebServer* server) : webServer(server) {
-		// Use absolute path to web files - works regardless of working directory
-		basePath = "/Users/jonasfehr/Documents/openFrameworks/apps/myApps/MadMapperControl_MM6_V2/bin/data/web";
-		ofLogNotice() << "WebServerFactory: Using web directory: " << basePath;
-	}
-
-	HTTPRequestHandler* createRequestHandler(const HTTPServerRequest& request) override {
-		std::string path = request.getURI();
-		if (path.find("/api/") == 0) {
-			return new APIRequestHandler(webServer);
-		} else {
-			return new StaticFileHandler(basePath);
-		}
-	}
-
-  private:
-	WebServer* webServer;
-	std::string basePath;
-};
-
-WebServer::WebServer(int port)
-	: port(port), running(false), httpServer(nullptr) {}
-
-WebServer::~WebServer() {
-	stop();
-}
-
-void WebServer::start() {
-	if (running) return;
-
-	try {
-		ofLogNotice() << "WebServer: Creating ServerSocket on port " << port;
-		ServerSocket svs(port);
-		
-		ofLogNotice() << "WebServer: Creating request handler factory";
-		WebServerFactory* factory = new WebServerFactory(this);
-		
-		ofLogNotice() << "WebServer: Creating HTTPServer instance";
-		Poco::Net::HTTPServerParams* params = new Poco::Net::HTTPServerParams();
-		params->setMaxQueued(100);
-		params->setMaxThreads(4);
-		
-		httpServer = std::make_unique<HTTPServer>(factory, svs, params);
-		
-		ofLogNotice() << "WebServer: Starting HTTPServer";
-		httpServer->start();
-		
-		running = true;
-		ofLogNotice() << "WebServer started successfully on port " << port;
-	} catch (const Poco::Exception& e) {
-		ofLogError() << "Poco Exception in WebServer::start(): " << e.what();
-		running = false;
-	} catch (const std::exception& e) {
-		ofLogError() << "std::exception in WebServer::start(): " << e.what();
-		running = false;
-	} catch (...) {
-		ofLogError() << "Unknown exception in WebServer::start()";
-		running = false;
-	}
-}
-
-void WebServer::stop() {
-	if (running && httpServer) {
-		httpServer->stop();
-		running = false;
-		ofLogNotice() << "WebServer stopped";
-	}
-}
-
-bool WebServer::isRunning() const {
-	return running;
-}
-
-void WebServer::broadcastParameterUpdate(const std::string& path, float value, int serverId) {
-	// TODO: Implement WebSocket broadcasting
-}
 
 void ofApp::updatePageDisplay() {
 	if (!surface) return;

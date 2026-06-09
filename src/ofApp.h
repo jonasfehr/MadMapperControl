@@ -93,7 +93,7 @@ class ofApp : public ofBaseApp {
 	void bankBackward(float& p);
 	MadParameter* fadeMasterVideo;
 	MadParameter* fadeMasterDMX;
-	MadParameter* fadeEngingeSpeed;
+	MadParameter* fadeEngineSpeed;
 	MadParameter* speed;
 	MidiComponentGroup selectGroup;
 	MidiComponentGroup soloGroup;
@@ -134,7 +134,7 @@ class ofApp : public ofBaseApp {
 	std::string cueBankName = "Bank-1";
 	bool cueFollowActiveBank = true;
 	bool cueGridActive = false;
-	bool cueGridRefreshPending = false;
+	std::atomic<bool> cueGridRefreshPending{false};
 	uint64_t lastCueGridRefreshMs = 0;
 
 	MidiComponent* getComponentByRole(const std::string& role);
@@ -172,7 +172,6 @@ class ofApp : public ofBaseApp {
 	ofJson pendingConfig;
 	bool hasPendingPageActivation = false;
 	std::atomic_bool hasPendingReload{false};
-	std::atomic_bool reloadInProgress{false};
 	bool reloadRequested = false;
 	uint64_t lastReloadMs = 0;
 	bool hasPendingConfigUpdate = false;

@@ -8,63 +8,70 @@
         :class="{ active: activeTab === idx }"
         @click="activeTab = idx"
       >
-        {{ tab === 'editor' ? '📝 Page Editor' : '⚙️ Page Builder' }}
+        {{ tab === 'editor' ? 'Editor' : 'Builder' }}
       </button>
     </div>
 
-    <!-- Tab 0: Page Builder (neue UI) -->
-    <div v-if="activeTab === 0" class="page-builder">
+    <!-- Tab 0: Page Builder -->
+    <div v-if="activeTab === 0" class="page-builder" :class="{ 'has-selection': selectedPageIdx !== null }">
+
+      <!-- Left: page list -->
       <div class="builder-section">
-        <h3>📋 Pages</h3>
+        <div class="section-header">
+          Pages
+          <div class="header-btns">
+            <button class="header-icon-btn" @click="exportPages" title="Export pages">↧</button>
+            <button class="header-icon-btn" @click="triggerImport" title="Import pages">↥</button>
+            <button class="header-icon-btn" @click="addPage" title="New page">+</button>
+          </div>
+        </div>
         <div class="pages-list">
           <div
             v-for="(page, idx) in pages.pages"
             :key="idx"
             class="page-item"
-            :class="{ selected: selectedPageIdx === idx }"
+            :class="{ selected: selectedPageIdx === idx, 'drag-over': dragOverIdx === idx, dragging: dragSrcIdx === idx }"
+            draggable="true"
             @click="selectPage(idx)"
+            @dragstart="onDragStart(idx, $event)"
+            @dragover.prevent="onDragOver(idx)"
+            @dragleave="onDragLeave"
+            @drop.prevent="onDrop(idx)"
+            @dragend="onDragEnd"
           >
-            <div class="page-header">
-              <span class="page-name">{{ page.name || 'Unnamed' }}</span>
-              <button class="delete-btn" @click.stop="deletePage(idx)">✕</button>
-            </div>
-            <div class="page-info">
-              {{ pageItemCount(page) }} items · {{ resolvedParameterCount(page) }} parameters
-            </div>
+            <span class="page-swatch page-drag-handle"></span>
+            <input
+              v-if="editingPageIdx === idx"
+              class="page-rename-input"
+              v-model="editingName"
+              @blur="commitRename"
+              @keyup.enter="commitRename"
+              @keyup.escape="cancelRename"
+              @click.stop
+            />
+            <span v-else class="page-name" @dblclick.stop="startRename(idx)">{{ page.name || 'Unnamed' }}</span>
+            <span v-show="editingPageIdx !== idx" class="page-count">{{ resolvedParameterCount(page) }}</span>
+            <button v-show="editingPageIdx !== idx" class="delete-btn" @click.stop="deletePage(idx)">✕</button>
           </div>
-        </div>
-
-        <div class="new-page-form">
-          <input
-            v-model="newPageName"
-            type="text"
-            placeholder="New page name..."
-            @keyup.enter="createNewPage"
-          />
-          <button @click="createNewPage" class="add-btn">+ New Page</button>
         </div>
       </div>
 
+      <!-- Center: configurator -->
       <div v-if="selectedPageIdx !== null" class="builder-section parameters">
-        <h3>🎛 Parameters for "{{ pages.pages[selectedPageIdx]?.name }}"</h3>
+        <div class="section-header">Configurator</div>
 
-        <!-- Available Parameters to add -->
         <div class="add-parameters">
-          <h4>Available Parameters</h4>
-          <div class="filter-search">
+          <div class="server-row">
+            <span class="server-label">Server</span>
             <select v-model="selectedPageServerId" @change="setSelectedPageServer">
-              <option
-                v-for="server in availableServerOptions"
-                :key="server.id"
-                :value="server.id"
-              >
+              <option v-for="server in availableServerOptions" :key="server.id" :value="server.id">
                 {{ server.name }}
               </option>
             </select>
           </div>
 
-          <div class="path-builder">
-            <h4>Path Selection</h4>
+          <div class="filter-builder">
+            <h4>Filter Line Builder</h4>
             <div class="selected-path">
               <button class="crumb" @click="resetPathSelection">/</button>
               <button
@@ -77,117 +84,132 @@
               </button>
             </div>
             <div class="next-options">
-              <button
-                v-for="option in nextPathOptions"
-                :key="option"
-                class="chip"
-                @click="selectNextPathOption(option)"
-              >
+              <button v-if="selectedPathSegments.length" class="chip chip--wildcard" @click="insertWildcardSegment" title="Wildcard segment">*</button>
+              <button v-for="option in nextPathOptions" :key="option" class="chip" @click="selectNextPathOption(option)">
                 {{ option }}
               </button>
             </div>
-            <button
-              v-if="selectedPathSegments.length"
-              class="wildcard-btn"
-              @click="insertWildcardSegment"
-              title="Insert wildcard segment *"
-            >
-              Insert <code>*</code> Segment
-            </button>
-            <p v-if="!nextPathOptions.length" class="hint">No further path parts. Choose a parameter below or go one step back.</p>
-          </div>
-
-          <div class="filter-builder">
-            <h4>Filter Line Builder</h4>
             <div class="filter-search">
-              <input
-                v-model="manualElementFilter"
-                type="text"
-                placeholder="e.g. /project_waves/Custom/*"
-              />
+              <input v-model="manualElementFilter" type="text" placeholder="e.g. /project_waves/Custom/*" />
             </div>
             <div class="builder-actions">
-              <button class="mini-btn secondary" @click="useSelectedPathAsFilter">Use Selected Path</button>
-              <button class="mini-btn secondary" @click="useSelectedPathAsPrefix">Add Trailing *</button>
-              <button class="mini-btn" @click="addManualFilterLine">Add Filter Line</button>
+              <button class="mini-btn secondary" @click="useSelectedPathAsFilter">Use Path</button>
+              <button class="mini-btn secondary" @click="useSelectedPathAsPrefix">Add *</button>
+              <button class="mini-btn" @click="addManualFilterLine">Add Filter</button>
               <button class="mini-btn secondary" @click="clearManualFilterLine">Clear</button>
             </div>
-            <p class="hint">Tip: You can build filters like <code>/surfaces/*/opacity</code> by inserting <code>*</code> between path segments.</p>
           </div>
 
           <div class="param-selector">
-            <div
-              v-for="param in filteredAvailableParams"
-              :key="param.key"
-              class="param-option"
-            >
+            <div v-for="param in filteredAvailableParams" :key="param.key" class="param-option">
               <span class="param-label" @click="addParameterToPage(param)">+ {{ param.path }}</span>
             </div>
-            <p v-if="!filteredAvailableParams.length" class="empty">
-              No parameters available
-            </p>
+            <p v-if="!filteredAvailableParams.length" class="empty">No parameters available</p>
           </div>
         </div>
 
-        <!-- Current Parameters -->
         <div class="current-parameters">
           <h4>Current Parameters</h4>
           <div class="param-list">
-            <div
-              v-for="(item, idx) in currentPageParams"
-              :key="idx"
-              class="param-item"
-            >
-              <span>{{ item }}</span>
-              <button
-                class="remove-btn"
-                @click="removeParameterFromPage(idx)"
-              >
-                ✕
-              </button>
+            <div v-for="(item, idx) in currentPageParams" :key="`${item.serverId}::${item.path}::${idx}`" class="param-item">
+              <span class="param-srv" :title="`Server ${item.serverId}`">{{ item.serverId }}</span>
+              <span class="param-path">{{ item.path }}</span>
+              <button class="remove-btn" @click="removeParameterFromPage(idx)">✕</button>
             </div>
-            <p v-if="!currentPageParams.length" class="empty">
-              No parameters yet
-            </p>
+            <p v-if="!currentPageParams.length" class="empty">No parameters yet</p>
           </div>
         </div>
+      </div>
 
-        <div class="action-buttons">
-          <button @click="savePageChanges" class="save-btn">💾 Save Changes</button>
-          <button @click="selectedPageIdx = null" class="cancel-btn">Cancel</button>
+      <!-- Right: resolved parameters -->
+      <div v-if="selectedPageIdx !== null" class="builder-section resolved-col">
+        <div class="section-header">
+          Resolved
+          <span class="count-badge">{{ resolvedParameters.length }}</span>
+        </div>
+        <div class="resolved-list">
+          <div v-for="item in resolvedParameters" :key="`${item.serverId}::${item.path}`" class="resolved-item">
+            <span class="resolved-srv" :title="item.serverName">{{ item.serverId }}</span>
+            <span class="resolved-path">{{ item.path }}</span>
+          </div>
+          <p v-if="!resolvedParameters.length" class="empty">No matches yet</p>
         </div>
       </div>
     </div>
 
-    <!-- Tab 1: JSON Editor (alte UI) -->
+    <!-- Tab 1: JSON Editor -->
     <div v-if="activeTab === 1" class="json-editor-section">
       <div class="json-editor">
-        <textarea
-          v-model="editedJson"
-          placeholder="Edit pages JSON here..."
-          @input="onJsonChange"
-        ></textarea>
+        <textarea v-model="editedJson" placeholder="Edit pages JSON here..." @input="onJsonChange"></textarea>
       </div>
       <div class="validation-message" :class="{ error: jsonError }">
         {{ jsonError || 'JSON is valid' }}
       </div>
-
       <div class="button-group">
-        <button class="save-btn" @click="handleJsonSave" :disabled="!!jsonError">
-          💾 Save Changes
-        </button>
+        <button class="save-btn" @click="handleJsonSave" :disabled="!!jsonError">💾 Save Changes</button>
         <button class="reset-btn" @click="handleReset">↶ Undo</button>
       </div>
     </div>
 
-    <div v-if="saveStatus" class="save-status" :class="saveStatus.type">
-      {{ saveStatus.message }}
+    <div v-if="saveStatus" class="save-status" :class="saveStatus.type">{{ saveStatus.message }}</div>
+
+    <!-- Hidden file input for import -->
+    <input ref="fileInputEl" type="file" accept=".json" style="display:none" @change="handleImportFile" />
+
+    <!-- Import overlay -->
+    <div v-if="importDraft" class="import-overlay" @click.self="cancelImport">
+      <div class="import-panel">
+        <div class="section-header">
+          Import Pages
+          <button class="header-icon-btn" @click="cancelImport">✕</button>
+        </div>
+
+        <div class="import-mode-row">
+          <label class="mode-option">
+            <input type="radio" v-model="importMode" value="merge" />
+            <span>Merge with existing</span>
+          </label>
+          <label class="mode-option">
+            <input type="radio" v-model="importMode" value="replace" />
+            <span>Replace all</span>
+          </label>
+        </div>
+
+        <div class="import-list">
+          <label
+            v-for="(page, idx) in importDraft.pages"
+            :key="idx"
+            class="import-row"
+            :class="{ checked: importSelections.has(idx) }"
+          >
+            <span class="import-swatch"></span>
+            <input type="checkbox" :checked="importSelections.has(idx)" @change="toggleImportPage(idx)" />
+            <span class="import-name">{{ page.name || 'Unnamed' }}</span>
+            <span class="import-count">{{ page.elements?.length || 0 }} filters</span>
+          </label>
+          <p v-if="!importDraft.pages?.length" class="empty">No pages found in file</p>
+        </div>
+
+        <div class="import-footer">
+          <button class="mini-btn secondary" @click="cancelImport">Cancel</button>
+          <button class="mini-btn" @click="selectAllImport">All</button>
+          <button class="mini-btn secondary" @click="selectNoneImport">None</button>
+          <button
+            class="mini-btn import-confirm-btn"
+            @click="confirmImport"
+            :disabled="importSelections.size === 0"
+          >
+            Import {{ importSelections.size }} page{{ importSelections.size === 1 ? '' : 's' }}
+          </button>
+        </div>
+      </div>
     </div>
+
   </div>
 </template>
 
 <script>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 
 export default {
   name: 'PageManager',
@@ -205,7 +227,8 @@ export default {
   setup(props, { emit }) {
     const activeTab = ref(0)
     const selectedPageIdx = ref(null)
-    const newPageName = ref('')
+    const editingPageIdx = ref(null)
+    const editingName = ref('')
     const selectedPageServerId = ref('server_0')
     const selectedPathSegments = ref([])
     const manualElementFilter = ref('')
@@ -213,45 +236,64 @@ export default {
     const jsonError = ref('')
     const saveStatus = ref(null)
     const originalData = ref(null)
+    const fileInputEl = ref(null)
+    const importDraft = ref(null)
+    const importSelections = ref(new Set())
+    const importMode = ref('merge')
+    const dragSrcIdx = ref(null)
+    const dragOverIdx = ref(null)
     let autoSaveTimer = null
 
     const tabs = ['builder', 'editor']
+
+    // ── Server options ──────────────────────────────────────────────────
 
     const availableServerOptions = computed(() => {
       const map = new Map()
       props.allParameters.forEach(p => {
         if (!p || !p.serverId) return
-        if (!map.has(p.serverId)) {
-          map.set(p.serverId, {
-            id: p.serverId,
-            name: p.serverName || p.serverId
-          })
-        }
+        if (!map.has(p.serverId)) map.set(p.serverId, { id: p.serverId, name: p.serverName || p.serverId })
       })
-      if (!map.size) {
-        map.set('server_0', { id: 'server_0', name: 'MadMapper' })
-      }
+      if (!map.size) map.set('server_0', { id: 'server_0', name: 'MadMapper' })
       return [...map.values()]
     })
 
-    // Computed: Parameters bereits in der selected page
+    // ── Parameter computeds ─────────────────────────────────────────────
+
+    // Normalize a raw element (string or object) to { path, serverId }
+    function normalizeElement(el, defaultServerId = 0) {
+      if (el && typeof el === 'object') return { path: el.path || '', serverId: el.serverId ?? defaultServerId }
+      return { path: String(el), serverId: defaultServerId }
+    }
+
+    // Convert param.serverId "server_N" → number N
+    function serverIdNum(serverIdStr) {
+      return Number(String(serverIdStr).replace('server_', '')) || 0
+    }
+
     const currentPageParams = computed(() => {
       if (selectedPageIdx.value === null) return []
       const page = props.pages.pages[selectedPageIdx.value]
       if (!page) return []
-      if (Array.isArray(page.elements)) return [...page.elements]
-      return [
-        ...(page.surfaces || []),
-        ...(page.fixtures || []),
-        ...(page.medias || [])
-      ]
+      const defaultSid = typeof page.serverId === 'number' ? page.serverId : 0
+      if (Array.isArray(page.elements)) {
+        return page.elements.map(el => normalizeElement(el, defaultSid))
+      }
+      // Legacy surfaces/fixtures format
+      const sid = defaultSid
+      const result = []
+      ;(page.surfaces || []).forEach(s       => result.push({ path: `/surfaces/${s}/*`,       serverId: sid }))
+      ;(page.laser_surfaces || []).forEach(s => result.push({ path: `/laser_surfaces/${s}/*`, serverId: sid }))
+      ;(page.fixtures || []).forEach(f       => result.push({ path: `/fixtures/${f}/*`,       serverId: sid }))
+      ;(page.medias || []).forEach(m         => result.push({ path: `/media/${m}/*`,          serverId: sid }))
+      return result
     })
 
     const availableParamsForServer = computed(() => {
-      const current = new Set(currentPageParams.value)
+      const currentPaths = new Set(currentPageParams.value.map(e => e.path))
       return props.allParameters
         .filter(p => p && p.serverId === selectedPageServerId.value)
-        .filter(p => !current.has(p.path))
+        .filter(p => !currentPaths.has(p.path))
         .sort((a, b) => a.path.localeCompare(b.path))
     })
 
@@ -291,64 +333,83 @@ export default {
       return filterSegments.every((seg, idx) => seg === '*' || pathParts[idx] === seg)
     }
 
-    function pageItemCount(page) {
-      if (!page) return 0
-      if (Array.isArray(page.elements)) return page.elements.length
-      return (page.surfaces?.length || 0) + (page.fixtures?.length || 0) + (page.medias?.length || 0)
-    }
-
+    // Returns { path, serverId }[] — works for both new (object) and legacy (string/surfaces) formats
     function pagePatterns(page) {
       if (!page) return []
-      if (Array.isArray(page.elements)) return page.elements
-
+      const defaultSid = typeof page.serverId === 'number' ? page.serverId : 0
+      if (Array.isArray(page.elements)) return page.elements.map(el => normalizeElement(el, defaultSid))
       const patterns = []
-      if (Array.isArray(page.surfaces)) {
-        page.surfaces.forEach(surface => patterns.push(`/surfaces/${surface}/*`))
-      }
-      if (Array.isArray(page.fixtures)) {
-        page.fixtures.forEach(fixture => patterns.push(`/fixtures/${fixture}/*`))
-      }
-      if (Array.isArray(page.medias)) {
-        page.medias.forEach(media => patterns.push(`/media/${media}/*`))
-      }
+      const sid = defaultSid
+      if (Array.isArray(page.surfaces))       page.surfaces.forEach(s       => patterns.push({ path: `/surfaces/${s}/*`,       serverId: sid }))
+      if (Array.isArray(page.laser_surfaces)) page.laser_surfaces.forEach(s => patterns.push({ path: `/laser_surfaces/${s}/*`, serverId: sid }))
+      if (Array.isArray(page.fixtures))       page.fixtures.forEach(f       => patterns.push({ path: `/fixtures/${f}/*`,       serverId: sid }))
+      if (Array.isArray(page.medias))         page.medias.forEach(m         => patterns.push({ path: `/media/${m}/*`,          serverId: sid }))
       return patterns
     }
 
+    // Group { path, serverId }[] patterns by server number → Map<number, string[]>
+    function patternsByServer(patterns) {
+      const map = new Map()
+      patterns.forEach(p => {
+        if (!map.has(p.serverId)) map.set(p.serverId, [])
+        map.get(p.serverId).push(p.path)
+      })
+      return map
+    }
+
+    const resolvedParameters = computed(() => {
+      if (selectedPageIdx.value === null) return []
+      const page = props.pages.pages[selectedPageIdx.value]
+      if (!page) return []
+      const byServer = patternsByServer(pagePatterns(page))
+      if (!byServer.size) return []
+      const seen = new Set()
+      const result = []
+      props.allParameters.forEach(param => {
+        if (!param) return
+        const sNum = serverIdNum(param.serverId)
+        const patterns = byServer.get(sNum)
+        if (!patterns) return
+        if (patterns.some(pattern => matchesWildcardFilter(param.path, pattern))) {
+          const key = `${sNum}::${param.path}`
+          if (!seen.has(key)) {
+            seen.add(key)
+            result.push({ path: param.path, serverId: sNum, serverName: param.serverName || `server_${sNum}` })
+          }
+        }
+      })
+      return result.sort((a, b) => a.serverId - b.serverId || a.path.localeCompare(b.path))
+    })
+
     function resolvedParameterCount(page) {
       if (!page || !props.allParameters.length) return 0
-
-      const pageServerId = typeof page.serverId === 'number' ? `server_${page.serverId}` : 'server_0'
-      const patterns = pagePatterns(page)
-      if (!patterns.length) return 0
-
+      const byServer = patternsByServer(pagePatterns(page))
+      if (!byServer.size) return 0
       const resolved = new Set()
       props.allParameters.forEach(param => {
-        if (!param || param.serverId !== pageServerId) return
-        if (patterns.some(pattern => matchesWildcardFilter(param.path, pattern))) {
-          resolved.add(param.path)
-        }
+        if (!param) return
+        const sNum = serverIdNum(param.serverId)
+        const patterns = byServer.get(sNum)
+        if (!patterns) return
+        if (patterns.some(pattern => matchesWildcardFilter(param.path, pattern))) resolved.add(`${sNum}::${param.path}`)
       })
       return resolved.size
     }
 
     const filteredAvailableParams = computed(() => {
       let result = availableParamsForServer.value
-
-      // Filter by path selection
       if (selectedPathSegments.value.length) {
         result = result.filter(param => startsWithSegments(param.path, selectedPathSegments.value))
       }
-
-      // Filter by manual filter input
       const manualFilter = manualElementFilter.value.trim()
       if (manualFilter) {
         result = result.filter(param => matchesWildcardFilter(param.path, manualFilter))
       }
-
       return result
     })
 
-    // Watch: Wenn props.pages ändert, JSON aktualisieren
+    // ── Save / autosave ─────────────────────────────────────────────────
+
     watch(
       () => props.pages,
       (newVal) => {
@@ -360,63 +421,31 @@ export default {
       { immediate: true, deep: true }
     )
 
-    function selectPage(idx) {
-      selectedPageIdx.value = idx
-      selectedPathSegments.value = []
-      manualElementFilter.value = ''
-      const page = props.pages.pages[idx]
-      selectedPageServerId.value = page?.serverId ? `server_${page.serverId}` : 'server_0'
-      if (page?.name) {
-        emit('activate-page', page.name)
-      }
-    }
-
-    function setSelectedPageServer() {
-      if (selectedPageIdx.value === null) return
-      const page = props.pages.pages[selectedPageIdx.value]
-      if (!page) return
-      const parsed = String(selectedPageServerId.value).replace('server_', '')
-      page.serverId = Number.parseInt(parsed, 10) || 0
-      selectedPathSegments.value = []
-      manualElementFilter.value = ''
-      scheduleAutoSave()
-    }
-
     function buildSavePayload(liveReload = true) {
-      const convertedPages = props.pages.pages.map(page => {
+      const convertedPages = props.pages.pages.filter(page => page.name).map(page => {
+        const defaultSid = typeof page.serverId === 'number' ? page.serverId : 0
         if (Array.isArray(page.elements)) {
+          // Normalize all elements to {path, serverId} objects
           return {
             ...page,
-            serverId: typeof page.serverId === 'number' ? page.serverId : 0,
+            elements: page.elements.map(el => normalizeElement(el, defaultSid)),
+            serverId: defaultSid,
             skipKeys: page.skipKeys || ['children']
           }
         }
-
         const elements = []
-        if (page.surfaces) {
-          page.surfaces.forEach(surface => {
-            elements.push(`/surfaces/${surface}/*`)
-          })
-        }
-        if (page.fixtures) {
-          page.fixtures.forEach(fixture => {
-            elements.push(`/fixtures/${fixture}/*`)
-          })
-        }
-        if (page.medias) {
-          page.medias.forEach(media => {
-            elements.push(`/media/${media}/*`)
-          })
-        }
-
+        const sid = defaultSid
+        if (page.surfaces)       page.surfaces.forEach(s       => elements.push({ path: `/surfaces/${s}/*`,       serverId: sid }))
+        if (page.laser_surfaces) page.laser_surfaces.forEach(s => elements.push({ path: `/laser_surfaces/${s}/*`, serverId: sid }))
+        if (page.fixtures)       page.fixtures.forEach(f       => elements.push({ path: `/fixtures/${f}/*`,       serverId: sid }))
+        if (page.medias)         page.medias.forEach(m         => elements.push({ path: `/media/${m}/*`,          serverId: sid }))
         return {
           name: page.name,
-          elements: elements.length > 0 ? elements : ["/surfaces/*/opacity"],
-          serverId: page.serverId || 0,
-          skipKeys: page.skipKeys || ["children"]
+          elements: elements.length > 0 ? elements : [{ path: '/surfaces/*/opacity', serverId: sid }],
+          serverId: defaultSid,
+          skipKeys: page.skipKeys || ['children']
         }
       })
-
       return {
         pages: convertedPages,
         subpages: props.pages.subpages || [],
@@ -427,49 +456,143 @@ export default {
       }
     }
 
-    function scheduleAutoSave(liveReload = false) {
-      if (selectedPageIdx.value === null) return
+    function scheduleAutoSave(liveReload = true) {
       clearTimeout(autoSaveTimer)
-      autoSaveTimer = setTimeout(() => {
-        emit('save', buildSavePayload(liveReload))
-      }, 300)
+      autoSaveTimer = setTimeout(() => emit('save', buildSavePayload(liveReload)), 300)
     }
 
-    function syncSelectedPathToFilter() {
-      manualElementFilter.value = joinSelectedSegments()
+    // ── Page list actions ───────────────────────────────────────────────
+
+    // ── Drag to reorder ──────────────────────────────────────────────────
+
+    function onDragStart(idx, event) {
+      dragSrcIdx.value = idx
+      event.dataTransfer.effectAllowed = 'move'
+      event.dataTransfer.setData('text/plain', String(idx))
     }
 
-    function selectNextPathOption(option) {
-      selectedPathSegments.value.push(option)
-      syncSelectedPathToFilter()
+    function onDragOver(idx) {
+      if (dragSrcIdx.value === null || dragSrcIdx.value === idx) return
+      dragOverIdx.value = idx
     }
 
-    function insertWildcardSegment() {
-      selectedPathSegments.value.push('*')
-      syncSelectedPathToFilter()
+    function onDragLeave() {
+      dragOverIdx.value = null
     }
 
-    function truncatePathSelection(index) {
-      selectedPathSegments.value = selectedPathSegments.value.slice(0, index + 1)
-      syncSelectedPathToFilter()
+    function onDrop(targetIdx) {
+      if (dragSrcIdx.value === null || dragSrcIdx.value === targetIdx) {
+        dragSrcIdx.value = null
+        dragOverIdx.value = null
+        return
+      }
+      const src = dragSrcIdx.value
+      const dst = targetIdx
+      const pages = props.pages.pages
+      const [moved] = pages.splice(src, 1)
+      pages.splice(dst, 0, moved)
+      // keep selectedPageIdx pointing at the same page
+      if (selectedPageIdx.value === src) {
+        selectedPageIdx.value = dst
+      } else if (selectedPageIdx.value !== null) {
+        const sel = selectedPageIdx.value
+        if (src < dst && sel > src && sel <= dst) selectedPageIdx.value--
+        else if (src > dst && sel >= dst && sel < src) selectedPageIdx.value++
+      }
+      dragSrcIdx.value = null
+      dragOverIdx.value = null
+      scheduleAutoSave(true)
     }
 
-    function resetPathSelection() {
+    function onDragEnd() {
+      dragSrcIdx.value = null
+      dragOverIdx.value = null
+    }
+
+    function selectPage(idx) {
+      if (editingPageIdx.value !== null) return
+      if (dragSrcIdx.value !== null) return
+      selectedPageIdx.value = idx
       selectedPathSegments.value = []
-      syncSelectedPathToFilter()
+      manualElementFilter.value = ''
+      const page = props.pages.pages[idx]
+      selectedPageServerId.value = page?.serverId ? `server_${page.serverId}` : 'server_0'
+      if (page?.name) emit('activate-page', page.name)
     }
 
-    function useSelectedPathAsFilter() {
-      syncSelectedPathToFilter()
+    function startRename(idx) {
+      editingPageIdx.value = idx
+      editingName.value = props.pages.pages[idx]?.name || ''
+      nextTick(() => {
+        const input = document.querySelector('.page-rename-input')
+        if (input) { input.focus(); input.select() }
+      })
     }
+
+    function commitRename() {
+      if (editingPageIdx.value === null) return
+      const page = props.pages.pages[editingPageIdx.value]
+      if (page && editingName.value.trim()) {
+        page.name = editingName.value.trim()
+        scheduleAutoSave(true)
+      }
+      editingPageIdx.value = null
+    }
+
+    function cancelRename() {
+      const idx = editingPageIdx.value
+      if (idx !== null) {
+        const page = props.pages.pages[idx]
+        if (page && !page.name) {
+          props.pages.pages.splice(idx, 1)
+          if (selectedPageIdx.value === idx) selectedPageIdx.value = null
+        }
+      }
+      editingPageIdx.value = null
+    }
+
+    function addPage() {
+      const newPage = { name: '', elements: [], serverId: 0, skipKeys: ['children'] }
+      if (!props.pages.pages) props.pages.pages = []
+      props.pages.pages.push(newPage)
+      const idx = props.pages.pages.length - 1
+      selectedPageIdx.value = idx
+      nextTick(() => startRename(idx))
+    }
+
+    function deletePage(idx) {
+      const pageName = props.pages.pages[idx]?.name
+      props.pages.pages.splice(idx, 1)
+      if (selectedPageIdx.value === idx) selectedPageIdx.value = null
+      else if (selectedPageIdx.value > idx) selectedPageIdx.value--
+      scheduleAutoSave(true)
+      saveStatus.value = { type: 'success', message: `✓ Page "${pageName}" deleted` }
+      setTimeout(() => (saveStatus.value = null), 2000)
+    }
+
+    // ── Parameter editor actions ─────────────────────────────────────────
+
+    function setSelectedPageServer() {
+      if (selectedPageIdx.value === null) return
+      const page = props.pages.pages[selectedPageIdx.value]
+      if (!page) return
+      page.serverId = Number.parseInt(String(selectedPageServerId.value).replace('server_', ''), 10) || 0
+      selectedPathSegments.value = []
+      manualElementFilter.value = ''
+      scheduleAutoSave(true)
+    }
+
+    function syncSelectedPathToFilter() { manualElementFilter.value = joinSelectedSegments() }
+    function selectNextPathOption(option) { selectedPathSegments.value.push(option); syncSelectedPathToFilter() }
+    function insertWildcardSegment()      { selectedPathSegments.value.push('*');    syncSelectedPathToFilter() }
+    function truncatePathSelection(index) { selectedPathSegments.value = selectedPathSegments.value.slice(0, index + 1); syncSelectedPathToFilter() }
+    function resetPathSelection()         { selectedPathSegments.value = []; syncSelectedPathToFilter() }
+    function useSelectedPathAsFilter()    { syncSelectedPathToFilter() }
+    function clearManualFilterLine()      { manualElementFilter.value = '' }
 
     function useSelectedPathAsPrefix() {
       const path = joinSelectedSegments()
-      if (!path) {
-        manualElementFilter.value = ''
-        return
-      }
-      manualElementFilter.value = `${path}/*`
+      manualElementFilter.value = path ? `${path}/*` : ''
     }
 
     function normalizeFilterPath(value) {
@@ -482,86 +605,29 @@ export default {
       if (selectedPageIdx.value === null) return
       const page = props.pages.pages[selectedPageIdx.value]
       if (!page) return
-
       const normalized = normalizeFilterPath(manualElementFilter.value)
       if (!normalized) return
-
       if (!Array.isArray(page.elements)) page.elements = []
-      if (!page.elements.includes(normalized)) {
-        page.elements.push(normalized)
+      const sNum = serverIdNum(selectedPageServerId.value)
+      const alreadyExists = currentPageParams.value.some(e => e.path === normalized && e.serverId === sNum)
+      if (!alreadyExists) {
+        page.elements.push({ path: normalized, serverId: sNum })
         scheduleAutoSave(true)
-        saveStatus.value = {
-          type: 'success',
-          message: `✓ Filter line added: ${normalized}`
-        }
+        saveStatus.value = { type: 'success', message: `✓ Filter added: ${normalized}` }
         setTimeout(() => (saveStatus.value = null), 1500)
       }
-    }
-
-    function clearManualFilterLine() {
-      manualElementFilter.value = ''
-    }
-
-    function createNewPage() {
-      if (!newPageName.value.trim()) {
-        saveStatus.value = {
-          type: 'error',
-          message: '⚠️ Page name cannot be empty'
-        }
-        setTimeout(() => (saveStatus.value = null), 3000)
-        return
-      }
-
-      const newPage = {
-        name: newPageName.value,
-        elements: [],
-        serverId: Number.parseInt(String(selectedPageServerId.value).replace('server_', ''), 10) || 0,
-        skipKeys: ['children']
-      }
-
-      // Add to our local copy
-      if (!props.pages.pages) {
-        props.pages.pages = []
-      }
-      props.pages.pages.push(newPage)
-      newPageName.value = ''
-      scheduleAutoSave()
-
-      saveStatus.value = {
-        type: 'success',
-        message: `✓ Page "${newPage.name}" created`
-      }
-      setTimeout(() => (saveStatus.value = null), 2000)
-    }
-
-    function deletePage(idx) {
-      const pageName = props.pages.pages[idx]?.name
-      props.pages.pages.splice(idx, 1)
-      scheduleAutoSave()
-      if (selectedPageIdx.value === idx) {
-        selectedPageIdx.value = null
-      }
-
-      saveStatus.value = {
-        type: 'success',
-        message: `✓ Page "${pageName}" deleted`
-      }
-      setTimeout(() => (saveStatus.value = null), 2000)
     }
 
     function addParameterToPage(param) {
       if (selectedPageIdx.value === null) return
       const page = props.pages.pages[selectedPageIdx.value]
       if (!page) return
-
       if (!Array.isArray(page.elements)) page.elements = []
-      if (typeof page.serverId !== 'number') {
-        page.serverId = Number.parseInt(String(selectedPageServerId.value).replace('server_', ''), 10) || 0
-      }
-
-      if (!page.elements.includes(param.path)) {
-        page.elements.push(param.path)
-        scheduleAutoSave()
+      const sNum = serverIdNum(selectedPageServerId.value)
+      const alreadyExists = currentPageParams.value.some(e => e.path === param.path && e.serverId === sNum)
+      if (!alreadyExists) {
+        page.elements.push({ path: param.path, serverId: sNum })
+        scheduleAutoSave(true)
       }
     }
 
@@ -569,37 +635,101 @@ export default {
       if (selectedPageIdx.value === null) return
       const page = props.pages.pages[selectedPageIdx.value]
       if (!page) return
+      const toRemove = currentPageParams.value[idx]
+      if (!toRemove) return
+      if (Array.isArray(page.elements)) {
+        const defaultSid = typeof page.serverId === 'number' ? page.serverId : 0
+        const i = page.elements.findIndex(el => {
+          const norm = normalizeElement(el, defaultSid)
+          return norm.path === toRemove.path && norm.serverId === toRemove.serverId
+        })
+        if (i !== -1) { page.elements.splice(i, 1); scheduleAutoSave(true) }
+        return
+      }
+      ;['surfaces', 'laser_surfaces', 'fixtures', 'medias'].forEach(type => {
+        if (!page[type]) return
+        const i = page[type].indexOf(toRemove.path)
+        if (i !== -1) { page[type].splice(i, 1); scheduleAutoSave(true) }
+      })
+    }
 
-      const params = currentPageParams.value
-      const removedParam = params[idx]
-      if (removedParam) {
-        if (Array.isArray(page.elements)) {
-          page.elements = page.elements.filter(p => p !== removedParam)
-          return
+    // ── Export ──────────────────────────────────────────────────────────
+
+    function exportPages() {
+      const data = { pages: props.pages.pages, subpages: props.pages.subpages || [] }
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `pages-${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    }
+
+    // ── Import ──────────────────────────────────────────────────────────
+
+    function triggerImport() {
+      if (fileInputEl.value) fileInputEl.value.click()
+    }
+
+    function handleImportFile(event) {
+      const file = event.target.files?.[0]
+      if (!file) return
+      event.target.value = ''
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        try {
+          const parsed = JSON.parse(e.target.result)
+          const pagesArr = Array.isArray(parsed.pages) ? parsed.pages : Array.isArray(parsed) ? parsed : []
+          importDraft.value = { pages: pagesArr, subpages: parsed.subpages || [] }
+          importSelections.value = new Set(pagesArr.map((_, i) => i))
+          importMode.value = 'merge'
+        } catch {
+          saveStatus.value = { type: 'error', message: '✕ Invalid JSON file' }
+          setTimeout(() => (saveStatus.value = null), 3000)
         }
-        ;['surfaces', 'fixtures', 'medias'].forEach(type => {
-          if (page[type]) {
-            const paramIdx = page[type].indexOf(removedParam)
-            if (paramIdx !== -1) {
-              page[type].splice(paramIdx, 1)
-              scheduleAutoSave()
-            }
+      }
+      reader.readAsText(file)
+    }
+
+    function toggleImportPage(idx) {
+      const s = new Set(importSelections.value)
+      s.has(idx) ? s.delete(idx) : s.add(idx)
+      importSelections.value = s
+    }
+
+    function selectAllImport()  { importSelections.value = new Set(importDraft.value.pages.map((_, i) => i)) }
+    function selectNoneImport() { importSelections.value = new Set() }
+
+    function confirmImport() {
+      if (!importDraft.value) return
+      const selected = importDraft.value.pages.filter((_, i) => importSelections.value.has(i))
+      if (!props.pages.pages) props.pages.pages = []
+      if (importMode.value === 'replace') {
+        props.pages.pages.splice(0, props.pages.pages.length, ...selected)
+        selectedPageIdx.value = null
+      } else {
+        const existingNames = new Set(props.pages.pages.map(p => p.name))
+        selected.forEach(page => {
+          if (existingNames.has(page.name)) {
+            const i = props.pages.pages.findIndex(p => p.name === page.name)
+            if (i !== -1) props.pages.pages.splice(i, 1, { ...page })
+          } else {
+            props.pages.pages.push({ ...page })
           }
         })
       }
-    }
-
-    function savePageChanges() {
-      clearTimeout(autoSaveTimer)
-      emit('save', buildSavePayload(true))
-
-      saveStatus.value = {
-        type: 'success',
-        message: '✓ Pages saved successfully'
-      }
+      importDraft.value = null
+      scheduleAutoSave(true)
+      saveStatus.value = { type: 'success', message: `✓ Imported ${selected.length} page${selected.length === 1 ? '' : 's'}` }
       setTimeout(() => (saveStatus.value = null), 2000)
-      selectedPageIdx.value = null
     }
+
+    function cancelImport() {
+      importDraft.value = null
+    }
+
+    // ── JSON editor ──────────────────────────────────────────────────────
 
     function validateJson() {
       try {
@@ -612,229 +742,506 @@ export default {
       }
     }
 
-    function onJsonChange() {
-      validateJson()
-    }
+    function onJsonChange() { validateJson() }
 
     function handleJsonSave() {
       const validated = validateJson()
       if (!validated) return
-
       emit('save', validated)
-
-      saveStatus.value = {
-        type: 'success',
-        message: '✓ Changes saved'
-      }
-
+      saveStatus.value = { type: 'success', message: '✓ Changes saved' }
       setTimeout(() => (saveStatus.value = null), 2000)
     }
 
     function handleReset() {
-      if (originalData.value) {
-        editedJson.value = originalData.value
-        jsonError.value = ''
-      }
+      if (originalData.value) { editedJson.value = originalData.value; jsonError.value = '' }
     }
 
     return {
-      activeTab,
-      tabs,
-      selectedPageIdx,
-      newPageName,
-      selectedPageServerId,
-      selectedPathSegments,
-      manualElementFilter,
-      editedJson,
-      jsonError,
-      saveStatus,
-      pageItemCount,
-      resolvedParameterCount,
-      availableServerOptions,
-      currentPageParams,
-      nextPathOptions,
-      filteredAvailableParams,
-      selectPage,
+      activeTab, tabs,
+      selectedPageIdx, editingPageIdx, editingName,
+      selectedPageServerId, selectedPathSegments, manualElementFilter,
+      editedJson, jsonError, saveStatus,
+      fileInputEl, importDraft, importSelections, importMode,
+      dragSrcIdx, dragOverIdx, onDragStart, onDragOver, onDragLeave, onDrop, onDragEnd,
+      resolvedParameters, resolvedParameterCount,
+      availableServerOptions, currentPageParams, nextPathOptions, filteredAvailableParams,
+      selectPage, startRename, commitRename, cancelRename, addPage, deletePage,
       setSelectedPageServer,
-      selectNextPathOption,
-      insertWildcardSegment,
-      truncatePathSelection,
-      resetPathSelection,
-      useSelectedPathAsFilter,
-      useSelectedPathAsPrefix,
-      addManualFilterLine,
-      clearManualFilterLine,
-      createNewPage,
-      deletePage,
-      addParameterToPage,
-      removeParameterFromPage,
-      savePageChanges,
-      onJsonChange,
-      handleJsonSave,
-      handleReset
+      selectNextPathOption, insertWildcardSegment, truncatePathSelection,
+      resetPathSelection, useSelectedPathAsFilter, useSelectedPathAsPrefix,
+      addManualFilterLine, clearManualFilterLine,
+      addParameterToPage, removeParameterFromPage,
+      exportPages, triggerImport, handleImportFile,
+      toggleImportPage, selectAllImport, selectNoneImport, confirmImport, cancelImport,
+      onJsonChange, handleJsonSave, handleReset
     }
   }
 }
 </script>
 
 <style scoped>
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 .page-manager {
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 1rem;
-  gap: 1rem;
   color: var(--text-main);
+  position: relative;
 }
 
+/* ── Tab strip ── */
 .manager-tabs {
-  display: inline-flex;
-  gap: 0.45rem;
-  align-self: flex-start;
-  padding: 0.35rem;
-  border: 1px solid var(--border-strong);
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgba(56, 56, 56, 0.9), rgba(37, 37, 37, 0.96));
+  display: flex;
+  background: var(--bg-shell);
+  border-bottom: 1px solid var(--border-strong);
+  padding: 0 12px;
+  flex-shrink: 0;
 }
 
 .tab {
-  min-width: 160px;
-  padding: 0.7rem 1rem;
-  border: 1px solid transparent;
-  border-radius: 10px;
+  padding: 0 18px;
+  height: 34px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--text-dim);
   cursor: pointer;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transition: color 0.1s, border-color 0.1s;
 }
 
-.tab:hover {
-  color: var(--text-main);
-  background: rgba(255, 255, 255, 0.04);
-}
+.tab:hover { color: var(--text-muted); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
-.tab.active {
-  color: #061518;
-  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
-  border-color: rgba(24, 200, 218, 0.35);
-}
-
+/* ── Layout ── */
 .page-builder {
   display: grid;
-  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
-  gap: 1rem;
+  grid-template-columns: 220px minmax(0, 1fr);
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
+.page-builder.has-selection {
+  grid-template-columns: 220px minmax(0, 1fr) 200px;
+}
+
+/* ── Panel sections ── */
 .builder-section {
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
   min-height: 0;
-  padding: 1rem;
-  border: 1px solid var(--border-strong);
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(42, 42, 42, 0.98), rgba(30, 30, 30, 0.98));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  border-right: 1px solid var(--border-strong);
+  background: var(--bg-shell);
+  overflow: hidden;
 }
 
 .builder-section.parameters {
-  overflow: auto;
-}
-
-.builder-section h3 {
-  margin: 0;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--border-soft);
-  font-size: 0.98rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  color: var(--text-main);
-}
-
-.pages-list,
-.param-list {
+  border-right: none;
+  background: var(--bg-panel);
+  overflow-y: auto;
+  padding: 0 0 10px;
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
-  min-height: 0;
-  overflow-y: auto;
 }
 
-.page-item,
-.param-item,
-.param-option {
+.builder-section.parameters > *:not(.section-header) {
+  padding: 10px 12px 0;
+}
+
+/* ── Section header ── */
+.section-header {
+  padding: 0 6px 0 10px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-panel-strong);
+  border-bottom: 1px solid var(--border-strong);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.header-btns {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.header-icon-btn {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid var(--border-soft);
-  border-radius: 10px;
-  background: linear-gradient(180deg, rgba(55, 55, 55, 0.96), rgba(42, 42, 42, 0.96));
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  transition: color 0.1s, border-color 0.1s, background 0.1s;
+}
+
+.header-icon-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent-dim);
+  background: var(--bg-active);
+}
+
+/* ── Resolved parameters column ── */
+.resolved-col { background: var(--bg-panel); }
+
+.resolved-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.resolved-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 6px;
+  font-size: 10px;
+  font-family: "SFMono-Regular", "Menlo", monospace;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.resolved-item:hover { background: var(--bg-hover); color: var(--text-main); }
+
+.resolved-path {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resolved-item:hover .resolved-path {
+  overflow: visible;
+  white-space: normal;
+  word-break: break-all;
+}
+
+.count-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-dim);
+  background: var(--bg-panel-soft);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-xs);
+  padding: 0 5px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* ── Pages list ── */
+.pages-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .page-item {
-  padding: 0.8rem 0.85rem;
-  cursor: pointer;
-  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
-}
-
-.page-item:hover,
-.param-option:hover {
-  background: linear-gradient(180deg, rgba(63, 63, 63, 0.96), rgba(46, 46, 46, 0.96));
-  border-color: #5a5a5a;
-}
-
-.page-item.selected {
-  background: linear-gradient(180deg, rgba(14, 130, 145, 0.95), rgba(10, 99, 112, 0.95));
-  border-color: rgba(24, 200, 218, 0.5);
-  transform: translateY(-1px);
-  box-shadow: inset 0 0 0 1px rgba(24, 200, 218, 0.15);
-}
-
-.page-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.3rem;
+  height: 28px;
+  padding: 0 8px 0 0;
+  gap: 7px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-soft);
+  background: transparent;
+  transition: background 0.07s;
 }
+
+.page-item:hover:not(.selected):not(.dragging) { background: var(--bg-hover); }
+
+.page-item.selected { background: rgba(18, 200, 218, 0.18); }
+.page-item.selected .page-name { color: var(--accent); font-weight: 600; }
+
+.page-item.dragging { opacity: 0.35; }
+
+.page-item.drag-over {
+  background: rgba(18, 200, 218, 0.1);
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.page-swatch {
+  width: 4px;
+  height: 28px;
+  flex-shrink: 0;
+  background: var(--accent);
+  opacity: 0.6;
+  cursor: grab;
+}
+
+.page-item.dragging .page-swatch { cursor: grabbing; }
+
+.page-item.selected .page-swatch { opacity: 1; }
 
 .page-name {
-  font-weight: 700;
-  font-size: 0.92rem;
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.page-info,
-.hint,
-.empty {
-  color: var(--text-dim);
-  font-size: 0.78rem;
+.page-rename-input {
+  flex: 1;
+  height: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--accent-dim);
+  border-radius: var(--radius-xs);
+  background: var(--bg-input);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 0;
 }
 
-.empty {
+.page-rename-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(18, 200, 218, 0.15);
+}
+
+.page-count { font-size: 10px; color: var(--text-dim); flex-shrink: 0; }
+
+/* ── Sub-section headers ── */
+.add-parameters,
+.current-parameters,
+.filter-builder {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.add-parameters,
+.current-parameters {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.add-parameters:last-child,
+.current-parameters:last-child { padding-bottom: 0; border-bottom: none; }
+
+.add-parameters h4,
+.current-parameters h4,
+.filter-builder h4 {
   margin: 0;
-  text-align: center;
-  padding: 1rem 0.6rem;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
+
+.filter-builder {
+  padding: 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-xs);
+  background: var(--bg-shell);
+}
+
+/* Server row: label + dropdown inline */
+.server-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.server-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.server-row select {
+  flex: 1;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-xs);
+  color: var(--text-main);
+  background: var(--bg-input);
+  font-size: 11px;
+}
+
+.server-row select:focus {
+  outline: none;
+  border-color: var(--accent-dim);
+}
+
+.param-selector {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-xs);
+  background: var(--bg-shell);
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 3px;
+}
+
+.selected-path,
+.next-options { display: flex; gap: 4px; flex-wrap: wrap; }
+
+.crumb,
+.chip {
+  padding: 3px 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-xs);
+  background: var(--bg-panel-soft);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  transition: border-color 0.1s, color 0.1s;
+}
+
+.crumb:hover,
+.chip:hover { border-color: var(--accent-dim); color: var(--accent); }
+
+.chip--wildcard {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+  font-family: "SFMono-Regular", "Menlo", monospace;
+  font-weight: 700;
+  background: var(--bg-active);
+}
+
+.chip--wildcard:hover {
+  background: rgba(18, 200, 218, 0.2);
+}
+
+.mini-btn,
+.save-btn,
+.reset-btn {
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  transition: background 0.1s, opacity 0.1s;
+}
+
+.mini-btn.secondary,
+.reset-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--border-soft);
+  background: var(--bg-panel-soft);
+  color: var(--text-muted);
+}
+
+.mini-btn.secondary:hover,
+.reset-btn:hover { background: var(--bg-hover); color: var(--text-main); }
+
+.mini-btn,
+.save-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--accent-dim);
+  background: var(--accent);
+  color: #071316;
+}
+
+.mini-btn:hover,
+.save-btn:not(:disabled):hover { background: var(--accent-strong); }
+
+.save-btn,
+.reset-btn { padding: 5px 14px; }
+.save-btn { flex: 1; }
+
+.filter-search { display: flex; gap: 6px; }
+
+.filter-search input,
+.filter-search select {
+  flex: 1;
+  padding: 4px 8px;
+  height: 26px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-xs);
+  color: var(--text-main);
+  background: var(--bg-input);
+  font-size: 11px;
+}
+
+.filter-search input::placeholder { color: var(--text-dim); }
+
+.filter-search input:focus,
+.filter-search select:focus { outline: none; border-color: var(--accent-dim); }
+
+.param-list { display: flex; flex-direction: column; }
+
+.param-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 26px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 11px;
+}
+
+.param-srv,
+.resolved-srv {
+  flex-shrink: 0;
+  width: 16px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  border-radius: 2px;
+  background: var(--bg-panel-soft);
+  border: 1px solid var(--border-soft);
+  color: var(--text-dim);
+  letter-spacing: 0;
+}
+
+.param-path { overflow-wrap: anywhere; flex: 1; }
+
+.param-option {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border-soft);
+  background: transparent;
+  font-size: 11px;
+}
+
+.param-option:hover { background: var(--bg-hover); }
+.param-label { display: block; cursor: pointer; color: var(--text-main); }
 
 .delete-btn,
 .remove-btn {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
   background: transparent;
   color: var(--text-dim);
+  font-size: 10px;
   cursor: pointer;
-  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+  flex-shrink: 0;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
 }
 
 .delete-btn:hover,
@@ -844,308 +1251,178 @@ export default {
   background: rgba(198, 40, 40, 0.14);
 }
 
-.new-page-form,
-.filter-search,
-.builder-actions,
-.action-buttons,
-.button-group {
-  display: flex;
-  gap: 0.6rem;
-}
+.hint { margin: 0; font-size: 11px; color: var(--text-dim); line-height: 1.45; }
 
-.new-page-form {
-  padding-top: 0.9rem;
-  border-top: 1px solid var(--border-soft);
-}
-
-.add-parameters,
-.current-parameters,
-.filter-builder,
-.path-builder {
-  display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
-}
-
-.add-parameters,
-.current-parameters {
-  margin-bottom: 0.4rem;
-  padding-bottom: 0.9rem;
-  border-bottom: 1px solid var(--border-soft);
-}
-
-.add-parameters:last-child,
-.current-parameters:last-child {
-  margin-bottom: 0;
-  padding-bottom: 0;
-  border-bottom: none;
-}
-
-.add-parameters h4,
-.current-parameters h4,
-.path-builder h4,
-.filter-builder h4 {
-  margin: 0;
-  font-size: 0.84rem;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.filter-builder,
-.path-builder,
-.param-selector,
-.json-editor textarea {
-  border: 1px solid var(--border-soft);
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgba(35, 35, 35, 0.95), rgba(28, 28, 28, 0.98));
-}
-
-.filter-builder,
-.path-builder {
-  padding: 0.8rem;
-}
-
-.selected-path,
-.next-options {
-  display: flex;
-  gap: 0.45rem;
-  flex-wrap: wrap;
-}
-
-.selected-path {
-  margin-bottom: 0.2rem;
-}
-
-.crumb,
-.chip,
-.wildcard-btn,
-.mini-btn,
-.add-btn,
-.save-btn,
-.cancel-btn,
-.reset-btn {
-  border-radius: 10px;
-  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
-}
-
-.crumb,
-.chip {
-  padding: 0.34rem 0.65rem;
-  border: 1px solid var(--border-soft);
-  background: linear-gradient(180deg, rgba(65, 65, 65, 0.95), rgba(50, 50, 50, 0.95));
-  color: var(--text-main);
-  cursor: pointer;
-  font-size: 0.76rem;
-}
-
-.crumb:hover,
-.chip:hover,
-.wildcard-btn:hover,
-.mini-btn:hover,
-.add-btn:hover,
-.save-btn:hover,
-.cancel-btn:hover,
-.reset-btn:hover {
-  transform: translateY(-1px);
-}
-
-.crumb:hover,
-.chip:hover {
-  border-color: rgba(24, 200, 218, 0.35);
-  background: linear-gradient(180deg, rgba(71, 71, 71, 0.96), rgba(56, 56, 56, 0.96));
-}
-
-.wildcard-btn,
-.mini-btn.secondary,
-.cancel-btn,
-.reset-btn {
-  border: 1px solid var(--border-soft);
-  background: linear-gradient(180deg, rgba(73, 73, 73, 0.94), rgba(56, 56, 56, 0.94));
-  color: var(--text-main);
-}
-
-.mini-btn,
-.add-btn,
-.save-btn {
-  border: 1px solid rgba(24, 200, 218, 0.35);
-  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
-  color: #061518;
-  font-weight: 800;
-}
-
-.mini-btn,
-.wildcard-btn {
-  padding: 0.55rem 0.85rem;
-  font-size: 0.8rem;
-  cursor: pointer;
-}
-
-.add-btn,
-.save-btn,
-.cancel-btn,
-.reset-btn {
-  padding: 0.75rem 1rem;
-  cursor: pointer;
-  font-size: 0.88rem;
-  font-weight: 700;
-}
-
-.save-btn {
-  flex: 1;
-}
-
-.hint {
-  margin: 0;
-  line-height: 1.45;
-}
-
-.hint code,
-.wildcard-btn code {
-  padding: 0.08rem 0.32rem;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.08);
+.hint code {
+  padding: 1px 4px;
+  border-radius: var(--radius-xs);
+  background: rgba(255, 255, 255, 0.07);
   color: var(--accent);
+  font-family: "SFMono-Regular", "Menlo", monospace;
 }
 
-.filter-search input,
-.filter-search select,
-.json-editor textarea {
-  width: 100%;
-  padding: 0.72rem 0.85rem;
-  border: 1px solid var(--border-soft);
-  color: var(--text-main);
-  background: var(--bg-input);
-}
+.empty { text-align: center; padding: 14px 8px; font-size: 11px; color: var(--text-dim); margin: 0; }
 
-.filter-search input::placeholder,
-.json-editor textarea::placeholder {
-  color: var(--text-dim);
-}
+.builder-actions,
+.button-group { display: flex; gap: 6px; }
 
-.filter-search input:focus,
-.filter-search select:focus,
-.json-editor textarea:focus {
-  outline: none;
-  border-color: rgba(24, 200, 218, 0.55);
-  box-shadow: 0 0 0 3px rgba(24, 200, 218, 0.12);
-}
-
-.param-selector {
-  max-height: 220px;
-  overflow-y: auto;
-  padding: 0.35rem;
-}
-
-.param-option {
-  padding: 0.55rem 0.7rem;
-}
-
-.param-option + .param-option {
-  margin-top: 0.35rem;
-}
-
-.param-label {
-  display: block;
-  cursor: pointer;
-  color: var(--text-main);
-  font-weight: 600;
-}
-
-.param-item {
-  padding: 0.62rem 0.75rem;
-  gap: 0.75rem;
-}
-
-.param-item span {
-  overflow-wrap: anywhere;
-}
-
-.action-buttons {
-  margin-top: auto;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border-soft);
-}
-
+/* ── JSON editor ── */
 .json-editor-section {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 10px;
   flex: 1;
   min-height: 0;
+  padding: 12px;
 }
 
-.json-editor {
-  flex: 1;
-  display: flex;
-  min-height: 0;
-}
+.json-editor { flex: 1; display: flex; min-height: 0; }
 
 .json-editor textarea {
-  resize: none;
+  flex: 1;
+  padding: 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-xs);
+  color: var(--text-main);
+  background: var(--bg-app);
   font-family: "SFMono-Regular", "Menlo", monospace;
-  font-size: 0.84rem;
+  font-size: 11px;
+  line-height: 1.5;
+  resize: none;
 }
 
+.json-editor textarea:focus { outline: none; border-color: var(--accent-dim); }
+
+/* ── Status messages ── */
 .validation-message,
 .save-status {
-  padding: 0.75rem 0.9rem;
+  padding: 5px 10px;
   border: 1px solid transparent;
-  border-radius: 12px;
-  font-size: 0.84rem;
-  font-weight: 700;
+  border-radius: var(--radius-xs);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .validation-message,
 .save-status.success {
   color: var(--success-text);
   background: var(--success-bg);
-  border-color: rgba(46, 125, 50, 0.28);
+  border-color: rgba(46, 125, 50, 0.25);
 }
 
 .validation-message.error,
 .save-status.error {
   color: var(--error-text);
   background: var(--error-bg);
-  border-color: rgba(198, 40, 40, 0.34);
+  border-color: rgba(198, 40, 40, 0.3);
 }
 
-.button-group .save-btn:disabled {
-  opacity: 0.55;
+.save-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.save-status { animation: fadeIn 0.15s ease-out; }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* ── Import overlay ── */
+.import-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.import-panel {
+  width: 360px;
+  max-height: 80%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-shell);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+}
+
+.import-mode-row {
+  display: flex;
+  gap: 16px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-strong);
+  flex-shrink: 0;
+}
+
+.mode-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.mode-option input { accent-color: var(--accent); cursor: pointer; }
+
+.import-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.import-row {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px 0 0;
+  gap: 8px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-soft);
+  transition: background 0.07s;
+}
+
+.import-row:hover { background: var(--bg-hover); }
+.import-row.checked { background: rgba(18, 200, 218, 0.08); }
+
+.import-swatch {
+  width: 4px;
+  height: 28px;
+  flex-shrink: 0;
+  background: var(--accent);
+  opacity: 0.4;
+}
+
+.import-row.checked .import-swatch { opacity: 1; }
+
+.import-row input[type="checkbox"] {
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.import-name { flex: 1; font-size: 12px; color: var(--text-muted); }
+.import-row.checked .import-name { color: var(--accent); font-weight: 600; }
+.import-count { font-size: 10px; color: var(--text-dim); flex-shrink: 0; }
+
+.import-footer {
+  display: flex;
+  gap: 5px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border-strong);
+  background: var(--bg-panel-strong);
+  flex-shrink: 0;
+}
+
+.import-confirm-btn { margin-left: auto; }
+
+.mini-btn:disabled {
+  opacity: 0.4;
   cursor: not-allowed;
-  transform: none;
 }
 
-.save-status {
-  animation: slideIn 0.22s ease-out;
-}
-
-@keyframes slideIn {
-  from {
-    transform: translateY(-8px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-@media (max-width: 1000px) {
-  .page-builder {
-    grid-template-columns: 1fr;
-  }
-
-  .builder-section {
-    min-height: auto;
-  }
-
-  .builder-actions,
-  .action-buttons,
-  .new-page-form,
-  .button-group {
-    flex-wrap: wrap;
-  }
+@media (max-width: 900px) {
+  .page-builder,
+  .page-builder.has-selection { grid-template-columns: 1fr; }
+  .builder-section { border-right: none; border-bottom: 1px solid var(--border-strong); }
 }
 </style>
