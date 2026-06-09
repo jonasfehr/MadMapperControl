@@ -74,19 +74,28 @@ ok "System packages ready"
 # ════════════════════════════════════════════════════════════════════
 section "2 · openFrameworks"
 # ════════════════════════════════════════════════════════════════════
+OF_LIB_DIR="$OF_INSTALL_DIR/libs/openFrameworksCompiled/lib"
+OF_COMPILED=false
+[[ -n "$(ls -A "$OF_LIB_DIR" 2>/dev/null)" ]] && OF_COMPILED=true
+
 if $SKIP_OF; then
   warn "--skip-of set — skipping OF download & compile"
-elif [[ -d "$OF_INSTALL_DIR/libs/openFrameworks" ]]; then
-  ok "openFrameworks already found at $OF_INSTALL_DIR — skipping download"
+elif $OF_COMPILED; then
+  ok "openFrameworks already compiled at $OF_INSTALL_DIR — skipping"
 else
-  info "Downloading OF ${OF_VERSION} for ${OF_ARCH}…"
-  cd "$HOME"
-  wget -q --show-progress "$OF_URL" -O "$OF_TARBALL"
-  info "Extracting…"
-  tar -xzf "$OF_TARBALL"
-  mv "of_v${OF_VERSION}_${OF_ARCH}_release" "$OF_INSTALL_DIR"
-  rm "$OF_TARBALL"
-  ok "Extracted to $OF_INSTALL_DIR"
+  # Source present but not compiled, or not present at all
+  if [[ ! -d "$OF_INSTALL_DIR/libs/openFrameworks" ]]; then
+    info "Downloading OF ${OF_VERSION} for ${OF_ARCH}…"
+    cd "$HOME"
+    wget -q --show-progress "$OF_URL" -O "$OF_TARBALL"
+    info "Extracting…"
+    tar -xzf "$OF_TARBALL"
+    mv "of_v${OF_VERSION}_${OF_ARCH}_release" "$OF_INSTALL_DIR"
+    rm "$OF_TARBALL"
+    ok "Extracted to $OF_INSTALL_DIR"
+  else
+    ok "openFrameworks source found — skipping download, compiling…"
+  fi
 
   info "Installing OF system dependencies…"
   sudo "$OF_INSTALL_DIR/scripts/linux/debian/install_dependencies.sh"
