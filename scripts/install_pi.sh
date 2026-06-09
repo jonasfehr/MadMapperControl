@@ -98,11 +98,16 @@ else
   fi
 
   info "Installing OF system dependencies…"
-  # libgconf-2-4 was removed in Debian Trixie — patch it out before running
-  sudo sed -i 's/libgconf-2-4//g' \
+  # Patch for non-interactive Debian Trixie installs:
+  #  - add -y to apt-get so it doesn't prompt
+  #  - remove libgconf-2-4 (dropped in Trixie)
+  sudo sed -i \
+    -e 's/apt-get install /apt-get install -y /g' \
+    -e 's/libgconf-2-4//g' \
     "$OF_INSTALL_DIR/scripts/linux/debian/install_dependencies.sh" 2>/dev/null || true
-  sudo "$OF_INSTALL_DIR/scripts/linux/debian/install_dependencies.sh" || \
-    warn "Some OF dependencies failed — continuing (usually harmless on Trixie)"
+  sudo DEBIAN_FRONTEND=noninteractive \
+    "$OF_INSTALL_DIR/scripts/linux/debian/install_dependencies.sh" || \
+    warn "Some OF dependencies failed — continuing"
 
   info "Compiling openFrameworks (this takes 20–40 min on Pi 5)…"
   make -C "$OF_INSTALL_DIR/libs/openFrameworksCompiled/project" \
