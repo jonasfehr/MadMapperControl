@@ -984,6 +984,25 @@ void ofApp::update() {
 		reloadRequested = true;
 	}
 
+	// MIDI hot-plug: scan for port changes every 2 seconds
+	{
+		const uint64_t nowMidi = ofGetElapsedTimeMillis();
+		if (initialised && (nowMidi - lastMidiScanMs >= 2000)) {
+			lastMidiScanMs = nowMidi;
+			const auto currentInPorts = ofxMidiIn().getInPortList();
+			if (currentInPorts != lastKnownInPorts) {
+				lastKnownInPorts = currentInPorts;
+				if (noDeviceConnected) {
+					tryConnectMidiDevice();
+				} else if (activeProfile) {
+					bool stillPresent = std::find(currentInPorts.begin(), currentInPorts.end(),
+					                              activeProfile->midiInPort) != currentInPorts.end();
+					if (!stillPresent) disconnectMidiDevice();
+				}
+			}
+		}
+	}
+
 	const uint64_t nowMs = ofGetElapsedTimeMillis();
 	if (reloadRequested && (nowMs - lastReloadMs >= 3000)) {
 		float reloadButton = 1.f;
@@ -1394,6 +1413,54 @@ bool ofApp::reloadFromServer(float& p) {
 		return true;
 	}
 	return false;
+}
+
+//--------------------------------------------------------------
+void ofApp::disconnectMidiDevice() {
+	if (!surface) return;
+	ofLogNotice("ofApp") << "MIDI device disconnected: "
+	                     << (activeProfile ? activeProfile->name : "unknown");
+	if (initialised && currentPage != madOscQuery.pages.end()) removeListeners();
+	surface.reset();
+	activeProfile.reset();
+	noDeviceConnected = true;
+}
+
+//--------------------------------------------------------------
+void ofApp::tryConnectMidiDevice() {
+	auto profilesOpt = loadDeviceProfiles("device_profiles.json");
+	if (!profilesOpt) return;
+
+	const auto inPorts  = ofxMidiIn().getInPortList();
+	const auto outPorts = ofxMidiOut().getOutPortList();
+	std::optional<DeviceProfile> found;
+	for (const auto& p : *profilesOpt) {
+		bool inMatch  = std::find(inPorts.begin(),  inPorts.end(),  p.midiInPort)  != inPorts.end();
+		bool outMatch = std::find(outPorts.begin(), outPorts.end(), p.midiOutPort) != outPorts.end();
+		if (inMatch && outMatch) { found = p; break; }
+	}
+	if (!found) return;
+
+	activeProfile = found;
+	ofLogNotice("ofApp") << "MIDI device connected: " << activeProfile->name;
+
+	if (activeProfile->name.find("Push") != std::string::npos)
+		surface = std::make_unique<Push3Surface>();
+	else if (activeProfile->name.find("Platform") != std::string::npos)
+		surface = std::make_unique<PlatformMSurface>();
+	else
+		surface = std::make_unique<Faderport16Surface>();
+
+	static_cast<ofxMidiDevice*>(surface.get())->setupFromProfile(*activeProfile);
+	surface->onProfileLoaded(*activeProfile);
+	noDeviceConnected = false;
+
+	// Re-bind to current page and re-wire all listeners if already running
+	if (initialised && madOscQuery.madMapperJson != nullptr
+	    && currentPage != madOscQuery.pages.end()) {
+		setupUI(*madOscQuery.madMapperJson);
+		setActivePage(&(*currentPage), nullptr);
+	}
 }
 
 //--------------------------------------------------------------

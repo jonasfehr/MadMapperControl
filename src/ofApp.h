@@ -177,4 +177,9 @@ class ofApp : public ofBaseApp {
 	bool hasPendingConfigUpdate = false;
 	uint64_t lastEndpointHealthCheckMs = 0;
 	std::atomic_bool healthCheckInProgress{false};
+
+	void tryConnectMidiDevice();
+	void disconnectMidiDevice();
+	uint64_t lastMidiScanMs = 0;
+	std::vector<std::string> lastKnownInPorts;
 };
