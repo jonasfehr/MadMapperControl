@@ -1456,9 +1456,9 @@ void ofApp::tryConnectMidiDevice() {
 	noDeviceConnected = false;
 
 	// Re-bind to current page and re-wire all listeners if already running
-	if (initialised && madOscQuery.madMapperJson != nullptr
+	if (initialised && !madOscQuery.madMapperJson.is_null()
 	    && currentPage != madOscQuery.pages.end()) {
-		setupUI(*madOscQuery.madMapperJson);
+		setupUI(madOscQuery.madMapperJson);
 		setActivePage(&(*currentPage), nullptr);
 	}
 }
