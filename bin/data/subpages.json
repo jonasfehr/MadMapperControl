@@ -1,0 +1,57 @@
+{
+  "opacity":  {
+      "key": "/surfaces/*",
+      "elements": [
+        "/fx/*",
+        "/color/blue",
+        "/color/green",
+        "/color/red",
+        "/opacity"
+      ],
+      "skipKeys":[
+        "selected",
+        "children"
+      ]
+    },
+  "luminosity":  {
+    "key": "/fixtures/*",
+    "elements": [
+      "/color/blue",
+      "/color/green",
+      "/color/red",
+      "/luminosity",
+      "/response",
+      "/sliders/*"
+    ],
+    "skipKeys":[
+      "selected",
+      "children"
+    ]
+  },
+  "media":
+    {
+      "key": "/media/*",
+      "elements": [
+        "/*"
+        ],
+        "skipKeys":[
+          "selected",
+          "next",
+          "per_type_selection",
+          "previous",
+          "select",
+          "select_by_name",
+          "audio_level",
+          "audio_pan",
+          "alpha",
+          "red",
+          "green",
+          "blue",
+          "hue",
+          "saturation",
+          "value",
+          "width",
+          "height"
+        ]
+      }
+}

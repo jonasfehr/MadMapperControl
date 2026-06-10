@@ -1,0 +1,27 @@
+{
+    "enableWebSocket": true,
+    "feedbackPort": 9893,
+    "ip": "127.0.0.1",
+    "midiDeviceMAC": "Push 3",
+    "midiDeviceWIN": "MyMIDIKeyboard",
+    "queryPort": 9001,
+    "sendPort": 9001,
+    "servers": [
+        {
+            "discovery": "manual",
+            "feedbackPort": 9893,
+            "id": "MadMapper",
+            "ip": "127.0.0.1",
+            "queryPort": 9001,
+            "sendPort": 9001
+        },
+        {
+            "discovery": "manual",
+            "feedbackPort": 9123,
+            "id": "TouchDesigner",
+            "ip": "127.0.0.1",
+            "queryPort": 9123,
+            "sendPort": 9123
+        }
+    ]
+}
