@@ -123,11 +123,18 @@ clone_or_update() {
   local url="$1" dir="$2" branch="${3:-}"
   if [[ -d "$dir/.git" ]]; then
     info "$(basename "$dir") already exists — updating"
-    git -C "$dir" fetch --all
     if [[ -n "$branch" ]]; then
-      git -C "$dir" checkout "$branch" 2>/dev/null || git -C "$dir" checkout -b "$branch" "origin/$branch"
+      # Fetch the specific branch (FETCH_HEAD = the branch tip)
+      git -C "$dir" fetch origin "$branch" || git -C "$dir" fetch --all
+      # Try local branch → remote ref → FETCH_HEAD (handles shallow clones)
+      git -C "$dir" checkout "$branch" 2>/dev/null || \
+        git -C "$dir" checkout -b "$branch" "origin/$branch" 2>/dev/null || \
+        git -C "$dir" checkout -b "$branch" FETCH_HEAD
+      git -C "$dir" pull --ff-only || warn "Could not fast-forward $dir (local changes?)"
+    else
+      git -C "$dir" fetch --all
+      git -C "$dir" pull --ff-only || warn "Could not fast-forward $dir (local changes?)"
     fi
-    git -C "$dir" pull --ff-only || warn "Could not fast-forward $dir (local changes?)"
   else
     info "Cloning $(basename "$url")${branch:+ (branch: $branch)}…"
     if [[ -n "$branch" ]]; then
