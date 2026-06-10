@@ -13,6 +13,7 @@
 #include "Poco/Exception.h"
 
 static const ofJson* jsonGet(const ofJson& root, std::initializer_list<const char*> keys);
+static bool midiPortMatches(const std::vector<std::string>& ports, const std::string& name);
 
 namespace {
 	std::string resolveCustomPagesPath() {
