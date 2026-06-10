@@ -523,8 +523,8 @@ void ofApp::setup() {
 		const auto inPorts = ofxMidiIn().getInPortList();
 		const auto outPorts = ofxMidiOut().getOutPortList();
 		for (const auto& p : *profilesOpt) {
-			bool inMatch = std::find(inPorts.begin(), inPorts.end(), p.midiInPort) != inPorts.end();
-			bool outMatch = std::find(outPorts.begin(), outPorts.end(), p.midiOutPort) != outPorts.end();
+			bool inMatch = midiPortMatches(inPorts, p.midiInPort);
+			bool outMatch = midiPortMatches(outPorts, p.midiOutPort);
 			if (inMatch && outMatch) {
 				activeProfile = p;
 				break;
@@ -995,8 +995,7 @@ void ofApp::update() {
 				if (noDeviceConnected) {
 					tryConnectMidiDevice();
 				} else if (activeProfile) {
-					bool stillPresent = std::find(currentInPorts.begin(), currentInPorts.end(),
-					                              activeProfile->midiInPort) != currentInPorts.end();
+					bool stillPresent = midiPortMatches(currentInPorts, activeProfile->midiInPort);
 					if (!stillPresent) disconnectMidiDevice();
 				}
 			}
@@ -1415,6 +1414,14 @@ bool ofApp::reloadFromServer(float& p) {
 	return false;
 }
 
+// Linux rtmidi returns "ClientName:PortName NN:MM"; profile stores just "PortName".
+// Substring match handles both Linux and macOS naming.
+static bool midiPortMatches(const std::vector<std::string>& ports, const std::string& name) {
+	for (const auto& p : ports)
+		if (p == name || p.find(name) != std::string::npos) return true;
+	return false;
+}
+
 //--------------------------------------------------------------
 void ofApp::disconnectMidiDevice() {
 	if (!surface) return;
@@ -1435,9 +1442,10 @@ void ofApp::tryConnectMidiDevice() {
 	const auto outPorts = ofxMidiOut().getOutPortList();
 	std::optional<DeviceProfile> found;
 	for (const auto& p : *profilesOpt) {
-		bool inMatch  = std::find(inPorts.begin(),  inPorts.end(),  p.midiInPort)  != inPorts.end();
-		bool outMatch = std::find(outPorts.begin(), outPorts.end(), p.midiOutPort) != outPorts.end();
-		if (inMatch && outMatch) { found = p; break; }
+		if (midiPortMatches(inPorts, p.midiInPort) && midiPortMatches(outPorts, p.midiOutPort)) {
+			found = p;
+			break;
+		}
 	}
 	if (!found) return;
 
