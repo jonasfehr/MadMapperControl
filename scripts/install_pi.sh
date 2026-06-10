@@ -109,9 +109,10 @@ else
     "$OF_INSTALL_DIR/scripts/linux/debian/install_dependencies.sh" || \
     warn "Some OF dependencies failed — continuing"
 
-  info "Compiling openFrameworks (this takes 20–40 min on Pi 5)…"
+  # Use -j1 for OF: parallel g++ processes OOM-kill on Pi with ≤4GB RAM
+  info "Compiling openFrameworks (this takes 40–60 min on Pi 5 at -j1)…"
   make -C "$OF_INSTALL_DIR/libs/openFrameworksCompiled/project" \
-       Release -j"$(nproc)" --no-print-directory
+       Release -j1 --no-print-directory
   ok "openFrameworks compiled"
 fi
 
