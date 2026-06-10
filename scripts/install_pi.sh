@@ -195,8 +195,9 @@ section "6 · Build C++ app"
 if $SKIP_BUILD; then
   warn "--skip-build set — skipping C++ compile"
 else
-  info "Compiling (using $(nproc) cores)…"
-  make -C "$PROJECT_DIR" Release -j"$(nproc)"
+  # Use -j1: Pi with ≤1GB RAM OOM-kills parallel g++ (ofApp.cpp alone needs ~400MB)
+  info "Compiling (single-threaded, Pi ≤1GB RAM)…"
+  make -C "$PROJECT_DIR" Release -j1
   ok "Binary: $PROJECT_DIR/bin/MadMapperControl_MM6_V2"
 fi
 
