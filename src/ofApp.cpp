@@ -3,6 +3,7 @@
 #include <cctype>
 #include <cmath>
 #include <optional>
+#include <set>
 #include <unordered_map>
 #include <unordered_set>
 #include <fstream>
@@ -983,6 +984,7 @@ void ofApp::update() {
 			}).detach();
 		}
 	}
+	refreshBonjourServices();
 
 	if (hasPendingReload.exchange(false)) {
 		reloadRequested = true;
@@ -1695,7 +1697,6 @@ ofJson ofApp::getConfig() {
 	ofJson config = ofJson::object();
 
 	config["servers"] = ofJson::array();
-	config["bonjourAnnouncements"] = ofJson::array();
 	for (size_t i = 0; i < oscServerConfigs.size(); ++i) {
 		const auto& serverConfig = oscServerConfigs[i];
 		ofJson sc = ofJson::object();
@@ -1707,15 +1708,17 @@ ofJson ofApp::getConfig() {
 		sc["discovery"] = serverConfig.discovery;
 		sc["reachable"] = i < endpointReachability.size() ? endpointReachability[i] : false;
 		config["servers"].push_back(sc);
-		if (serverConfig.discovery == "bonjour") {
-			ofJson announced = ofJson::object();
-			announced["id"] = serverConfig.id;
-			announced["ip"] = serverConfig.ip;
-			announced["queryPort"] = serverConfig.queryPort;
-			announced["sendPort"] = serverConfig.sendPort;
-			announced["feedbackPort"] = serverConfig.feedbackPort;
-			announced["reachable"] = i < endpointReachability.size() ? endpointReachability[i] : false;
-			config["bonjourAnnouncements"].push_back(announced);
+	}
+	// Bonjour discovered: live mDNS scan results filtered to exclude already-configured IPs
+	{
+		std::set<std::string> configuredIps;
+		for (auto& s : oscServerConfigs) configuredIps.insert(s.ip);
+		std::lock_guard<std::mutex> bonLock(bonjourMutex);
+		config["bonjourAnnouncements"] = ofJson::array();
+		for (auto& svc : bonjourDiscovered) {
+			std::string ip = svc.value("ip", std::string());
+			if (configuredIps.count(ip) == 0)
+				config["bonjourAnnouncements"].push_back(svc);
 		}
 	}
 
@@ -1832,6 +1835,61 @@ bool ofApp::endpointReachable(const OscServerConfig& cfg, std::string* error) co
 		if (error) *error = "unknown error";
 		return false;
 	}
+}
+
+void ofApp::refreshBonjourServices() {
+	const uint64_t nowMs = ofGetElapsedTimeMillis();
+	if (bonjourScanInProgress.load() || (nowMs - lastBonjourScanMs) < 15000) return;
+	lastBonjourScanMs = nowMs;
+	bonjourScanInProgress.store(true);
+
+	std::thread([this]() {
+		std::vector<ofJson> found;
+#ifdef TARGET_LINUX
+		FILE* pipe = popen("avahi-browse -t -r -p _oscjson._tcp 2>/dev/null", "r");
+		if (pipe) {
+			char buf[512];
+			std::map<std::string, ofJson> byKey;
+			while (fgets(buf, sizeof(buf), pipe)) {
+				std::string line(buf);
+				if (line.empty() || line[0] != '=') continue;
+				// format: =;iface;proto;name;type;domain;hostname;address;port;txt
+				std::vector<std::string> parts;
+				std::stringstream ss(line);
+				std::string tok;
+				while (std::getline(ss, tok, ';')) parts.push_back(tok);
+				if (parts.size() < 9) continue;
+				std::string name = parts[3];
+				std::string ip   = parts[7];
+				int port = 0;
+				try { port = std::stoi(parts[8]); } catch (...) { continue; }
+				if (ip.empty() || port <= 0) continue;
+				// Strip ":port" suffix from name if present (e.g. "MadMapper:9001" → "MadMapper")
+				std::string id = name;
+				auto colon = id.rfind(':');
+				if (colon != std::string::npos) {
+					std::string suf = id.substr(colon + 1);
+					if (!suf.empty() && std::all_of(suf.begin(), suf.end(), ::isdigit))
+						id = id.substr(0, colon);
+				}
+				ofJson svc;
+				svc["id"] = id;
+				svc["ip"] = ip;
+				svc["queryPort"] = port;
+				svc["sendPort"]  = port;
+				svc["feedbackPort"] = 9893;
+				byKey[name + ip] = svc;
+			}
+			pclose(pipe);
+			for (auto& kv : byKey) found.push_back(kv.second);
+		}
+#endif
+		{
+			std::lock_guard<std::mutex> lock(bonjourMutex);
+			bonjourDiscovered = std::move(found);
+		}
+		bonjourScanInProgress.store(false);
+	}).detach();
 }
 
 void ofApp::refreshEndpointHealth(bool force) {

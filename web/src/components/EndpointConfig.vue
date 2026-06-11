@@ -150,6 +150,7 @@ export default {
 
     function removeServer(index) {
       draftServers.value.splice(index, 1)
+      save()
     }
 
     function toPayload() {

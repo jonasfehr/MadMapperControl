@@ -182,4 +182,10 @@ class ofApp : public ofBaseApp {
 	void disconnectMidiDevice();
 	uint64_t lastMidiScanMs = 0;
 	std::vector<std::string> lastKnownInPorts;
+
+	void refreshBonjourServices();
+	std::vector<ofJson> bonjourDiscovered;
+	std::mutex bonjourMutex;
+	uint64_t lastBonjourScanMs = 0;
+	std::atomic_bool bonjourScanInProgress{false};
 };
