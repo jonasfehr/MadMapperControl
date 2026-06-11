@@ -588,10 +588,13 @@ void ofApp::setup() {
 
 			// Pages were initially built before additional servers existed.
 			// Rebuild once so serverId>0 pages are available at startup.
+			// Mark initialised=true first so reloadFromServer clears groups before re-adding.
+			initialised = true;
 			float rebuildAllPages = 1.f;
 			reloadFromServer(rebuildAllPages);
+		} else {
+			initialised = true;
 		}
-		initialised = true;
 	}
 	errorImage.load("debug.png");
 
