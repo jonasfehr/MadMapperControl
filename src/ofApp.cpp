@@ -537,6 +537,19 @@ void ofApp::setup() {
 	if (settings.contains("cueFollowActiveBank") && settings["cueFollowActiveBank"].is_boolean()) {
 		cueFollowActiveBank = settings["cueFollowActiveBank"].get<bool>();
 	}
+	{
+		auto pathIt = settings.find("tdHoverEncoderPath");
+		if (pathIt != settings.end() && pathIt->is_string())
+			tdHoverEncoderOscPath = pathIt->get<std::string>();
+	}
+	// Identify which server is "TouchDesigner" for hover encoder routing.
+	tdServerId = SIZE_MAX;
+	for (size_t i = 0; i < oscServerConfigs.size(); ++i) {
+		if (oscServerConfigs[i].id == "TouchDesigner") {
+			tdServerId = i;
+			break;
+		}
+	}
 
 	// Load profiles and select first matching connected device
 	auto profilesOpt = loadDeviceProfiles("device_profiles.json");
@@ -942,10 +955,28 @@ void ofApp::removeListeners() {
 		fadeEngineSpeed->unlinkMidiComponent(dev->midiComponents["fader_Speed"]);
 	if (dev->midiComponents.count("jog")) speed->unlinkMidiComponent(dev->midiComponents["jog"]);
 
+	if (auto* c = ::getComponentByRole(dev, "fixed.tdHoverEncoder"))
+		c->value.removeListener(this, &ofApp::onTdHoverEncoderChange);
+
 	ofRemoveListener(selectGroup.lastChangedE, this, &ofApp::selectSurface);
 	ofRemoveListener(muteGroup.lastChangedE, this, &ofApp::selectSurface);
 	ofRemoveListener(muteGroup.noneSelectedE, this, &ofApp::backToCurrent);
 	ofRemoveListener(soloGroup.lastChangedE, this, &ofApp::selectMedia);
+}
+
+// TD HOVER ENCODER
+// -------------------------------------------------------------
+void ofApp::onTdHoverEncoderChange(float& v) {
+	if (tdServerId == SIZE_MAX) return;
+
+	const float delta = v - tdHoverEncoderPrevValue;
+	tdHoverEncoderPrevValue = v;
+	if (delta == 0.f) return;
+
+	ofxOscMessage m;
+	m.setAddress(tdHoverEncoderOscPath);
+	m.addFloatArg(delta);
+	oscSendToServer(tdServerId, m);
 }
 
 // OSC FUNCTIONS
@@ -1129,6 +1160,13 @@ void ofApp::setupUI(ofJson madmapperJson) {
 	if (bpm && dev->midiComponents.count("jog")) {
 		speed = madOscQuery.createParameter(*bpm);
 		speed->linkMidiComponent(dev->midiComponents["jog"]);
+	}
+
+	// TD hover encoder — relative encoder on Push3 right side controls the
+	// currently hovered TD parameter by sending normalized deltas via OSC.
+	if (auto* c = ::getComponentByRole(dev, "fixed.tdHoverEncoder")) {
+		tdHoverEncoderPrevValue = c->value.get();
+		c->value.addListener(this, &ofApp::onTdHoverEncoderChange);
 	}
 
 	selectGroup.doCheckbox = true;

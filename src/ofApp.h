@@ -11,6 +11,7 @@
 #include "ofxMadOscQuery.h"
 #include "ofxMidiDevice.h"
 #include "ofxOscParameterSync.h"
+#include <cstddef>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -138,6 +139,16 @@ class ofApp : public ofBaseApp {
 	uint64_t lastCueGridRefreshMs = 0;
 
 	MidiComponent* getComponentByRole(const std::string& role);
+
+	// TD hover encoder — Push3 master encoder routes relative MIDI to the
+	// currently hovered TouchDesigner parameter via OSC.
+	void onTdHoverEncoderChange(float& v);
+	float tdHoverEncoderPrevValue = 0.f;
+	// OSC path that TD is listening on for hover encoder deltas.
+	// Override in settings.json under "tdHoverEncoderPath".
+	std::string tdHoverEncoderOscPath = "/ParHoverMIDI_VSN1/knob_delta";
+	// Index into oscServerConfigs for the TD server. SIZE_MAX = not found / disabled.
+	size_t tdServerId = SIZE_MAX;
 
   private:
 	ofxMadOscQuery* getOscServer(size_t serverId);
