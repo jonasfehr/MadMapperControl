@@ -56,21 +56,28 @@ namespace {
 		size_t index = 0;
 		for (const auto& item : servers) {
 			if (!item.is_object()) continue;
-			const std::string ip = item.value("ip", std::string());
-			const int query = item.value("queryPort", PORT_RECEIVE);
+			auto ipIt = item.find("ip");
+			const std::string ip = (ipIt != item.end() && ipIt->is_string()) ? ipIt->get<std::string>() : std::string();
+			auto qpIt = item.find("queryPort");
+			const int query = (qpIt != item.end() && qpIt->is_number()) ? qpIt->get<int>() : PORT_RECEIVE;
 			if (ip.empty() || query <= 0 || query > 65535) continue;
 
 			const std::string dedupeKey = ofToLower(ip) + ":" + ofToString(query);
 			if (seenHostPort.count(dedupeKey)) continue;
 			seenHostPort.insert(dedupeKey);
 
+			auto idIt = item.find("id");
+			auto spIt = item.find("sendPort");
+			auto fpIt = item.find("feedbackPort");
+			auto discIt = item.find("discovery");
+
 			ofJson out = ofJson::object();
-			out["id"] = item.value("id", "server_" + ofToString(index));
+			out["id"] = (idIt != item.end() && idIt->is_string()) ? idIt->get<std::string>() : "server_" + ofToString(index);
 			out["ip"] = ip;
 			out["queryPort"] = query;
-			out["sendPort"] = item.value("sendPort", query);
-			out["feedbackPort"] = item.value("feedbackPort", PORT_FEEDBACK);
-			out["discovery"] = item.value("discovery", std::string("manual"));
+			out["sendPort"] = (spIt != item.end() && spIt->is_number()) ? spIt->get<int>() : query;
+			out["feedbackPort"] = (fpIt != item.end() && fpIt->is_number()) ? fpIt->get<int>() : PORT_FEEDBACK;
+			out["discovery"] = (discIt != item.end() && discIt->is_string()) ? discIt->get<std::string>() : std::string("manual");
 			sanitized.push_back(out);
 			++index;
 		}
@@ -459,6 +466,18 @@ namespace {
 		return false;
 	}
 
+	std::string safeStr(const ofJson& obj, const std::string& key, const std::string& def = "") {
+		auto it = obj.find(key);
+		if (it == obj.end() || !it->is_string()) return def;
+		return it->get<std::string>();
+	}
+
+	int safeInt(const ofJson& obj, const std::string& key, int def = 0) {
+		auto it = obj.find(key);
+		if (it == obj.end() || !it->is_number()) return def;
+		return it->get<int>();
+	}
+
 	std::vector<ofApp::OscServerConfig> parseOscServerConfigs(const ofJson& settings) {
 		std::vector<ofApp::OscServerConfig> configs;
 
@@ -467,12 +486,12 @@ namespace {
 			for (const auto& item : settings["servers"]) {
 				if (!item.is_object()) continue;
 				ofApp::OscServerConfig cfg;
-				cfg.id = item.value("id", "server_" + ofToString(index));
-				cfg.ip = item.value("ip", std::string("127.0.0.1"));
-				cfg.sendPort = item.value("sendPort", PORT_RECEIVE);
-				cfg.feedbackPort = item.value("feedbackPort", PORT_FEEDBACK);
-				cfg.queryPort = item.value("queryPort", cfg.sendPort);
-				cfg.discovery = item.value("discovery", std::string("manual"));
+				cfg.id = safeStr(item, "id", "server_" + ofToString(index));
+				cfg.ip = safeStr(item, "ip", "127.0.0.1");
+				cfg.sendPort = safeInt(item, "sendPort", PORT_RECEIVE);
+				cfg.feedbackPort = safeInt(item, "feedbackPort", PORT_FEEDBACK);
+				cfg.queryPort = safeInt(item, "queryPort", cfg.sendPort);
+				cfg.discovery = safeStr(item, "discovery", "manual");
 				configs.push_back(cfg);
 				++index;
 			}
@@ -481,10 +500,10 @@ namespace {
 		if (configs.empty()) {
 			ofApp::OscServerConfig legacy;
 			legacy.id = "server_0";
-			legacy.ip = settings.contains("ip") ? settings["ip"].get<std::string>() : "127.0.0.1";
-			legacy.sendPort = settings.contains("sendPort") ? settings["sendPort"].get<int>() : PORT_RECEIVE;
-			legacy.queryPort = settings.contains("queryPort") ? settings["queryPort"].get<int>() : legacy.sendPort;
-			legacy.feedbackPort = settings.contains("feedbackPort") ? settings["feedbackPort"].get<int>() : PORT_FEEDBACK;
+			legacy.ip = safeStr(settings, "ip", "127.0.0.1");
+			legacy.sendPort = safeInt(settings, "sendPort", PORT_RECEIVE);
+			legacy.queryPort = safeInt(settings, "queryPort", legacy.sendPort);
+			legacy.feedbackPort = safeInt(settings, "feedbackPort", PORT_FEEDBACK);
 			legacy.discovery = "manual";
 			configs.push_back(legacy);
 		}
@@ -1333,6 +1352,7 @@ void ofApp::drawStatusString() {
 //--------------------------------------------------------------
 bool ofApp::reloadFromServer(float& p) {
 	if (p == 1) {
+		try {
 		std::lock_guard<std::mutex> lock(oscStateMutex);
 		if (!endpointReachability.empty() && !endpointReachability[0]) {
 			ofLogWarning("ofApp") << "Primary endpoint unreachable - skipping reload";
@@ -1416,6 +1436,15 @@ bool ofApp::reloadFromServer(float& p) {
 			setActivePage(&(*currentPage), nullptr);
 		}
 		return true;
+		} catch (const std::exception& e) {
+			ofLogError("ofApp") << "reloadFromServer: JSON parsing exception: " << e.what();
+			madMapperLoadError = true;
+			return false;
+		} catch (...) {
+			ofLogError("ofApp") << "reloadFromServer: unknown exception";
+			madMapperLoadError = true;
+			return false;
+		}
 	}
 	return false;
 }
@@ -1814,7 +1843,11 @@ void ofApp::applyPendingServerConfig() {
 
 	setupAdditionalOscServers();
 	hasPendingReload.store(true);
-	requestActivatePageByName(configToApply.value("currentPage", std::string()));
+	{
+		auto cpIt = configToApply.find("currentPage");
+		if (cpIt != configToApply.end() && cpIt->is_string())
+			requestActivatePageByName(cpIt->get<std::string>());
+	}
 }
 
 bool ofApp::endpointReachable(const OscServerConfig& cfg, std::string* error) const {
