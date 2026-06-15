@@ -133,7 +133,7 @@
       {"label":"media_6","channel":1,"address":25,"type":"cc","interfaceType":"button"},
       {"label":"media_7","channel":1,"address":26,"type":"cc","interfaceType":"button"},
       {"label":"media_8","channel":1,"address":27,"type":"cc","interfaceType":"button"},
-      {"label":"master_encoder","channel":1,"address":79,"type":"encoder_relative","interfaceType":"knob"}
+      {"label":"master_encoder","channel":1,"address":70,"type":"encoder_relative","interfaceType":"knob"}
      ],
     "bindings": {
       "nav.pagePrev": "arrow_page_left",

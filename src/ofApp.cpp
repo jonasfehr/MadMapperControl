@@ -985,9 +985,13 @@ void ofApp::onTdHoverEncoderChange(float& v) {
 		if (accel < 1.f) accel = 1.f;
 	}
 
+	// Snap to nearest 0.001 so the outgoing value is always a clean decimal.
+	const float scaledDelta = std::round(delta * accel * 1000.f) / 1000.f;
+	if (scaledDelta == 0.f) return;
+
 	ofxOscMessage m;
 	m.setAddress(tdHoverEncoderOscPath);
-	m.addFloatArg(delta * accel);
+	m.addFloatArg(scaledDelta);
 	oscSendToServer(tdServerId, m);
 }
 
