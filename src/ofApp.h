@@ -143,10 +143,16 @@ class ofApp : public ofBaseApp {
 	// TD hover encoder — Push3 master encoder routes relative MIDI to the
 	// currently hovered TouchDesigner parameter via OSC.
 	void onTdHoverEncoderChange(float& v);
-	float tdHoverEncoderPrevValue = 0.f;
+	float    tdHoverEncoderPrevValue = 0.f;
+	uint64_t tdHoverEncoderLastMs   = 0;
 	// OSC path that TD is listening on for hover encoder deltas.
 	// Override in settings.json under "tdHoverEncoderPath".
 	std::string tdHoverEncoderOscPath = "/ParHoverMIDI_VSN1/knob_delta";
+	// Acceleration: velocity (ticks/s) is divided by this to get the multiplier.
+	// Lower = more sensitive. At kHoverAccelBase ticks/s the multiplier is 1×.
+	static constexpr float kHoverAccelBase = 8.f;
+	// Cap on how large the multiplier can grow.
+	static constexpr float kHoverAccelMax  = 12.f;
 	// Index into oscServerConfigs for the TD server. SIZE_MAX = not found / disabled.
 	size_t tdServerId = SIZE_MAX;
 

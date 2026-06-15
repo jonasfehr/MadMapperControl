@@ -973,9 +973,21 @@ void ofApp::onTdHoverEncoderChange(float& v) {
 	tdHoverEncoderPrevValue = v;
 	if (delta == 0.f) return;
 
+	// Velocity-based acceleration: measure time between ticks to estimate speed.
+	const uint64_t now = ofGetElapsedTimeMillis();
+	const uint64_t dt  = now - tdHoverEncoderLastMs;
+	tdHoverEncoderLastMs = now;
+
+	float accel = 1.f;
+	if (dt > 0 && dt < 500) {  // ignore gaps > 500 ms (user paused)
+		const float velocity = 1000.f / static_cast<float>(dt);  // ticks per second
+		accel = std::min(velocity / kHoverAccelBase, kHoverAccelMax);
+		if (accel < 1.f) accel = 1.f;
+	}
+
 	ofxOscMessage m;
 	m.setAddress(tdHoverEncoderOscPath);
-	m.addFloatArg(delta);
+	m.addFloatArg(delta * accel);
 	oscSendToServer(tdServerId, m);
 }
 
