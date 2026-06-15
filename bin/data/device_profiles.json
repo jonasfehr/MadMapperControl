@@ -132,13 +132,15 @@
       {"label":"media_5","channel":1,"address":24,"type":"cc","interfaceType":"button"},
       {"label":"media_6","channel":1,"address":25,"type":"cc","interfaceType":"button"},
       {"label":"media_7","channel":1,"address":26,"type":"cc","interfaceType":"button"},
-      {"label":"media_8","channel":1,"address":27,"type":"cc","interfaceType":"button"}
+      {"label":"media_8","channel":1,"address":27,"type":"cc","interfaceType":"button"},
+      {"label":"master_encoder","channel":1,"address":70,"type":"encoder_relative","interfaceType":"knob"}
      ],
     "bindings": {
       "nav.pagePrev": "arrow_page_left",
       "nav.pageNext": "arrow_page_right",
       "nav.bankPrev": "arrow_octave_down",
       "nav.bankNext": "arrow_octave_up",
+      "fixed.tdHoverEncoder": "master_encoder",
       "param.1.fader": "fader_1","param.2.fader": "fader_2","param.3.fader": "fader_3","param.4.fader": "fader_4","param.5.fader": "fader_5","param.6.fader": "fader_6","param.7.fader": "fader_7","param.8.fader": "fader_8",
       "param.1.surfaceSubpage": "subpage_1","param.2.surfaceSubpage": "subpage_2","param.3.surfaceSubpage": "subpage_3","param.4.surfaceSubpage": "subpage_4","param.5.surfaceSubpage": "subpage_5","param.6.surfaceSubpage": "subpage_6","param.7.surfaceSubpage": "subpage_7","param.8.surfaceSubpage": "subpage_8",
       "param.1.mediaSubpage": "media_1","param.2.mediaSubpage": "media_2","param.3.mediaSubpage": "media_3","param.4.mediaSubpage": "media_4","param.5.mediaSubpage": "media_5","param.6.mediaSubpage": "media_6","param.7.mediaSubpage": "media_7","param.8.mediaSubpage": "media_8"
