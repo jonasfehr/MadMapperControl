@@ -37,5 +37,48 @@ export const apiClient = {
   async saveConfig(config) {
     const response = await axios.post(`${API_BASE}/config`, config)
     return response.data
+  },
+
+  // Mappings (nav + fixed OSC targets)
+  async fetchMappings() {
+    const response = await axios.get(`${API_BASE}/mappings`)
+    return response.data
+  },
+  async saveMappings(mappings) {
+    const response = await axios.post(`${API_BASE}/mappings`, mappings)
+    return response.data
+  },
+
+  // Active device profile (components + bindings)
+  async fetchProfile() {
+    const response = await axios.get(`${API_BASE}/profile`)
+    return response.data
+  },
+  async saveProfile(profile) {
+    const response = await axios.post(`${API_BASE}/profile`, profile)
+    return response.data
+  },
+
+  // MIDI Learn
+  async learnStart() {
+    const response = await axios.post(`${API_BASE}/learn/start`)
+    return response.data
+  },
+  async learnStop() {
+    const response = await axios.post(`${API_BASE}/learn/stop`)
+    return response.data
+  },
+  async learnStatus() {
+    const response = await axios.get(`${API_BASE}/learn/status`)
+    return response.data
+  },
+  async learnAssign(payload) {
+    const response = await axios.post(`${API_BASE}/learn/assign`, payload)
+    return response.data
+  },
+
+  async learnInject(payload) {
+    const response = await axios.post(`${API_BASE}/learn/inject`, payload)
+    return response.data
   }
 }

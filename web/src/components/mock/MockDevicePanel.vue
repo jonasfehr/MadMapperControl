@@ -1,9 +1,10 @@
 <script setup>
-import { ref, shallowRef, watch, computed, toRef } from 'vue'
+import { ref, shallowRef, watch, computed, toRef, onMounted, onUnmounted } from 'vue'
 import Push3Surface      from './Push3Surface.vue'
 import Faderport16Surface from './Faderport16Surface.vue'
 import PlatformMSurface   from './PlatformMSurface.vue'
 import { useDeviceMappings } from '../../composables/useDeviceMappings.js'
+import { apiClient } from '../../api.js'
 
 const props = defineProps({
   pages:         { type: Object,  default: () => ({ pages: [], subpages: [] }) },
@@ -49,11 +50,48 @@ function onBankChange(delta) {
   bankOffset.value = Math.max(0, Math.min(maxBanks, bankOffset.value + delta))
 }
 
+// ── MIDI learn bridge ─────────────────────────────────────────────
+const learnActive  = ref(false)
+const learnCapture = ref(null)
+let learnPoll = null
+
+async function tryInject(payload) {
+  try { await apiClient.learnInject(payload) } catch (_) {}
+}
+
+async function pollLearnStatus() {
+  try {
+    const s = await apiClient.learnStatus()
+    learnActive.value = s.active
+    if (s.ready && !learnCapture.value) learnCapture.value = s
+    if (s.ready) learnCapture.value = s
+  } catch (_) {}
+}
+
+onMounted(() => { learnPoll = setInterval(pollLearnStatus, 400) })
+onUnmounted(() => clearInterval(learnPoll))
+
 // ── MIDI log ───────────────────────────────────────────────────────
-function onNoteOn(ev)    { log(`Note On  ch:${ev.ch}  note:${ev.note}  vel:${ev.vel}`) }
-function onNoteOff(ev)   { log(`Note Off ch:${ev.ch}  note:${ev.note}`) }
-function onCC(ev)        { log(`CC       ch:${ev.ch}  cc:${ev.cc}  val:${ev.val}`) }
-function onPitchBend(ev) { log(`Pitch    ch:${ev.ch}  val:${ev.val}`) }
+// MIDI status bytes
+const STATUS_NOTE_ON = 144
+const STATUS_CC      = 176
+const STATUS_PITCH   = 224
+
+function onNoteOn(ev) {
+  log(`Note On  ch:${ev.ch}  note:${ev.note}  vel:${ev.vel}`)
+  tryInject({ channel: ev.ch, status: STATUS_NOTE_ON, control: 0, pitch: ev.note, value: ev.vel })
+}
+function onNoteOff(ev) {
+  log(`Note Off ch:${ev.ch}  note:${ev.note}`)
+}
+function onCC(ev) {
+  log(`CC       ch:${ev.ch}  cc:${ev.cc}  val:${ev.val}`)
+  tryInject({ channel: ev.ch, status: STATUS_CC, control: ev.cc, pitch: 0, value: ev.val })
+}
+function onPitchBend(ev) {
+  log(`Pitch    ch:${ev.ch}  val:${ev.val}`)
+  tryInject({ channel: ev.ch, status: STATUS_PITCH, control: 0, pitch: 0, value: ev.val })
+}
 
 const bankLabel = computed(() => {
   const maxCh  = currentDev.value.maxCh
@@ -94,6 +132,20 @@ function clearLog() { midiLog.value = [] }
           @click="selectedId = d.id"
         >{{ d.label }}</button>
       </div>
+    </div>
+
+    <!-- Learn banner -->
+    <div v-if="learnActive || learnCapture" class="learn-banner" :class="{ captured: learnCapture }">
+      <template v-if="learnCapture">
+        ✓ Captured: {{ learnCapture.type?.toUpperCase() }}
+        {{ learnCapture.type === 'cc' ? 'CC ' + learnCapture.control : learnCapture.type === 'note' ? 'Note ' + learnCapture.pitch : 'Pitch Bend' }}
+        ch {{ learnCapture.channel }}
+        — go to <strong>Mapping</strong> tab to assign
+        <button class="learn-dismiss" @click="learnCapture = null">✕</button>
+      </template>
+      <template v-else>
+        <span class="learn-pulse">●</span> MIDI Learn active — interact with a control below
+      </template>
     </div>
 
     <!-- surface -->
@@ -137,6 +189,43 @@ function clearLog() { midiLog.value = [] }
   background: var(--bg-shell, #111);
   min-height: 100%;
   overflow: auto;
+}
+
+/* ── Learn banner ── */
+.learn-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #1a2a1a;
+  border: 1px solid #3a6b3a;
+  color: #80c880;
+}
+.learn-banner.captured {
+  background: #1a2a30;
+  border-color: #2d5a7a;
+  color: #80d8ff;
+}
+.learn-pulse {
+  color: #4caf50;
+  animation: pulse 1s infinite;
+}
+.learn-dismiss {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+  opacity: 0.6;
+}
+.learn-dismiss:hover { opacity: 1; }
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
 }
 
 /* ── header ─────────────────────────────────────────────────────── */

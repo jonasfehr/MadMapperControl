@@ -537,12 +537,14 @@ void ofApp::setup() {
 	if (settings.contains("cueFollowActiveBank") && settings["cueFollowActiveBank"].is_boolean()) {
 		cueFollowActiveBank = settings["cueFollowActiveBank"].get<bool>();
 	}
+	// settings.json can still override the hover encoder OSC path (legacy support)
 	{
 		auto pathIt = settings.find("tdHoverEncoderPath");
 		if (pathIt != settings.end() && pathIt->is_string())
 			tdHoverEncoderOscPath = pathIt->get<std::string>();
 	}
-	// Identify which server is "TouchDesigner" for hover encoder routing.
+	// Identify which server is "TouchDesigner" for hover encoder routing (default).
+	// loadMappings() will override these from mappings.json if present.
 	tdServerId = SIZE_MAX;
 	for (size_t i = 0; i < oscServerConfigs.size(); ++i) {
 		if (oscServerConfigs[i].id == "TouchDesigner") {
@@ -550,6 +552,8 @@ void ofApp::setup() {
 			break;
 		}
 	}
+
+	loadMappings();
 
 	// Load profiles and select first matching connected device
 	auto profilesOpt = loadDeviceProfiles("device_profiles.json");
@@ -947,6 +951,13 @@ void ofApp::removeListeners() {
 	if (auto c = ::getComponentByRole(dev, "nav.reload")) c->value.removeListener(this, &ofApp::updateValues);
 	if (auto c = ::getComponentByRole(dev, "action.back")) c->value.removeListener(this, &ofApp::backToCurrent);
 
+	// Remove page shortcut listeners
+	for (auto& listener : pageGotoListeners) {
+		if (auto* c = ::getComponentByRole(dev, listener.role))
+			c->value.removeListener(&listener, &PageGotoListener::onPress);
+	}
+	pageGotoListeners.clear();
+
 	if (dev->midiComponents.count("fader_M_video"))
 		fadeMasterVideo->unlinkMidiComponent(dev->midiComponents["fader_M_video"]);
 	if (dev->midiComponents.count("fader_M_dmx"))
@@ -957,6 +968,9 @@ void ofApp::removeListeners() {
 
 	if (auto* c = ::getComponentByRole(dev, "fixed.tdHoverEncoder"))
 		c->value.removeListener(this, &ofApp::onTdHoverEncoderChange);
+	for (auto& lp : linkedFixedParams) lp.param->unlinkMidiComponent(*lp.component);
+	linkedFixedParams.clear();
+	activeFixedBindings.clear();
 
 	ofRemoveListener(selectGroup.lastChangedE, this, &ofApp::selectSurface);
 	ofRemoveListener(muteGroup.lastChangedE, this, &ofApp::selectSurface);
@@ -1052,8 +1066,31 @@ void ofApp::update() {
 	}
 	refreshBonjourServices();
 
+	if (hasPendingReconnect.exchange(false) && !reconnectInProgress.load()) {
+		reconnectInProgress.store(true);
+		std::thread([this]() {
+			ofLogNotice("ofApp") << "Primary endpoint became reachable — auto-reconnecting OSCQuery...";
+			{
+				std::lock_guard<std::mutex> lock(oscStateMutex);
+				madOscQuery.receive();
+				if (madOscQuery.madMapperJson != nullptr &&
+					madOscQuery.connectWebSocket(queryPort)) {
+					madOscQuery.subscribeAllParameters();
+					registerServerPathRouting(0, madOscQuery);
+					subscribeTimelinePaths();
+				}
+			}
+			hasPendingReload.store(true);
+			reconnectInProgress.store(false);
+		}).detach();
+	}
+
 	if (hasPendingReload.exchange(false)) {
 		reloadRequested = true;
+	}
+
+	if (hasPendingBindingsUpdate.exchange(false)) {
+		applyBindingsUpdate();
 	}
 
 	// MIDI hot-plug: scan for port changes every 2 seconds
@@ -1106,6 +1143,36 @@ void ofApp::update() {
 		}
 	}
 
+	// Delta-mode fixed bindings: poll, accelerate, send raw OSC delta.
+	// Absolute-mode bindings are listener-driven via MadParameter::linkMidiComponent
+	// (acceleration lives in MadParameter::onParameterChange). Tune kFixedAccelBase/Max
+	// in ofApp.h; tune MadParameter::encoderAccelBase/Max in MadParameter.h.
+	for (auto& fb : activeFixedBindings) {
+		const float v     = fb.component->value.get();
+		const float delta = v - fb.prevValue;
+		fb.prevValue = v;
+		if (delta == 0.f) continue;
+
+		const uint64_t now = ofGetElapsedTimeMillis();
+		const uint64_t dt  = now - fb.lastMs;
+		fb.lastMs = now;
+
+		float accel = 1.f;
+		if (dt > 0 && dt < 500) {
+			const float velocity = 1000.f / static_cast<float>(dt);
+			accel = std::min(velocity / kFixedAccelBase, kFixedAccelMax);
+			if (accel < 1.f) accel = 1.f;
+		}
+
+		const float scaledDelta = std::round(delta * accel * 1000.f) / 1000.f;
+		if (scaledDelta == 0.f) continue;
+
+		ofxOscMessage m;
+		m.setAddress(fb.mapping.path);
+		m.addFloatArg(scaledDelta);
+		oscSendToServer(fb.mapping.serverId, m);
+	}
+
 	// Throttled refresh so displays (e.g. Push3) show value changes without saturating USB/CPU.
 	static uint64_t lastDisplayRefreshMs = 0;
 	const uint64_t nowMsDisplay = ofGetElapsedTimeMillis();
@@ -1149,6 +1216,16 @@ void ofApp::setupUI(ofJson madmapperJson) {
 	if (auto c = ::getComponentByRole(dev, "nav.reload")) c->value.addListener(this, &ofApp::updateValues);
 	if (auto c = ::getComponentByRole(dev, "action.back")) c->value.addListener(this, &ofApp::backToCurrent);
 
+	// Wire page shortcut buttons (nav.pageGoto.N → activatePageByName)
+	pageGotoListeners.clear();
+	for (auto& entry : pageGotoEntries) {
+		if (entry.pageName.empty()) continue;
+		auto* c = ::getComponentByRole(dev, entry.role);
+		if (!c) continue;
+		pageGotoListeners.push_back({ entry.role, entry.pageName, this });
+		c->value.addListener(&pageGotoListeners.back(), &PageGotoListener::onPress);
+	}
+
 	const ofJson* mappingOpacity =
 		jsonGet(madmapperJson, {"CONTENTS", "surfaces", "CONTENTS", "Mapping", "CONTENTS", "opacity"});
 	const ofJson* masterVideo = mappingOpacity
@@ -1183,6 +1260,53 @@ void ofApp::setupUI(ofJson madmapperJson) {
 	if (auto* c = ::getComponentByRole(dev, "fixed.tdHoverEncoder")) {
 		tdHoverEncoderPrevValue = c->value.get();
 		c->value.addListener(this, &ofApp::onTdHoverEncoderChange);
+	}
+
+	// Generic fixed OSC mappings: wire all fixed.* bindings (except tdHoverEncoder).
+	// For absolute mode, create a MadParameter to get min/max range + MM feedback sync.
+	auto resolveOscPathNode = [](const ofJson& tree, const std::string& path) -> const ofJson* {
+		const ofJson* node = &tree;
+		std::string seg;
+		std::istringstream ss(path);
+		while (std::getline(ss, seg, '/')) {
+			if (seg.empty()) continue;
+			auto cit = node->find("CONTENTS");
+			if (cit == node->end()) return nullptr;
+			auto pit = cit->find(seg);
+			if (pit == cit->end()) return nullptr;
+			node = &(*pit);
+		}
+		return node;
+	};
+
+	activeFixedBindings.clear();
+	linkedFixedParams.clear();
+	for (auto& [key, fm] : fixedMappings) {
+		if (key == "tdHoverEncoder") continue;
+		auto* c = ::getComponentByRole(dev, "fixed." + key);
+		if (!c) continue;
+
+		if (fm.mode == "absolute") {
+			ofxMadOscQuery* query = (fm.serverId == 0) ? &madOscQuery
+			                      : (fm.serverId - 1 < extraOscQueries.size()
+			                         ? extraOscQueries[fm.serverId - 1].get() : nullptr);
+			if (query && query->madMapperJson.is_object()) {
+				if (const ofJson* node = resolveOscPathNode(query->madMapperJson, fm.path)) {
+					MadParameter* param = query->createParameter(*node);
+					if (param) {
+						param->linkMidiComponent(*c); // acceleration + feedback sync built-in
+						linkedFixedParams.push_back({ c, param });
+						ofLogNotice("ofApp") << "Fixed binding linked: fixed." << key << " → "
+						                     << fm.path << " [" << param->range.min
+						                     << ".." << param->range.max << "]";
+					}
+				}
+			}
+		} else {
+			// Delta mode: poll in update() and send raw delta OSC
+			activeFixedBindings.push_back({ c, fm, c->value.get(), 0 });
+			ofLogNotice("ofApp") << "Fixed binding wired: fixed." << key << " → " << fm.path << " (delta)";
+		}
 	}
 
 	selectGroup.doCheckbox = true;
@@ -1611,6 +1735,108 @@ void ofApp::setupWebServer() {
 	webServer->setConfigFetcher([this]() { return getConfig(); });
 	webServer->setConfigSaver([this](const ofJson& config) { saveConfig(config); });
 
+	webServer->setMappingsFetcher([this]() { return getMappingsJson(); });
+	webServer->setMappingsSaver([this](const ofJson& body) {
+		mappingsJson = body;
+		saveMappings();
+		loadMappings();
+		hasPendingBindingsUpdate.store(true);
+	});
+	webServer->setProfileFetcher([this]() { return getProfileJson(); });
+	webServer->setProfileSaver([this](const ofJson& body) {
+		saveProfileJson(body);
+		hasPendingBindingsUpdate.store(true);
+	});
+
+	webServer->setLearnStarter([this]() { startLearnMode(); });
+	webServer->setLearnStopper([this]() { stopLearnMode(); });
+	webServer->setLearnInjector([this](const ofJson& body) {
+		int ch     = body.value("channel", 1);
+		int status = body.value("status",  176); // default CC
+		int ctrl   = body.value("control", 0);
+		int pitch  = body.value("pitch",   0);
+		int val    = body.value("value",   0);
+		injectLearnMessage(ch, status, ctrl, pitch, val);
+	});
+	webServer->setLearnStatusFetcher([this]() {
+		std::lock_guard<std::mutex> lock(learnMutex);
+		ofJson j;
+		j["active"]  = learnModeActive;
+		j["ready"]   = learnedMsg.ready;
+		j["channel"] = learnedMsg.channel;
+		j["control"] = learnedMsg.control;
+		j["status"]  = learnedMsg.status;
+		j["pitch"]   = learnedMsg.pitch;
+		j["type"]    = learnedMsg.type;
+		j["messages"] = ofJson::array();
+		for (const auto& m : learnMessages) {
+			ofJson entry;
+			entry["channel"] = m.channel;
+			entry["control"] = m.control;
+			entry["status"]  = m.status;
+			entry["pitch"]   = m.pitch;
+			entry["value"]   = m.value;
+			entry["type"]    = m.type;
+			j["messages"].push_back(entry);
+		}
+		return j;
+	});
+	webServer->setLearnAssigner([this](const ofJson& body) {
+		// body: { label, channel, control, type, interfaceType, role }
+		// Writes a new component + binding into the active device profile JSON.
+		if (!activeProfile) return;
+		if (!body.contains("label") || !body["label"].is_string()) return;
+
+		const std::string path = ofToDataPath("device_profiles.json", true);
+		ofJson profiles;
+		try { profiles = ofLoadJson(path); } catch (...) { return; }
+		if (!profiles.is_array()) return;
+
+		for (auto& profile : profiles) {
+			if (profile.value("name", std::string()) != activeProfile->name) continue;
+
+			// Add or update component
+			if (!profile.contains("components") || !profile["components"].is_array())
+				profile["components"] = ofJson::array();
+
+			std::string label = body["label"].get<std::string>();
+			bool found = false;
+			for (auto& comp : profile["components"]) {
+				if (comp.value("label", std::string()) == label) {
+					if (body.contains("channel"))       comp["channel"]       = body["channel"];
+					if (body.contains("address"))       comp["address"]       = body["address"];
+					else if (body.contains("control"))  comp["address"]       = body["control"]; // legacy
+					if (body.contains("type"))          comp["type"]          = body["type"];
+					if (body.contains("interfaceType")) comp["interfaceType"] = body["interfaceType"];
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
+				ofJson comp;
+				comp["label"]         = label;
+				comp["channel"]       = body.value("channel", 1);
+				comp["address"]       = body.contains("address") ? body["address"].get<int>()
+				                      : body.value("control", 0);
+				comp["type"]          = body.value("type", std::string("cc"));
+				comp["interfaceType"] = body.value("interfaceType", std::string("button"));
+				profile["components"].push_back(comp);
+			}
+
+			// Set binding role → label
+			if (body.contains("role") && body["role"].is_string()) {
+				if (!profile.contains("bindings") || !profile["bindings"].is_object())
+					profile["bindings"] = ofJson::object();
+				profile["bindings"][body["role"].get<std::string>()] = label;
+			}
+
+			ofSavePrettyJson(path, profiles);
+			ofLogNotice("ofApp") << "Learn assign saved: " << label << " → " << body.value("role", std::string("(no role)"));
+			hasPendingBindingsUpdate.store(true);
+			break;
+		}
+	});
+
 	webServer->start();
 }
 
@@ -2000,6 +2226,7 @@ void ofApp::refreshEndpointHealth(bool force) {
 		probed[i] = endpointReachable(configsSnapshot[i], &errors[i]);
 	}
 
+	bool primaryBecameReachable = false;
 	std::vector<std::string> becameReachable;
 	std::vector<std::string> becameUnreachable;
 	{
@@ -2012,6 +2239,7 @@ void ofApp::refreshEndpointHealth(bool force) {
 			if (reachable != oldValue) {
 				if (reachable) {
 					becameReachable.push_back(configsSnapshot[i].id + " (" + configsSnapshot[i].ip + ":" + ofToString(configsSnapshot[i].queryPort) + ")");
+					if (i == 0) primaryBecameReachable = true;
 				} else {
 					becameUnreachable.push_back(configsSnapshot[i].id + " (" + configsSnapshot[i].ip + ":" + ofToString(configsSnapshot[i].queryPort) + ") reason=" + errors[i]);
 				}
@@ -2026,6 +2254,9 @@ void ofApp::refreshEndpointHealth(bool force) {
 		ofLogWarning("ofApp") << "Endpoint unreachable: " << msg;
 	}
 
+	if (primaryBecameReachable && !reconnectInProgress.load()) {
+		hasPendingReconnect.store(true);
+	}
 }
 
 
@@ -2214,6 +2445,263 @@ void ofApp::updateParameterDisplay() {
 	}
 
 	surface->updateParameterDisplay(labels, values);
+}
+
+// ── Live bindings update (no MadMapper re-query) ─────────────────────────────
+
+void ofApp::applyBindingsUpdate() {
+	if (!surface || !activeProfile || !initialised) return;
+	if (currentPage == madOscQuery.pages.end()) return;
+
+	// Re-read device profile from disk and patch in-memory bindings
+	auto profilesOpt = loadDeviceProfiles("device_profiles.json");
+	if (!profilesOpt) return;
+
+	auto* dev = static_cast<ofxMidiDevice*>(surface.get());
+	for (const auto& p : *profilesOpt) {
+		if (p.name == activeProfile->name) {
+			// Patch bindings and components without recreating the surface
+			dev->bindings = p.bindings;
+			for (const auto& [lbl, compDef] : p.components) {
+				auto it = dev->midiComponents.find(lbl);
+				if (it != dev->midiComponents.end()) {
+					// Update MIDI matching fields in case type/channel/address changed
+					it->second.channel            = compDef.channel;
+					it->second.control            = compDef.address;
+					it->second.pitch              = compDef.address;
+					it->second.controlMessageType = compDef.type;
+				} else {
+					// New component: wire it into the device now
+					if (compDef.interfaceType == IT_FADER)
+						dev->addFader(lbl, compDef.channel, compDef.address, compDef.type);
+					else if (compDef.interfaceType == IT_KNOB)
+						dev->addKnob(lbl, compDef.channel, compDef.address, compDef.type);
+					else if (compDef.interfaceType == IT_BUTTON_LP)
+						dev->addButtonLP(lbl, compDef.channel, compDef.address, compDef.type);
+					else
+						dev->addButton(lbl, compDef.channel, compDef.address, compDef.type);
+					dev->midiComponents[lbl].value.setName(lbl);
+					dev->parameterGroup.add(dev->midiComponents[lbl].value);
+					ofLogNotice("ofApp") << "applyBindingsUpdate: added new component " << lbl;
+				}
+			}
+			activeProfile = p;
+			break;
+		}
+	}
+
+	// Re-run setupUI with current MadMapper JSON so listeners reflect new bindings
+	removeListeners();
+	setupUI(madOscQuery.madMapperJson);
+	ofLogNotice("ofApp") << "Bindings updated and UI re-wired";
+}
+
+// ── Mappings ──────────────────────────────────────────────────────────────────
+
+void ofApp::loadMappings() {
+	const std::string path = ofToDataPath("mappings.json", true);
+	try {
+		mappingsJson = ofLoadJson(path);
+	} catch (...) {
+		mappingsJson = ofJson::object();
+	}
+	if (!mappingsJson.is_object()) mappingsJson = ofJson::object();
+
+	// Parse fixed mappings
+	fixedMappings.clear();
+	if (mappingsJson.contains("fixed") && mappingsJson["fixed"].is_object()) {
+		for (auto& [key, val] : mappingsJson["fixed"].items()) {
+			if (!val.is_object()) continue;
+			FixedMapping fm;
+			if (val.contains("path") && val["path"].is_string())
+				fm.path = val["path"].get<std::string>();
+			if (val.contains("serverId") && val["serverId"].is_number())
+				fm.serverId = val["serverId"].get<size_t>();
+			if (val.contains("mode") && val["mode"].is_string())
+				fm.mode = val["mode"].get<std::string>();
+			fixedMappings[key] = fm;
+		}
+	}
+
+	// Update tdHoverEncoder from mappings if present
+	auto it = fixedMappings.find("tdHoverEncoder");
+	if (it != fixedMappings.end()) {
+		tdHoverEncoderOscPath = it->second.path;
+		tdServerId = it->second.serverId;
+	}
+
+	// Parse page goto entries
+	pageGotoEntries.clear();
+	if (mappingsJson.contains("nav") && mappingsJson["nav"].is_object()) {
+		const auto& nav = mappingsJson["nav"];
+		if (nav.contains("pageGoto") && nav["pageGoto"].is_array()) {
+			const auto& arr = nav["pageGoto"];
+			for (int idx = 0, n = static_cast<int>(arr.size()); idx < n; ++idx) {
+				PageGotoEntry e;
+				e.index    = idx;
+				e.role     = "nav.pageGoto." + std::to_string(idx);
+				e.pageName = arr[idx].is_string() ? arr[idx].get<std::string>() : "";
+				pageGotoEntries.push_back(e);
+			}
+		}
+	}
+}
+
+void ofApp::saveMappings() {
+	const std::string path = ofToDataPath("mappings.json", true);
+	try {
+		ofSavePrettyJson(path, mappingsJson);
+	} catch (const std::exception& e) {
+		ofLogError("ofApp") << "saveMappings failed: " << e.what();
+	}
+}
+
+ofJson ofApp::getMappingsJson() const {
+	ofJson result = mappingsJson;
+
+	// Build pages list: prefer live madOscQuery.pages (populated once MM connects),
+	// fall back to custom_page.json so the dropdown works before MM is connected.
+	result["pages"] = ofJson::array();
+	if (!madOscQuery.pages.empty()) {
+		for (auto& page : madOscQuery.pages)
+			result["pages"].push_back(const_cast<MadParameterPage&>(page).getName());
+	} else {
+		try {
+			ofJson cpj = ofLoadJson(resolveCustomPagesPath());
+			if (cpj.contains("pages") && cpj["pages"].is_array()) {
+				for (auto& p : cpj["pages"]) {
+					if (p.contains("name") && p["name"].is_string())
+						result["pages"].push_back(p["name"].get<std::string>());
+				}
+			}
+		} catch (...) {}
+	}
+	return result;
+}
+
+// ── MIDI Learn ────────────────────────────────────────────────────────────────
+
+void ofApp::startLearnMode() {
+	if (!surface) return;
+	std::lock_guard<std::mutex> lock(learnMutex);
+	if (learnModeActive) return;
+
+	learnedMsg = LearnedMessage{};
+	learnMessages.clear();
+	learnModeActive = true;
+
+	auto* dev = static_cast<ofxMidiDevice*>(surface.get());
+	learnListener.callback = [this](ofxMidiMessage& msg) { onLearnMessage(msg); };
+	dev->midiIn.addListener(&learnListener);
+	ofLogNotice("ofApp") << "MIDI learn mode started";
+}
+
+void ofApp::stopLearnMode() {
+	if (!surface) return;
+	std::lock_guard<std::mutex> lock(learnMutex);
+	if (!learnModeActive) return;
+
+	auto* dev = static_cast<ofxMidiDevice*>(surface.get());
+	dev->midiIn.removeListener(&learnListener);
+	learnListener.callback = nullptr;
+	learnModeActive = false;
+	ofLogNotice("ofApp") << "MIDI learn mode stopped";
+}
+
+static std::string midiTypeString(int status) {
+	if (status == MIDI_CONTROL_CHANGE)                   return "cc";
+	if (status == MIDI_NOTE_ON || status == MIDI_NOTE_OFF) return "note";
+	if (status == MIDI_PITCH_BEND)                       return "pitch_bend";
+	return "unknown";
+}
+
+static void addLearnMessage(std::vector<ofApp::LearnedMessage>& log, ofApp::LearnedMessage m) {
+	// Deduplicate: if same type+channel+control/pitch already in log, update its value
+	for (auto& existing : log) {
+		if (existing.status == m.status && existing.channel == m.channel
+		    && existing.control == m.control && existing.pitch == m.pitch) {
+			existing.value = m.value;
+			return;
+		}
+	}
+	log.push_back(m);
+	if (log.size() > 20) log.erase(log.begin());
+}
+
+void ofApp::onLearnMessage(ofxMidiMessage& msg) {
+	std::lock_guard<std::mutex> lock(learnMutex);
+	if (!learnModeActive) return;
+
+	LearnedMessage m;
+	m.ready   = true;
+	m.channel = msg.channel;
+	m.status  = msg.status;
+	m.control = msg.control;
+	m.pitch   = msg.pitch;
+	m.value   = msg.value;
+	m.type    = midiTypeString(msg.status);
+
+	addLearnMessage(learnMessages, m);
+	learnedMsg = m;
+
+	ofLogNotice("ofApp") << "MIDI learn: ch " << msg.channel
+	                     << " " << m.type << " ctrl " << msg.control
+	                     << " val " << msg.value;
+}
+
+void ofApp::injectLearnMessage(int channel, int status, int control, int pitch, int value) {
+	std::lock_guard<std::mutex> lock(learnMutex);
+	if (!learnModeActive) return;
+
+	LearnedMessage m;
+	m.ready   = true;
+	m.channel = channel;
+	m.status  = status;
+	m.control = control;
+	m.pitch   = pitch;
+	m.value   = value;
+	m.type    = midiTypeString(status);
+
+	addLearnMessage(learnMessages, m);
+	learnedMsg = m;
+}
+
+// ── Profile fetch/save for mapping UI ────────────────────────────────────────
+
+ofJson ofApp::getProfileJson() {
+	if (!activeProfile) return ofJson::object();
+	// Re-read the file so the UI always sees the current on-disk state
+	try {
+		ofJson profiles = ofLoadJson(ofToDataPath("device_profiles.json", true));
+		if (!profiles.is_array()) return ofJson::object();
+		for (auto& profile : profiles) {
+			if (profile.value("name", std::string()) == activeProfile->name)
+				return profile;
+		}
+	} catch (const std::exception& e) {
+		ofLogError("ofApp") << "getProfileJson: " << e.what();
+	}
+	return ofJson::object();
+}
+
+void ofApp::saveProfileJson(const ofJson& updated) {
+	try {
+		const std::string path = ofToDataPath("device_profiles.json", true);
+		ofJson profiles = ofLoadJson(path);
+		if (!profiles.is_array()) return;
+		std::string targetName = updated.value("name", std::string());
+		for (auto& profile : profiles) {
+			if (profile.value("name", std::string()) == targetName) {
+				profile = updated;
+				ofSavePrettyJson(path, profiles);
+				ofLogNotice("ofApp") << "Saved profile: " << targetName;
+				return;
+			}
+		}
+		ofLogWarning("ofApp") << "saveProfileJson: profile not found: " << targetName;
+	} catch (const std::exception& e) {
+		ofLogError("ofApp") << "saveProfileJson: " << e.what();
+	}
 }
 
 

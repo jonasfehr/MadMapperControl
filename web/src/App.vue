@@ -42,6 +42,23 @@
           <span class="tb-label">Endpoints</span>
         </button>
 
+        <!-- Mapping -->
+        <button
+          class="toolbar-btn"
+          :class="{ active: activeView === 'mapping' }"
+          @click="activeView = 'mapping'"
+          title="Controller Mapping"
+        >
+          <svg class="tb-icon" viewBox="0 0 20 20" fill="none">
+            <rect x="2"  y="9"  width="5" height="2" rx="1" fill="currentColor" opacity="0.8"/>
+            <rect x="13" y="9"  width="5" height="2" rx="1" fill="currentColor" opacity="0.8"/>
+            <circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.3" opacity="0.9"/>
+            <line x1="7" y1="4" x2="7" y2="16" stroke="currentColor" stroke-width="1" opacity="0.4" stroke-dasharray="2 2"/>
+            <line x1="13" y1="4" x2="13" y2="16" stroke="currentColor" stroke-width="1" opacity="0.4" stroke-dasharray="2 2"/>
+          </svg>
+          <span class="tb-label">Mapping</span>
+        </button>
+
         <!-- Emulator -->
         <button
           class="toolbar-btn"
@@ -103,6 +120,9 @@
             @save-config="saveConfig"
           />
         </section>
+        <section v-show="activeView === 'mapping'" class="main-panel">
+          <MappingPanel :config="config" />
+        </section>
         <section v-show="activeView === 'emulator'" class="main-panel">
           <MockDevicePanel
             :pages="pages"
@@ -122,13 +142,15 @@ import { apiClient } from './api'
 import PageManager from './components/PageManager.vue'
 import EndpointConfig from './components/EndpointConfig.vue'
 import MockDevicePanel from './components/mock/MockDevicePanel.vue'
+import MappingPanel from './components/MappingPanel.vue'
 
 export default {
   name: 'App',
   components: {
     PageManager,
     EndpointConfig,
-    MockDevicePanel
+    MockDevicePanel,
+    MappingPanel
   },
   setup() {
     const pages = reactive({ pages: [], subpages: [] })

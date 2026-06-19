@@ -145,16 +145,96 @@ class ofApp : public ofBaseApp {
 	void onTdHoverEncoderChange(float& v);
 	float    tdHoverEncoderPrevValue = 0.f;
 	uint64_t tdHoverEncoderLastMs   = 0;
-	// OSC path that TD is listening on for hover encoder deltas.
-	// Override in settings.json under "tdHoverEncoderPath".
 	std::string tdHoverEncoderOscPath = "/ParHoverMIDI_VSN1/knob_delta";
-	// Acceleration: velocity (ticks/s) is divided by this to get the multiplier.
-	// Lower = more sensitive. At kHoverAccelBase ticks/s the multiplier is 1×.
 	static constexpr float kHoverAccelBase = 8.f;
-	// Cap on how large the multiplier can grow.
 	static constexpr float kHoverAccelMax  = 12.f;
-	// Index into oscServerConfigs for the TD server. SIZE_MAX = not found / disabled.
 	size_t tdServerId = SIZE_MAX;
+
+	// ── Mappings (loaded from bin/data/mappings.json) ────────────────────────
+	struct FixedMapping {
+		std::string path;
+		size_t serverId = 0;
+		std::string mode = "absolute"; // "absolute" | "delta"
+	};
+	struct PageGotoEntry {
+		int index = 0;
+		std::string role;     // e.g. "nav.pageGoto.0"
+		std::string pageName; // target page name
+	};
+
+	// Per-shortcut listener so OF's typed addListener can capture the page name.
+	// Stores the role so removeListeners can look up the component for cleanup.
+	struct PageGotoListener {
+		std::string role;
+		std::string pageName;
+		ofApp*      app = nullptr;
+		void onPress(float& v) { if (v > 0.f && app) app->requestActivatePageByName(pageName); }
+	};
+
+	// Delta-mode fixed binding: polled in update(), sends raw OSC delta
+	struct ActiveFixedBinding {
+		MidiComponent* component;
+		FixedMapping   mapping;
+		float          prevValue = 0.f;
+		uint64_t       lastMs    = 0;
+	};
+
+	// Absolute-mode fixed binding: linked via MadParameter (acceleration built-in)
+	struct LinkedFixedParam {
+		MidiComponent* component;
+		MadParameter*  param;
+	};
+
+	// ── Delta-mode encoder acceleration ────────────────────────────────────────
+	// Acceleration for fixed delta-mode encoders (absolute-mode accel is in MadParameter).
+	static constexpr float kFixedAccelBase = 6.f;
+	static constexpr float kFixedAccelMax  = 8.f;
+
+	ofJson mappingsJson;
+	std::unordered_map<std::string, FixedMapping> fixedMappings;
+	std::vector<ActiveFixedBinding> activeFixedBindings; // delta mode — polled in update()
+	std::vector<LinkedFixedParam>   linkedFixedParams;   // absolute mode — listener-driven
+	std::vector<PageGotoEntry>    pageGotoEntries;
+	std::list<PageGotoListener>   pageGotoListeners; // std::list keeps pointers stable
+
+	void loadMappings();
+	void saveMappings();
+	ofJson getMappingsJson() const;
+	ofJson getProfileJson();
+	void   saveProfileJson(const ofJson& updated);
+
+	// ── MIDI Learn ────────────────────────────────────────────────────────────
+	struct LearnedMessage {
+		bool ready = false;
+		int channel  = 0;
+		int control  = 0;
+		int status   = 0; // MIDI_CONTROL_CHANGE, MIDI_NOTE_ON, etc.
+		int pitch    = 0;
+		int value    = 0;
+		std::string type; // "cc" | "note" | "pitch_bend"
+	};
+
+	struct MidiLearnListener : public ofxMidiListener {
+		std::function<void(ofxMidiMessage&)> callback;
+		void newMidiMessage(ofxMidiMessage& msg) override {
+			if (callback) callback(msg);
+		}
+	};
+
+	bool learnModeActive = false;
+	LearnedMessage learnedMsg;
+	std::vector<LearnedMessage> learnMessages; // rolling log while learn is active
+	MidiLearnListener learnListener;
+	std::mutex learnMutex;
+
+	void startLearnMode();
+	void stopLearnMode();
+	void onLearnMessage(ofxMidiMessage& msg);
+	void injectLearnMessage(int channel, int status, int control, int pitch, int value);
+
+	// Re-applies bindings from disk without full MadMapper re-query
+	void applyBindingsUpdate();
+	std::atomic_bool hasPendingBindingsUpdate{false};
 
   private:
 	ofxMadOscQuery* getOscServer(size_t serverId);
@@ -194,6 +274,8 @@ class ofApp : public ofBaseApp {
 	bool hasPendingConfigUpdate = false;
 	uint64_t lastEndpointHealthCheckMs = 0;
 	std::atomic_bool healthCheckInProgress{false};
+	std::atomic_bool hasPendingReconnect{false};
+	std::atomic_bool reconnectInProgress{false};
 
 	void tryConnectMidiDevice();
 	void disconnectMidiDevice();

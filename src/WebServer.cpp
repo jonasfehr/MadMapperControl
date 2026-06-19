@@ -25,7 +25,7 @@ class APIRequestHandler : public HTTPRequestHandler {
 	void handleRequest(HTTPServerRequest& request, HTTPServerResponse& response) override {
 		response.setContentType("application/json");
 		response.add("Access-Control-Allow-Origin", "*");
-		response.add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+		response.add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
 		response.add("Access-Control-Allow-Headers", "Content-Type");
 
 		std::string path = request.getURI();
@@ -148,6 +148,113 @@ class APIRequestHandler : public HTTPRequestHandler {
 				response.setStatus(HTTPServerResponse::HTTP_BAD_REQUEST);
 				std::stringstream ss;
 				ss << R"({"error":")" << e.what() << R"("})";
+				response.send() << ss.str();
+			}
+		} else if (path == "/api/mappings" && method == "GET") {
+			try {
+				if (webServer->mappingsFetcher) {
+					ofJson j = webServer->mappingsFetcher();
+					std::string s = j.dump();
+					response.setStatus(HTTPServerResponse::HTTP_OK);
+					response.setContentLength(s.size());
+					response.send() << s;
+				} else {
+					response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
+					response.send() << R"({"error":"mappingsFetcher not set"})";
+				}
+			} catch (const std::exception& e) {
+				response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
+				std::stringstream ss; ss << R"({"error":")" << e.what() << R"("})";
+				response.send() << ss.str();
+			}
+		} else if (path == "/api/mappings" && method == "POST") {
+			std::stringstream buf; buf << request.stream().rdbuf();
+			try {
+				ofJson body = ofJson::parse(buf.str());
+				if (webServer->mappingsSaver) webServer->mappingsSaver(body);
+				response.setStatus(HTTPServerResponse::HTTP_OK);
+				response.send() << R"({"status":"saved"})";
+			} catch (const std::exception& e) {
+				response.setStatus(HTTPServerResponse::HTTP_BAD_REQUEST);
+				std::stringstream ss; ss << R"({"error":")" << e.what() << R"("})";
+				response.send() << ss.str();
+			}
+		} else if (path == "/api/profile" && method == "GET") {
+			try {
+				if (webServer->profileFetcher) {
+					ofJson j = webServer->profileFetcher();
+					std::string s = j.dump();
+					response.setStatus(HTTPServerResponse::HTTP_OK);
+					response.setContentLength(s.size());
+					response.send() << s;
+				} else {
+					response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
+					response.send() << R"({"error":"profileFetcher not set"})";
+				}
+			} catch (const std::exception& e) {
+				response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
+				std::stringstream ss; ss << R"({"error":")" << e.what() << R"("})";
+				response.send() << ss.str();
+			}
+		} else if (path == "/api/profile" && method == "POST") {
+			std::stringstream buf; buf << request.stream().rdbuf();
+			try {
+				ofJson body = ofJson::parse(buf.str());
+				if (webServer->profileSaver) webServer->profileSaver(body);
+				response.setStatus(HTTPServerResponse::HTTP_OK);
+				response.send() << R"({"status":"saved"})";
+			} catch (const std::exception& e) {
+				response.setStatus(HTTPServerResponse::HTTP_BAD_REQUEST);
+				std::stringstream ss; ss << R"({"error":")" << e.what() << R"("})";
+				response.send() << ss.str();
+			}
+		} else if (path == "/api/learn/start" && method == "POST") {
+			if (webServer->learnStarter) webServer->learnStarter();
+			response.setStatus(HTTPServerResponse::HTTP_OK);
+			response.send() << R"({"status":"learning"})";
+		} else if (path == "/api/learn/stop" && method == "POST") {
+			if (webServer->learnStopper) webServer->learnStopper();
+			response.setStatus(HTTPServerResponse::HTTP_OK);
+			response.send() << R"({"status":"stopped"})";
+		} else if (path == "/api/learn/status" && method == "GET") {
+			try {
+				if (webServer->learnStatusFetcher) {
+					ofJson j = webServer->learnStatusFetcher();
+					std::string s = j.dump();
+					response.setStatus(HTTPServerResponse::HTTP_OK);
+					response.setContentLength(s.size());
+					response.send() << s;
+				} else {
+					response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
+					response.send() << R"({"error":"learnStatusFetcher not set"})";
+				}
+			} catch (const std::exception& e) {
+				response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
+				std::stringstream ss; ss << R"({"error":")" << e.what() << R"("})";
+				response.send() << ss.str();
+			}
+		} else if (path == "/api/learn/inject" && method == "POST") {
+			std::stringstream buf; buf << request.stream().rdbuf();
+			try {
+				ofJson body = ofJson::parse(buf.str());
+				if (webServer->learnInjector) webServer->learnInjector(body);
+				response.setStatus(HTTPServerResponse::HTTP_OK);
+				response.send() << R"({"status":"ok"})";
+			} catch (const std::exception& e) {
+				response.setStatus(HTTPServerResponse::HTTP_BAD_REQUEST);
+				std::stringstream ss; ss << R"({"error":")" << e.what() << R"("})";
+				response.send() << ss.str();
+			}
+		} else if (path == "/api/learn/assign" && method == "POST") {
+			std::stringstream buf; buf << request.stream().rdbuf();
+			try {
+				ofJson body = ofJson::parse(buf.str());
+				if (webServer->learnAssigner) webServer->learnAssigner(body);
+				response.setStatus(HTTPServerResponse::HTTP_OK);
+				response.send() << R"({"status":"assigned"})";
+			} catch (const std::exception& e) {
+				response.setStatus(HTTPServerResponse::HTTP_BAD_REQUEST);
+				std::stringstream ss; ss << R"({"error":")" << e.what() << R"("})";
 				response.send() << ss.str();
 			}
 		} else {
