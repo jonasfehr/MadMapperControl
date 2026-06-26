@@ -21,6 +21,7 @@ class WebServer {
 	using MappingsFetcher = std::function<ofJson()>;
 	using MappingsSaver = std::function<void(const ofJson&)>;
 	using ProfileFetcher = std::function<ofJson()>;
+	using ProfilesFetcher = std::function<ofJson()>;   // all profiles
 	using ProfileSaver = std::function<void(const ofJson&)>;
 	using LearnStarter = std::function<void()>;
 	using LearnStopper = std::function<void()>;
@@ -44,6 +45,7 @@ class WebServer {
 	void setMappingsFetcher(MappingsFetcher f)  { mappingsFetcher = f; }
 	void setMappingsSaver(MappingsSaver f)      { mappingsSaver = f; }
 	void setProfileFetcher(ProfileFetcher f)    { profileFetcher = f; }
+	void setProfilesFetcher(ProfilesFetcher f)  { profilesFetcher = f; }
 	void setProfileSaver(ProfileSaver f)        { profileSaver = f; }
 	void setLearnStarter(LearnStarter f)        { learnStarter = f; }
 	void setLearnStopper(LearnStopper f)        { learnStopper = f; }
@@ -62,6 +64,7 @@ class WebServer {
 	MappingsFetcher mappingsFetcher;
 	MappingsSaver mappingsSaver;
 	ProfileFetcher profileFetcher;
+	ProfilesFetcher profilesFetcher;
 	ProfileSaver profileSaver;
 	LearnStarter learnStarter;
 	LearnStopper learnStopper;

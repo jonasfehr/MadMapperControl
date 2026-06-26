@@ -179,6 +179,23 @@ class APIRequestHandler : public HTTPRequestHandler {
 				std::stringstream ss; ss << R"({"error":")" << e.what() << R"("})";
 				response.send() << ss.str();
 			}
+		} else if (path == "/api/profiles" && method == "GET") {
+			try {
+				if (webServer->profilesFetcher) {
+					ofJson j = webServer->profilesFetcher();
+					std::string s = j.dump();
+					response.setStatus(HTTPServerResponse::HTTP_OK);
+					response.setContentLength(s.size());
+					response.send() << s;
+				} else {
+					response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
+					response.send() << R"({"error":"profilesFetcher not set"})";
+				}
+			} catch (const std::exception& e) {
+				response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
+				std::stringstream ss; ss << R"({"error":")" << e.what() << R"("})";
+				response.send() << ss.str();
+			}
 		} else if (path == "/api/profile" && method == "GET") {
 			try {
 				if (webServer->profileFetcher) {

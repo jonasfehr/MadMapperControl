@@ -59,28 +59,6 @@
           <span class="tb-label">Mapping</span>
         </button>
 
-        <!-- Emulator -->
-        <button
-          class="toolbar-btn"
-          :class="{ active: activeView === 'emulator' }"
-          @click="activeView = 'emulator'"
-          title="Device Emulator"
-        >
-          <svg class="tb-icon" viewBox="0 0 20 20" fill="none">
-            <!-- fader 1: track + handle -->
-            <line x1="5"  y1="3" x2="5"  y2="17" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" opacity="0.45"/>
-            <rect x="2.5" y="6.5" width="5" height="3.5" rx="1" fill="currentColor" opacity="0.9"/>
-            <!-- fader 2 -->
-            <line x1="10" y1="3" x2="10" y2="17" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" opacity="0.45"/>
-            <rect x="7.5" y="11" width="5" height="3.5" rx="1" fill="currentColor" opacity="0.65"/>
-            <!-- encoder knob -->
-            <circle cx="16" cy="7.5" r="3.2" stroke="currentColor" stroke-width="1.2" opacity="0.8"/>
-            <line x1="16" y1="7.5" x2="16" y2="4.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.9"/>
-            <!-- small display strip -->
-            <rect x="13.5" y="12" width="5" height="3" rx="0.8" stroke="currentColor" stroke-width="0.9" opacity="0.45"/>
-          </svg>
-          <span class="tb-label">Emulator</span>
-        </button>
       </div>
 
       <!-- Right side: server status + live page -->
@@ -121,12 +99,9 @@
           />
         </section>
         <section v-show="activeView === 'mapping'" class="main-panel">
-          <MappingPanel :config="config" />
-        </section>
-        <section v-show="activeView === 'emulator'" class="main-panel">
-          <MockDevicePanel
-            :pages="pages"
+          <MappingPanel
             :config="config"
+            :pages="pages"
             :all-parameters="allParameterEntries"
           />
         </section>

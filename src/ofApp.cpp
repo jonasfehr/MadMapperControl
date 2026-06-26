@@ -807,7 +807,7 @@ void ofApp::selectMedia(string& name) {
 	if (currentPage == madOscQuery.pages.end()) return;
 	if (surface) {
 		auto* dev = static_cast<ofxMidiDevice*>(surface.get());
-		if (isComponentMappedToRole(dev, name, ".surfaceSubpage")) return;
+		if (isComponentMappedToRole(dev, name, ".layerSubpage")) return;
 		auto mit = dev->midiComponents.find(name);
 		if (mit != dev->midiComponents.end() && mit->second.value.get() < 0.5f) return;
 	}
@@ -1311,7 +1311,7 @@ void ofApp::setupUI(ofJson madmapperJson) {
 
 	selectGroup.doCheckbox = true;
 	for (int i = 1; i < 17; i++) {
-		std::string lbl = labelForRoleOrPrefix(dev, "param." + ofToString(i) + ".surfaceSubpage", "sel_", i);
+		std::string lbl = labelForRoleOrPrefix(dev, "param." + ofToString(i) + ".layerSubpage", "sel_", i);
 		if (dev->midiComponents.count(lbl)) selectGroup.add(dev->midiComponents[lbl]);
 	}
 	ofAddListener(selectGroup.lastChangedE, this, &ofApp::selectSurface);
@@ -1480,13 +1480,13 @@ void ofApp::updateSubpageMediaButtonFeedback() {
 
 	for (int i = 1; i < 17; ++i) {
 		auto* parameter = visibleParameterAt(sourcePage, i);
-		std::string surfaceSubpage = extractSurfaceSubpageName(parameter);
+		std::string layerSubpage = extractSurfaceSubpageName(parameter);
 		std::string mediaSubpage = (parameter && parameter->isSelectable()) ? parameter->getConnectedMediaName() : std::string();
 
-		std::string surfaceLabel = labelForRoleOrPrefix(dev, "param." + ofToString(i) + ".surfaceSubpage", "sel_", i);
+		std::string surfaceLabel = labelForRoleOrPrefix(dev, "param." + ofToString(i) + ".layerSubpage", "sel_", i);
 		if (!surfaceLabel.empty()) {
 			auto& c = dev->midiComponents[surfaceLabel];
-			float v = (!surfaceSubpage.empty() && activeName == surfaceSubpage) ? 1.f : 0.f;
+			float v = (!layerSubpage.empty() && activeName == layerSubpage) ? 1.f : 0.f;
 			c.value.disableEvents();
 			c.value = v;
 			c.update();
@@ -1742,6 +1742,7 @@ void ofApp::setupWebServer() {
 		loadMappings();
 		hasPendingBindingsUpdate.store(true);
 	});
+	webServer->setProfilesFetcher([this]() { return getAllProfilesJson(); });
 	webServer->setProfileFetcher([this]() { return getProfileJson(); });
 	webServer->setProfileSaver([this](const ofJson& body) {
 		saveProfileJson(body);
@@ -1823,11 +1824,22 @@ void ofApp::setupWebServer() {
 				profile["components"].push_back(comp);
 			}
 
-			// Set binding role → label
+			// Set role on the component (replaces old role→label bindings map)
 			if (body.contains("role") && body["role"].is_string()) {
-				if (!profile.contains("bindings") || !profile["bindings"].is_object())
-					profile["bindings"] = ofJson::object();
-				profile["bindings"][body["role"].get<std::string>()] = label;
+				const std::string role = body["role"].get<std::string>();
+				if (profile.contains("components") && profile["components"].is_array()) {
+					// Clear this role from any other component that currently holds it
+					for (auto& comp : profile["components"])
+						if (comp.value("role", "") == role) comp.erase("role");
+					// Set role on the matching component
+					for (auto& comp : profile["components"]) {
+						if (comp.value("label", "") == label) {
+							if (role.empty()) comp.erase("role");
+							else comp["role"] = role;
+							break;
+						}
+					}
+				}
 			}
 
 			ofSavePrettyJson(path, profiles);
@@ -2584,10 +2596,10 @@ ofJson ofApp::getMappingsJson() const {
 void ofApp::startLearnMode() {
 	if (!surface) return;
 	std::lock_guard<std::mutex> lock(learnMutex);
-	if (learnModeActive) return;
-
 	learnedMsg = LearnedMessage{};
 	learnMessages.clear();
+	if (learnModeActive) return;
+
 	learnModeActive = true;
 
 	auto* dev = static_cast<ofxMidiDevice*>(surface.get());
@@ -2667,6 +2679,21 @@ void ofApp::injectLearnMessage(int channel, int status, int control, int pitch, 
 }
 
 // ── Profile fetch/save for mapping UI ────────────────────────────────────────
+
+ofJson ofApp::getAllProfilesJson() {
+	try {
+		ofJson profiles = ofLoadJson(ofToDataPath("device_profiles.json", true));
+		if (!profiles.is_array()) return ofJson::array();
+		// Annotate each profile with whether it's currently active
+		const std::string activeName = activeProfile ? activeProfile->name : "";
+		for (auto& p : profiles)
+			p["active"] = (p.value("name", std::string()) == activeName);
+		return profiles;
+	} catch (const std::exception& e) {
+		ofLogError("ofApp") << "getAllProfilesJson: " << e.what();
+		return ofJson::array();
+	}
+}
 
 ofJson ofApp::getProfileJson() {
 	if (!activeProfile) return ofJson::object();

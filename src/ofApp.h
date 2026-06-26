@@ -200,6 +200,7 @@ class ofApp : public ofBaseApp {
 	void loadMappings();
 	void saveMappings();
 	ofJson getMappingsJson() const;
+	ofJson getAllProfilesJson();
 	ofJson getProfileJson();
 	void   saveProfileJson(const ofJson& updated);
 

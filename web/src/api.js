@@ -50,6 +50,10 @@ export const apiClient = {
   },
 
   // Active device profile (components + bindings)
+  async fetchProfiles() {
+    const response = await axios.get(`${API_BASE}/profiles`)
+    return response.data
+  },
   async fetchProfile() {
     const response = await axios.get(`${API_BASE}/profile`)
     return response.data
