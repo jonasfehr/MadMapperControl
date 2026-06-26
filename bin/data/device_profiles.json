@@ -528,10 +528,10 @@
   {
     "active": true,
     "bindings": {
-      "fixed.engineSpeed": "dial_left_top",
-      "fixed.globalBPM": "dial_left_smal",
-      "fixed.masterVideo": "dial_left_smal",
-      "fixed.tdHoverEncoder": "master_encoder",
+      "fixed.engineSpeed": "volume",
+      "fixed.globalBPM": "tempo",
+      "fixed.masterVideo": "tempo",
+      "fixed.tdHoverEncoder": "jog",
       "nav.bankNext": "arrow_octave_up",
       "nav.bankPrev": "arrow_octave_down",
       "nav.pageGoto.0": "button_page",
@@ -823,7 +823,7 @@
         "address": 79,
         "channel": 1,
         "interfaceType": "button",
-        "label": "dial_left_top",
+        "label": "volume",
         "role": "fixed.engineSpeed",
         "type": "encoder_relative"
       },
@@ -831,7 +831,7 @@
         "address": 70,
         "channel": 1,
         "interfaceType": "knob",
-        "label": "master_encoder",
+        "label": "jog",
         "role": "fixed.tdHoverEncoder",
         "type": "encoder_relative"
       }
