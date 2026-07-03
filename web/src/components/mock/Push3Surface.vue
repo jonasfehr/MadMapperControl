@@ -133,26 +133,35 @@ defineExpose({
 })
 
 // ── Layout constants ──────────────────────────────────────────────
-const ENC_Y=34; const ENC_R=11; const ENC_SPACING=71; const ENC_START_X=183
-const DISP_BTN_Y=60; const DISP_BTN_H=16; const DISP_BTN_W=67; const DISP_START_X=151
-const DISPLAY_X=151; const DISPLAY_Y=82; const DISPLAY_W=568; const DISPLAY_H=62
+const ENC_Y=34; const ENC_R=11; const ENC_SPACING=71; const ENC_START_X=152
+const DISP_BTN_Y=60; const DISP_BTN_H=16; const DISP_BTN_W=67; const DISP_START_X=120
+const DISPLAY_X=120; const DISPLAY_Y=82; const DISPLAY_W=568; const DISPLAY_H=62
 const LOWER_BTN_Y=150
 const PAD_W=67; const PAD_H=34; const PAD_GAP=4
 const PADS_X=DISPLAY_X; const PADS_Y=176; const PAD_GRID_H=8*(PAD_H+PAD_GAP)-PAD_GAP
-const TS_X=76; const TS_Y=PADS_Y; const TS_W=RC_W; const TS_H=PAD_GRID_H  // aligned with undo/save, same width
 const SCENE_BTN_H=PAD_H
 const LP_BTN_H=18; const SMALL_BTN=14; const SMALL_PITCH=16
-// Right column: add, swap, master_trk, scene_1..8 all share same x and width
+// Right column (add/swap/scene) and left column (undo/save/touch_strip) mirror each other
 const RC_X=DISPLAY_X+DISPLAY_W+3; const RC_W=20
+const TS_X=DISPLAY_X-RC_W-3; const TS_Y=PADS_Y; const TS_W=RC_W; const TS_H=PAD_GRID_H
 // Knob centers — volume & jog vertically centered with display (y=82+31=113)
 const VOL_X=44;  const VOL_Y=DISPLAY_Y+Math.round(DISPLAY_H/2);  const VOL_R=24
-const JOG_X=825; const JOG_Y=DISPLAY_Y+Math.round(DISPLAY_H/2); const JOG_R=35
+const JOG_X=790; const JOG_Y=DISPLAY_Y+Math.round(DISPLAY_H/2); const JOG_R=35
 const TEMPO_X=44; const TEMPO_Y=PADS_Y+30; const TEMPO_R=18
+// Right-panel bottom layout
+const DPAD_SQ=52; const DPAD1_Y=JOG_Y+JOG_R+12  // diagonal D-pad square: size and top y
+const RP_BTN2_W=27; const RP_BTN2_H=14; const RP_BTN2_GAP=4
+const RP_BTN_LX=JOG_X-29; const RP_BTN_RX=RP_BTN_LX+RP_BTN2_W+RP_BTN2_GAP
+const RP_G1_Y=DPAD1_Y+DPAD_SQ+10                         // below D-pad square
+const RP_G2_Y=RP_G1_Y+2*(RP_BTN2_H+RP_BTN2_GAP)+8+RP_BTN2_H+10          // below 4-btn row + repeat/accent
+const RP_NAV2_Y=RP_G2_Y+2*(RP_BTN2_H+RP_BTN2_GAP)+12    // octave/page diagonal square
+const RP_BOT_Y=RP_NAV2_Y+DPAD_SQ+12                      // shift|select row
 
-const LP_SMALL_TOP_NAMES = ['sets','setup','learn','user']
-const LP_SMALL_MID_NAMES = ['lock','stop_clip','mute','solo']
-const RP_SMALL_TOP_NAMES = ['device','mix','clip','session_view']
-const LP_BTNS_BOT_NAMES  = ['tap_tempo','metronome','quantize','fixed_len','automate','new','capture','record','play']
+const LP_SMALL_TOP_NAMES  = ['sets','setup','learn','user']
+const LP_SMALL_MID_NAMES  = ['lock','stop_clip','mute','solo']
+const RP_SMALL_TOP_NAMES  = ['device','mix','clip','session_view']
+const LP_BTNS_BOT_NAMES   = ['tap_tempo','metronome','quantize','fixed_len','automate','new','capture','record','play']
+const LP_BTNS_BOT_LABELS  = ['tap','metro','quant','fix len','auto','new','capt','●','▶']
 
 function padX(i) { return PADS_X+(i%8)*(PAD_W+PAD_GAP) }
 function padY(i) { return PADS_Y+Math.floor(i/8)*(PAD_H+PAD_GAP) }
@@ -297,6 +306,39 @@ const highlightOverlay = computed(()=>{
         <polyline points="3,5 5,7.5 7,5" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round" stroke-linecap="round"/>
         <line x1="1.5" y1="9" x2="8.5" y2="9" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/>
       </symbol>
+      <!-- note: 3×4 grid of short horizontal lines (piano roll) -->
+      <symbol id="ico-note" viewBox="0 0 10 10">
+        <line x1="0.5" y1="1.5" x2="2.5" y2="1.5" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+        <line x1="3.5" y1="1.5" x2="5.5" y2="1.5" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+        <line x1="6.5" y1="1.5" x2="8.5" y2="1.5" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+        <line x1="0.5" y1="3.5" x2="2.5" y2="3.5" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+        <line x1="3.5" y1="3.5" x2="5.5" y2="3.5" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+        <line x1="6.5" y1="3.5" x2="8.5" y2="3.5" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+        <line x1="0.5" y1="6"   x2="2.5" y2="6"   stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+        <line x1="3.5" y1="6"   x2="5.5" y2="6"   stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+        <line x1="6.5" y1="6"   x2="8.5" y2="6"   stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+        <line x1="0.5" y1="8.5" x2="2.5" y2="8.5" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+        <line x1="3.5" y1="8.5" x2="5.5" y2="8.5" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+        <line x1="6.5" y1="8.5" x2="8.5" y2="8.5" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+      </symbol>
+      <!-- session: 2×2 clip grid -->
+      <symbol id="ico-session" viewBox="0 0 10 10">
+        <rect x="0.5" y="0.5" width="4" height="4" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.8"/>
+        <rect x="5.5" y="0.5" width="4" height="4" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.8"/>
+        <rect x="0.5" y="5.5" width="4" height="4" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.8"/>
+        <rect x="5.5" y="5.5" width="4" height="4" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.8"/>
+      </symbol>
+      <!-- scale: ascending staircase -->
+      <symbol id="ico-scale" viewBox="0 0 10 10">
+        <polyline points="0,10 0,7 2.5,7 2.5,5 5,5 5,2.5 7.5,2.5 7.5,0 10,0"
+                  fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+      </symbol>
+      <!-- layout: 3 equal vertical lines -->
+      <symbol id="ico-layout" viewBox="0 0 10 10">
+        <line x1="1.5" y1="1" x2="1.5" y2="9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="5"   y1="1" x2="5"   y2="9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="8.5" y1="1" x2="8.5" y2="9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </symbol>
     </defs>
 
     <!-- Device body -->
@@ -390,6 +432,8 @@ const highlightOverlay = computed(()=>{
        @mouseenter="hoveredName=name" @mouseleave="hoveredName=null" style="cursor:pointer">
       <rect x="12" :y="PADS_Y+68+bi*22" width="58" :height="LP_BTN_H" rx="2"
             :fill="btnFill(name)" :stroke="btnStroke(name)" stroke-width="0.8"/>
+      <text x="41" :y="PADS_Y+68+bi*22+LP_BTN_H/2" text-anchor="middle" dominant-baseline="central"
+            font-family="monospace" font-size="6" fill="#666" pointer-events="none">{{ LP_BTNS_BOT_LABELS[bi] }}</text>
     </g>
 
     <!-- ═══ CENTER ═══ -->
@@ -493,49 +537,188 @@ const highlightOverlay = computed(()=>{
             :transform="`rotate(${bigKnobAngles.jog})`"/>
     </g>
 
-    <!-- D-pad (below jog) -->
+    <!-- D-pad navigation: diagonal square with 4 triangular zones + center square -->
+    <rect :x="JOG_X-DPAD_SQ/2" :y="DPAD1_Y" :width="DPAD_SQ" :height="DPAD_SQ" rx="3"
+          fill="#1e1e22" stroke="#2a2a2e" stroke-width="0.8"/>
     <g @mousedown="pressElem('dpad_up')" @mouseup="releaseElem('dpad_up')"
        @mouseenter="hoveredName='dpad_up'" @mouseleave="hoveredName=null" style="cursor:pointer">
-      <rect :x="JOG_X-9" :y="JOG_Y+JOG_R+12" width="18" height="15" rx="2"
-            :fill="btnFill('dpad_up')" :stroke="btnStroke('dpad_up')" stroke-width="0.7"/>
+      <polygon :points="`${JOG_X-DPAD_SQ/2},${DPAD1_Y} ${JOG_X+DPAD_SQ/2},${DPAD1_Y} ${JOG_X},${DPAD1_Y+DPAD_SQ/2}`"
+               :fill="btnFill('dpad_up','transparent')" stroke="none"/>
+      <text :x="JOG_X" :y="DPAD1_Y+10" text-anchor="middle" dominant-baseline="central"
+            font-size="8" fill="#666" pointer-events="none">↑</text>
     </g>
     <g @mousedown="pressElem('dpad_left')" @mouseup="releaseElem('dpad_left')"
        @mouseenter="hoveredName='dpad_left'" @mouseleave="hoveredName=null" style="cursor:pointer">
-      <rect :x="JOG_X-29" :y="JOG_Y+JOG_R+29" width="18" height="15" rx="2"
-            :fill="btnFill('dpad_left')" :stroke="btnStroke('dpad_left')" stroke-width="0.7"/>
-    </g>
-    <g @mousedown="pressElem('dpad_center')" @mouseup="releaseElem('dpad_center')"
-       @mouseenter="hoveredName='dpad_center'" @mouseleave="hoveredName=null" style="cursor:pointer">
-      <rect :x="JOG_X-9" :y="JOG_Y+JOG_R+29" width="18" height="15" rx="9"
-            :fill="btnFill('dpad_center','#303034')" :stroke="btnStroke('dpad_center')" stroke-width="0.7"/>
+      <polygon :points="`${JOG_X-DPAD_SQ/2},${DPAD1_Y} ${JOG_X-DPAD_SQ/2},${DPAD1_Y+DPAD_SQ} ${JOG_X},${DPAD1_Y+DPAD_SQ/2}`"
+               :fill="btnFill('dpad_left','transparent')" stroke="none"/>
+      <text :x="JOG_X-18" :y="DPAD1_Y+DPAD_SQ/2" text-anchor="middle" dominant-baseline="central"
+            font-size="8" fill="#666" pointer-events="none">←</text>
     </g>
     <g @mousedown="pressElem('dpad_right')" @mouseup="releaseElem('dpad_right')"
        @mouseenter="hoveredName='dpad_right'" @mouseleave="hoveredName=null" style="cursor:pointer">
-      <rect :x="JOG_X+11" :y="JOG_Y+JOG_R+29" width="18" height="15" rx="2"
-            :fill="btnFill('dpad_right')" :stroke="btnStroke('dpad_right')" stroke-width="0.7"/>
+      <polygon :points="`${JOG_X+DPAD_SQ/2},${DPAD1_Y} ${JOG_X+DPAD_SQ/2},${DPAD1_Y+DPAD_SQ} ${JOG_X},${DPAD1_Y+DPAD_SQ/2}`"
+               :fill="btnFill('dpad_right','transparent')" stroke="none"/>
+      <text :x="JOG_X+18" :y="DPAD1_Y+DPAD_SQ/2" text-anchor="middle" dominant-baseline="central"
+            font-size="8" fill="#666" pointer-events="none">→</text>
     </g>
     <g @mousedown="pressElem('dpad_down')" @mouseup="releaseElem('dpad_down')"
        @mouseenter="hoveredName='dpad_down'" @mouseleave="hoveredName=null" style="cursor:pointer">
-      <rect :x="JOG_X-9" :y="JOG_Y+JOG_R+46" width="18" height="15" rx="2"
-            :fill="btnFill('dpad_down')" :stroke="btnStroke('dpad_down')" stroke-width="0.7"/>
+      <polygon :points="`${JOG_X-DPAD_SQ/2},${DPAD1_Y+DPAD_SQ} ${JOG_X+DPAD_SQ/2},${DPAD1_Y+DPAD_SQ} ${JOG_X},${DPAD1_Y+DPAD_SQ/2}`"
+               :fill="btnFill('dpad_down','transparent')" stroke="none"/>
+      <text :x="JOG_X" :y="DPAD1_Y+DPAD_SQ-10" text-anchor="middle" dominant-baseline="central"
+            font-size="8" fill="#666" pointer-events="none">↓</text>
+    </g>
+    <line :x1="JOG_X-DPAD_SQ/2" :y1="DPAD1_Y" :x2="JOG_X+DPAD_SQ/2" :y2="DPAD1_Y+DPAD_SQ"
+          stroke="#333" stroke-width="0.8" pointer-events="none"/>
+    <line :x1="JOG_X+DPAD_SQ/2" :y1="DPAD1_Y" :x2="JOG_X-DPAD_SQ/2" :y2="DPAD1_Y+DPAD_SQ"
+          stroke="#333" stroke-width="0.8" pointer-events="none"/>
+    <g @mousedown="pressElem('dpad_center')" @mouseup="releaseElem('dpad_center')"
+       @mouseenter="hoveredName='dpad_center'" @mouseleave="hoveredName=null" style="cursor:pointer">
+      <rect :x="JOG_X-6" :y="DPAD1_Y+DPAD_SQ/2-6" width="12" height="12" rx="2"
+            :fill="btnFill('dpad_center','#303034')" :stroke="btnStroke('dpad_center')" stroke-width="0.7"/>
+      <circle :cx="JOG_X" :cy="DPAD1_Y+DPAD_SQ/2" r="2.5" fill="#555" pointer-events="none"/>
+    </g>
+
+    <!-- Group 1: 2×2 — row1: note(icon)|session(icon), row2: scale(text)|layout(text), then repeat|accent -->
+    <g @mousedown="pressElem('note')" @mouseup="releaseElem('note')"
+       @mouseenter="hoveredName='note'" @mouseleave="hoveredName=null" style="cursor:pointer">
+      <rect :x="RP_BTN_LX" :y="RP_G1_Y" :width="RP_BTN2_W" :height="RP_BTN2_H" rx="2"
+            :fill="btnFill('note')" :stroke="btnStroke('note')" stroke-width="0.7"/>
+      <use href="#ico-note" :x="RP_BTN_LX+9" :y="RP_G1_Y+2" width="10" height="10" color="#777" pointer-events="none"/>
+    </g>
+    <g @mousedown="pressElem('session')" @mouseup="releaseElem('session')"
+       @mouseenter="hoveredName='session'" @mouseleave="hoveredName=null" style="cursor:pointer">
+      <rect :x="RP_BTN_RX" :y="RP_G1_Y" :width="RP_BTN2_W" :height="RP_BTN2_H" rx="2"
+            :fill="btnFill('session')" :stroke="btnStroke('session')" stroke-width="0.7"/>
+      <use href="#ico-session_view" :x="RP_BTN_RX+9" :y="RP_G1_Y+2" width="10" height="10" color="#777" pointer-events="none"/>
+    </g>
+    <g @mousedown="pressElem('scale')" @mouseup="releaseElem('scale')"
+       @mouseenter="hoveredName='scale'" @mouseleave="hoveredName=null" style="cursor:pointer">
+      <rect :x="RP_BTN_LX" :y="RP_G1_Y+RP_BTN2_H+RP_BTN2_GAP" :width="RP_BTN2_W" :height="RP_BTN2_H" rx="2"
+            :fill="btnFill('scale')" :stroke="btnStroke('scale')" stroke-width="0.7"/>
+      <text :x="RP_BTN_LX+RP_BTN2_W/2" :y="RP_G1_Y+RP_BTN2_H+RP_BTN2_GAP+RP_BTN2_H/2" text-anchor="middle"
+            dominant-baseline="central" font-family="monospace" font-size="5.5" fill="#666" pointer-events="none">Scale</text>
+    </g>
+    <g @mousedown="pressElem('layout')" @mouseup="releaseElem('layout')"
+       @mouseenter="hoveredName='layout'" @mouseleave="hoveredName=null" style="cursor:pointer">
+      <rect :x="RP_BTN_RX" :y="RP_G1_Y+RP_BTN2_H+RP_BTN2_GAP" :width="RP_BTN2_W" :height="RP_BTN2_H" rx="2"
+            :fill="btnFill('layout')" :stroke="btnStroke('layout')" stroke-width="0.7"/>
+      <text :x="RP_BTN_RX+RP_BTN2_W/2" :y="RP_G1_Y+RP_BTN2_H+RP_BTN2_GAP+RP_BTN2_H/2" text-anchor="middle"
+            dominant-baseline="central" font-family="monospace" font-size="5.5" fill="#666" pointer-events="none">Layout</text>
+    </g>
+    <g @mousedown="pressElem('repeat')" @mouseup="releaseElem('repeat')"
+       @mouseenter="hoveredName='repeat'" @mouseleave="hoveredName=null" style="cursor:pointer">
+      <rect :x="RP_BTN_LX" :y="RP_G1_Y+2*(RP_BTN2_H+RP_BTN2_GAP)+8" :width="RP_BTN2_W" :height="RP_BTN2_H" rx="2"
+            :fill="btnFill('repeat')" :stroke="btnStroke('repeat')" stroke-width="0.7"/>
+      <text :x="RP_BTN_LX+RP_BTN2_W/2" :y="RP_G1_Y+2*(RP_BTN2_H+RP_BTN2_GAP)+8+RP_BTN2_H/2" text-anchor="middle"
+            dominant-baseline="central" font-family="monospace" font-size="5.5" fill="#666" pointer-events="none">Repeat</text>
+    </g>
+    <g @mousedown="pressElem('accent')" @mouseup="releaseElem('accent')"
+       @mouseenter="hoveredName='accent'" @mouseleave="hoveredName=null" style="cursor:pointer">
+      <rect :x="RP_BTN_RX" :y="RP_G1_Y+2*(RP_BTN2_H+RP_BTN2_GAP)+8" :width="RP_BTN2_W" :height="RP_BTN2_H" rx="2"
+            :fill="btnFill('accent')" :stroke="btnStroke('accent')" stroke-width="0.7"/>
+      <text :x="RP_BTN_RX+RP_BTN2_W/2" :y="RP_G1_Y+2*(RP_BTN2_H+RP_BTN2_GAP)+8+RP_BTN2_H/2" text-anchor="middle"
+            dominant-baseline="central" font-family="monospace" font-size="5.5" fill="#666" pointer-events="none">Accent</text>
+    </g>
+
+    <!-- 2-row group 2: Double Loop/Duplicate, Convert/Delete -->
+    <g @mousedown="pressElem('double_loop')" @mouseup="releaseElem('double_loop')"
+       @mouseenter="hoveredName='double_loop'" @mouseleave="hoveredName=null" style="cursor:pointer">
+      <rect :x="RP_BTN_LX" :y="RP_G2_Y" :width="RP_BTN2_W" :height="RP_BTN2_H" rx="2"
+            :fill="btnFill('double_loop')" :stroke="btnStroke('double_loop')" stroke-width="0.7"/>
+      <text :x="RP_BTN_LX+RP_BTN2_W/2" :y="RP_G2_Y+RP_BTN2_H/2" text-anchor="middle"
+            dominant-baseline="central" font-family="monospace" font-size="5.5" fill="#666" pointer-events="none">D.Loop</text>
+    </g>
+    <g @mousedown="pressElem('duplicate')" @mouseup="releaseElem('duplicate')"
+       @mouseenter="hoveredName='duplicate'" @mouseleave="hoveredName=null" style="cursor:pointer">
+      <rect :x="RP_BTN_RX" :y="RP_G2_Y" :width="RP_BTN2_W" :height="RP_BTN2_H" rx="2"
+            :fill="btnFill('duplicate')" :stroke="btnStroke('duplicate')" stroke-width="0.7"/>
+      <text :x="RP_BTN_RX+RP_BTN2_W/2" :y="RP_G2_Y+RP_BTN2_H/2" text-anchor="middle"
+            dominant-baseline="central" font-family="monospace" font-size="5.5" fill="#666" pointer-events="none">Dupl</text>
+    </g>
+    <g @mousedown="pressElem('convert')" @mouseup="releaseElem('convert')"
+       @mouseenter="hoveredName='convert'" @mouseleave="hoveredName=null" style="cursor:pointer">
+      <rect :x="RP_BTN_LX" :y="RP_G2_Y+RP_BTN2_H+RP_BTN2_GAP" :width="RP_BTN2_W" :height="RP_BTN2_H" rx="2"
+            :fill="btnFill('convert')" :stroke="btnStroke('convert')" stroke-width="0.7"/>
+      <text :x="RP_BTN_LX+RP_BTN2_W/2" :y="RP_G2_Y+RP_BTN2_H+RP_BTN2_GAP+RP_BTN2_H/2" text-anchor="middle"
+            dominant-baseline="central" font-family="monospace" font-size="5.5" fill="#666" pointer-events="none">Conv</text>
+    </g>
+    <g @mousedown="pressElem('delete')" @mouseup="releaseElem('delete')"
+       @mouseenter="hoveredName='delete'" @mouseleave="hoveredName=null" style="cursor:pointer">
+      <rect :x="RP_BTN_RX" :y="RP_G2_Y+RP_BTN2_H+RP_BTN2_GAP" :width="RP_BTN2_W" :height="RP_BTN2_H" rx="2"
+            :fill="btnFill('delete')" :stroke="btnStroke('delete')" stroke-width="0.7"/>
+      <text :x="RP_BTN_RX+RP_BTN2_W/2" :y="RP_G2_Y+RP_BTN2_H+RP_BTN2_GAP+RP_BTN2_H/2" text-anchor="middle"
+            dominant-baseline="central" font-family="monospace" font-size="5.5" fill="#666" pointer-events="none">Delete</text>
+    </g>
+
+    <!-- Octave/Page: same diagonal square design, no center button -->
+    <rect :x="JOG_X-DPAD_SQ/2" :y="RP_NAV2_Y" :width="DPAD_SQ" :height="DPAD_SQ" rx="3"
+          fill="#1e1e22" stroke="#2a2a2e" stroke-width="0.8"/>
+    <g @mousedown="pressElem('arrow_octave_up')" @mouseup="releaseElem('arrow_octave_up')"
+       @mouseenter="hoveredName='arrow_octave_up'" @mouseleave="hoveredName=null" style="cursor:pointer">
+      <polygon :points="`${JOG_X-DPAD_SQ/2},${RP_NAV2_Y} ${JOG_X+DPAD_SQ/2},${RP_NAV2_Y} ${JOG_X},${RP_NAV2_Y+DPAD_SQ/2}`"
+               :fill="btnFill('arrow_octave_up','transparent')" stroke="none"/>
+      <text :x="JOG_X" :y="RP_NAV2_Y+10" text-anchor="middle" dominant-baseline="central"
+            font-size="8" fill="#666" pointer-events="none">↑</text>
+    </g>
+    <g @mousedown="pressElem('arrow_page_left')" @mouseup="releaseElem('arrow_page_left')"
+       @mouseenter="hoveredName='arrow_page_left'" @mouseleave="hoveredName=null" style="cursor:pointer">
+      <polygon :points="`${JOG_X-DPAD_SQ/2},${RP_NAV2_Y} ${JOG_X-DPAD_SQ/2},${RP_NAV2_Y+DPAD_SQ} ${JOG_X},${RP_NAV2_Y+DPAD_SQ/2}`"
+               :fill="btnFill('arrow_page_left','transparent')" stroke="none"/>
+      <text :x="JOG_X-18" :y="RP_NAV2_Y+DPAD_SQ/2" text-anchor="middle" dominant-baseline="central"
+            font-size="8" fill="#666" pointer-events="none">←</text>
+    </g>
+    <g @mousedown="pressElem('arrow_page_right')" @mouseup="releaseElem('arrow_page_right')"
+       @mouseenter="hoveredName='arrow_page_right'" @mouseleave="hoveredName=null" style="cursor:pointer">
+      <polygon :points="`${JOG_X+DPAD_SQ/2},${RP_NAV2_Y} ${JOG_X+DPAD_SQ/2},${RP_NAV2_Y+DPAD_SQ} ${JOG_X},${RP_NAV2_Y+DPAD_SQ/2}`"
+               :fill="btnFill('arrow_page_right','transparent')" stroke="none"/>
+      <text :x="JOG_X+18" :y="RP_NAV2_Y+DPAD_SQ/2" text-anchor="middle" dominant-baseline="central"
+            font-size="8" fill="#666" pointer-events="none">→</text>
+    </g>
+    <g @mousedown="pressElem('arrow_octave_down')" @mouseup="releaseElem('arrow_octave_down')"
+       @mouseenter="hoveredName='arrow_octave_down'" @mouseleave="hoveredName=null" style="cursor:pointer">
+      <polygon :points="`${JOG_X-DPAD_SQ/2},${RP_NAV2_Y+DPAD_SQ} ${JOG_X+DPAD_SQ/2},${RP_NAV2_Y+DPAD_SQ} ${JOG_X},${RP_NAV2_Y+DPAD_SQ/2}`"
+               :fill="btnFill('arrow_octave_down','transparent')" stroke="none"/>
+      <text :x="JOG_X" :y="RP_NAV2_Y+DPAD_SQ-10" text-anchor="middle" dominant-baseline="central"
+            font-size="8" fill="#666" pointer-events="none">↓</text>
+    </g>
+    <line :x1="JOG_X-DPAD_SQ/2" :y1="RP_NAV2_Y" :x2="JOG_X+DPAD_SQ/2" :y2="RP_NAV2_Y+DPAD_SQ"
+          stroke="#333" stroke-width="0.8" pointer-events="none"/>
+    <line :x1="JOG_X+DPAD_SQ/2" :y1="RP_NAV2_Y" :x2="JOG_X-DPAD_SQ/2" :y2="RP_NAV2_Y+DPAD_SQ"
+          stroke="#333" stroke-width="0.8" pointer-events="none"/>
+
+    <!-- Shift | Select -->
+    <g @mousedown="pressElem('shift')" @mouseup="releaseElem('shift')"
+       @mouseenter="hoveredName='shift'" @mouseleave="hoveredName=null" style="cursor:pointer">
+      <rect :x="RP_BTN_LX" :y="RP_BOT_Y" :width="RP_BTN2_W" :height="RP_BTN2_H" rx="2"
+            :fill="btnFill('shift')" :stroke="btnStroke('shift')" stroke-width="0.7"/>
+      <text :x="RP_BTN_LX+RP_BTN2_W/2" :y="RP_BOT_Y+RP_BTN2_H/2" text-anchor="middle"
+            dominant-baseline="central" font-family="monospace" font-size="5.5" fill="#666" pointer-events="none">Shift</text>
+    </g>
+    <g @mousedown="pressElem('select')" @mouseup="releaseElem('select')"
+       @mouseenter="hoveredName='select'" @mouseleave="hoveredName=null" style="cursor:pointer">
+      <rect :x="RP_BTN_RX" :y="RP_BOT_Y" :width="RP_BTN2_W" :height="RP_BTN2_H" rx="2"
+            :fill="btnFill('select')" :stroke="btnStroke('select')" stroke-width="0.7"/>
+      <text :x="RP_BTN_RX+RP_BTN2_W/2" :y="RP_BOT_Y+RP_BTN2_H/2" text-anchor="middle"
+            dominant-baseline="central" font-family="monospace" font-size="5.5" fill="#666" pointer-events="none">Select</text>
     </g>
 
     <!-- Decorative -->
-    <text x="436" y="16" text-anchor="middle" font-family="monospace" font-size="7" fill="#333" letter-spacing="2">ABLETON PUSH 3</text>
-    <line x1="152" y1="52" x2="719" y2="52" stroke="#1e1e22" stroke-width="0.5"/>
+    <text x="415" y="16" text-anchor="middle" font-family="monospace" font-size="7" fill="#333" letter-spacing="2">ABLETON PUSH 3</text>
+    <line x1="120" y1="52" x2="711" y2="52" stroke="#1e1e22" stroke-width="0.5"/>
 
     <!-- Map mode hint -->
-    <text v-if="isMap" x="436" y="556" text-anchor="middle" font-family="monospace" font-size="7" fill="#18c8da44">MAP MODE — click any element to assign a role</text>
+    <text v-if="isMap" x="415" y="556" text-anchor="middle" font-family="monospace" font-size="7" fill="#18c8da44">MAP MODE — click any element to assign a role</text>
 
     <!-- Unplaced bindings -->
     <template v-if="unmatchedBindings.length">
-      <text x="152" y="547" font-family="monospace" font-size="6" fill="#555">UNPLACED</text>
+      <text x="120" y="547" font-family="monospace" font-size="6" fill="#555">UNPLACED</text>
       <g v-for="(b,bi) in unmatchedBindings" :key="b.key">
-        <rect :x="152+bi*88" y="550" width="84" height="14" rx="2"
+        <rect :x="120+bi*88" y="550" width="84" height="14" rx="2"
               :fill="props.highlighted===b.key?'#243a24':'#1e1e22'"
               :stroke="props.highlighted===b.key?'#a0e060':'#444'"
               :stroke-width="props.highlighted===b.key?'2':'0.8'"/>
-        <text :x="152+bi*88+42" y="559" text-anchor="middle" font-family="monospace" font-size="6.5"
+        <text :x="120+bi*88+42" y="559" text-anchor="middle" font-family="monospace" font-size="6.5"
               :fill="props.highlighted===b.key?'#a0e060':'#888'">{{ b.label }}</text>
       </g>
     </template>

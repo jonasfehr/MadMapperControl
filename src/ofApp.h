@@ -92,10 +92,10 @@ class ofApp : public ofBaseApp {
 	void pageBackward(float& p);
 	void bankForward(float& p);
 	void bankBackward(float& p);
-	MadParameter* fadeMasterVideo;
-	MadParameter* fadeMasterDMX;
-	MadParameter* fadeEngineSpeed;
-	MadParameter* speed;
+	MadParameter* fadeMasterVideo = nullptr;
+	MadParameter* fadeMasterDMX   = nullptr;
+	MadParameter* fadeEngineSpeed  = nullptr;
+	MadParameter* speed            = nullptr;
 	MidiComponentGroup selectGroup;
 	MidiComponentGroup soloGroup;
 	MidiComponentGroup muteGroup;

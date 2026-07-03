@@ -943,7 +943,7 @@ void ofApp::removeListeners() {
 	auto* dev = static_cast<ofxMidiDevice*>(surface.get());
 	unbindCueGrid();
 	ofRemoveListener(madOscQuery.webSocketPathE, this, &ofApp::onWebSocketPathUpdate);
-	currentPage->unlinkDevice();
+	if (currentPage != madOscQuery.pages.end()) currentPage->unlinkDevice();
 	if (auto c = ::getComponentByRole(dev, "nav.pageNext")) c->value.removeListener(this, &ofApp::pageForward);
 	if (auto c = ::getComponentByRole(dev, "nav.pagePrev")) c->value.removeListener(this, &ofApp::pageBackward);
 	if (auto c = ::getComponentByRole(dev, "nav.bankNext")) c->value.removeListener(this, &ofApp::bankForward);
@@ -958,13 +958,18 @@ void ofApp::removeListeners() {
 	}
 	pageGotoListeners.clear();
 
-	if (dev->midiComponents.count("fader_M_video"))
+	if (fadeMasterVideo && dev->midiComponents.count("fader_M_video"))
 		fadeMasterVideo->unlinkMidiComponent(dev->midiComponents["fader_M_video"]);
-	if (dev->midiComponents.count("fader_M_dmx"))
+	if (fadeMasterDMX && dev->midiComponents.count("fader_M_dmx"))
 		fadeMasterDMX->unlinkMidiComponent(dev->midiComponents["fader_M_dmx"]);
-	if (dev->midiComponents.count("fader_Speed"))
+	if (fadeEngineSpeed && dev->midiComponents.count("fader_Speed"))
 		fadeEngineSpeed->unlinkMidiComponent(dev->midiComponents["fader_Speed"]);
-	if (dev->midiComponents.count("jog")) speed->unlinkMidiComponent(dev->midiComponents["jog"]);
+	if (speed && dev->midiComponents.count("jog"))
+		speed->unlinkMidiComponent(dev->midiComponents["jog"]);
+	fadeMasterVideo = nullptr;
+	fadeMasterDMX   = nullptr;
+	fadeEngineSpeed  = nullptr;
+	speed            = nullptr;
 
 	if (auto* c = ::getComponentByRole(dev, "fixed.tdHoverEncoder"))
 		c->value.removeListener(this, &ofApp::onTdHoverEncoderChange);
@@ -1553,20 +1558,21 @@ bool ofApp::reloadFromServer(float& p) {
 			return false;
 		}
 
-		// If we were initialised already, clear old bindings and pages first
+		// Remove listeners first (uses currentPage — must happen before page clear)
 		if (initialised) {
 			removeListeners();
-			selectGroup.clear();
-			muteGroup.clear();
-			soloGroup.clear();
-			madOscQuery.pages.clear();
-			madOscQuery.subPages.clear();
-			currentPage = madOscQuery.pages.end();
-			previousPage = madOscQuery.pages.end();
-			{
-				std::lock_guard<std::mutex> activePageLock(activePageMutex);
-				activePageName.clear();
-			}
+		}
+		// Always clear pages/groups before rebuild to avoid accumulation
+		selectGroup.clear();
+		muteGroup.clear();
+		soloGroup.clear();
+		madOscQuery.pages.clear();
+		madOscQuery.subPages.clear();
+		currentPage = madOscQuery.pages.end();
+		previousPage = madOscQuery.pages.end();
+		{
+			std::lock_guard<std::mutex> activePageLock(activePageMutex);
+			activePageName.clear();
 		}
 
 		// Rebuild pages and UI
@@ -1605,6 +1611,7 @@ bool ofApp::reloadFromServer(float& p) {
 				setActivePage(&(*currentPage), nullptr);
 				(*currentPage).setLowerBound(prevLowerBound);
 				ofLog(OF_LOG_NOTICE) << "Reload successful and resuming from " << prevPageName << endl;
+				initialised = true;
 				return true;
 			}
 		}
@@ -1613,6 +1620,7 @@ bool ofApp::reloadFromServer(float& p) {
 			currentPage = madOscQuery.pages.begin();
 			setActivePage(&(*currentPage), nullptr);
 		}
+		initialised = true;
 		return true;
 		} catch (const std::exception& e) {
 			ofLogError("ofApp") << "reloadFromServer: JSON parsing exception: " << e.what();

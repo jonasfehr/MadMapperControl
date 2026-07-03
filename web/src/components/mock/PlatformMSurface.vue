@@ -35,7 +35,7 @@ const FADER_H      = FADER_BOTTOM - FADER_TOP
 const SEL_Y  = SCRIBBLE_H + 202
 const MUTE_Y = SCRIBBLE_H + 220
 const SOLO_Y = SCRIBBLE_H + 238
-const REC_CY = SCRIBBLE_H + 260
+const REC_CY = SCRIBBLE_H + 268
 const RP_X = 525
 
 // ── state ─────────────────────────────────────────────────────────
@@ -104,7 +104,7 @@ function isHighlightedName(name) {
 // ── MIDI helpers ──────────────────────────────────────────────────
 function pressElem(name, value = 127) {
   const el = elemFor(name)
-  if (!el) {
+  if (!el || el.address < 0) {
     if (props.mode === 'map' || props.mode === 'learn')
       emit('midi-input', { type: '__learn_click__', name, value: 1 })
     return
@@ -114,13 +114,13 @@ function pressElem(name, value = 127) {
 }
 function releaseElem(name) {
   const el = elemFor(name)
-  if (!el) return
+  if (!el || el.address < 0) return
   btnState[name] = false
   emit('midi-input', { type: normType(el.type), channel: el.channel, address: el.address, value: 0, name })
 }
 function toggleElem(name) {
   const el = elemFor(name)
-  if (!el) {
+  if (!el || el.address < 0) {
     if (props.mode === 'map' || props.mode === 'learn')
       emit('midi-input', { type: '__learn_click__', name, value: 1 })
     return
@@ -287,6 +287,8 @@ function btnStroke(name, defaultStroke = '#3a3a3c') {
             style="cursor:pointer"
             @click="toggleElem(`sel_${i}`)"
             @mouseenter="hoveredName=`sel_${i}`" @mouseleave="hoveredName=null"/>
+      <text x="0" :y="SEL_Y+7" text-anchor="middle" dominant-baseline="central"
+            font-family="monospace" font-size="5" fill="#aa5566" pointer-events="none">sel</text>
 
       <!-- Mute (profile: mute_1..8) -->
       <rect x="-17" :y="MUTE_Y" width="34" height="14" rx="2"
@@ -295,6 +297,8 @@ function btnStroke(name, defaultStroke = '#3a3a3c') {
             style="cursor:pointer"
             @click="toggleElem(`mute_${i}`)"
             @mouseenter="hoveredName=`mute_${i}`" @mouseleave="hoveredName=null"/>
+      <text x="0" :y="MUTE_Y+7" text-anchor="middle" dominant-baseline="central"
+            font-family="monospace" font-size="6" fill="#4466aa" pointer-events="none">M</text>
 
       <!-- Solo (profile: solo_1..8) -->
       <rect x="-17" :y="SOLO_Y" width="34" height="14" rx="2"
@@ -303,14 +307,17 @@ function btnStroke(name, defaultStroke = '#3a3a3c') {
             style="cursor:pointer"
             @click="toggleElem(`solo_${i}`)"
             @mouseenter="hoveredName=`solo_${i}`" @mouseleave="hoveredName=null"/>
+      <text x="0" :y="SOLO_Y+7" text-anchor="middle" dominant-baseline="central"
+            font-family="monospace" font-size="6" fill="#448866" pointer-events="none">S</text>
 
-      <!-- Rec LED (profile: rec_1..8) -->
+      <!-- Rec LED (profile: rec_1..8) — filled circle with inner dot -->
       <circle :cx="0" :cy="REC_CY" r="6"
               :fill="btnState[`rec_${i}`] ? '#ee6633' : btnFill(`rec_${i}`,'#441e10')"
               :stroke="btnState[`rec_${i}`] ? '#ff8844' : btnStroke(`rec_${i}`,'#663322')"
               style="cursor:pointer"
               @click="toggleElem(`rec_${i}`)"
               @mouseenter="hoveredName=`rec_${i}`" @mouseleave="hoveredName=null"/>
+      <circle :cx="0" :cy="REC_CY" r="2.5" fill="#cc3322" opacity="0.7" pointer-events="none"/>
     </g>
 
     <!-- ══ MASTER STRIP (profile: fader_M_video) ══ -->
@@ -322,57 +329,148 @@ function btnStroke(name, defaultStroke = '#3a3a3c') {
             fill="#3a3a3e" stroke="#585860" style="cursor:ns-resize"
             @mousedown="faderDragStart(8, $event)"
             @mouseenter="hoveredName='fader_M_video'" @mouseleave="hoveredName=null"/>
+      <!-- Mixer (at SEL_Y — same row as sel buttons) -->
+      <rect x="-17" :y="SEL_Y" width="34" height="14" rx="2"
+            :fill="btnState['mixer'] ? '#e8889866' : btnFill('mixer','#c87888aa')"
+            :stroke="btnStroke('mixer','#aa5566')" stroke-width="0.8"
+            style="cursor:pointer"
+            @click="toggleElem('mixer')"
+            @mouseenter="hoveredName='mixer'" @mouseleave="hoveredName=null"/>
+      <text x="0" :y="SEL_Y+7" text-anchor="middle" dominant-baseline="central"
+            font-family="monospace" font-size="5" fill="#cc7788" pointer-events="none">Mixer</text>
+      <!-- Read (at MUTE_Y) -->
+      <rect x="-17" :y="MUTE_Y" width="34" height="14" rx="2"
+            :fill="btnState['auto_read'] ? '#6688bbaa' : btnFill('auto_read','#5577aa66')"
+            :stroke="btnStroke('auto_read','#4466aa')" stroke-width="0.8"
+            style="cursor:pointer"
+            @click="toggleElem('auto_read')"
+            @mouseenter="hoveredName='auto_read'" @mouseleave="hoveredName=null"/>
+      <text x="0" :y="MUTE_Y+7" text-anchor="middle" dominant-baseline="central"
+            font-family="monospace" font-size="5.5" fill="#4466aa" pointer-events="none">Read</text>
+      <!-- Write (at SOLO_Y) -->
+      <rect x="-17" :y="SOLO_Y" width="34" height="14" rx="2"
+            :fill="btnState['auto_write'] ? '#66aa88aa' : btnFill('auto_write','#559977aa')"
+            :stroke="btnStroke('auto_write','#448866')" stroke-width="0.8"
+            style="cursor:pointer"
+            @click="toggleElem('auto_write')"
+            @mouseenter="hoveredName='auto_write'" @mouseleave="hoveredName=null"/>
+      <text x="0" :y="SOLO_Y+7" text-anchor="middle" dominant-baseline="central"
+            font-family="monospace" font-size="5.5" fill="#448866" pointer-events="none">Write</text>
+      <!-- Lock (at REC_CY — circle like rec buttons) -->
+      <circle cx="0" :cy="REC_CY" r="7"
+              :fill="btnState['lock'] ? '#ee6633' : btnFill('lock','#441e10')"
+              :stroke="btnState['lock'] ? '#ff8844' : btnStroke('lock','#663322')"
+              style="cursor:pointer"
+              @click="toggleElem('lock')"
+              @mouseenter="hoveredName='lock'" @mouseleave="hoveredName=null"/>
+      <rect x="-3" :y="REC_CY" width="6" height="4" rx="0.5" fill="#cc5533" pointer-events="none"/>
+      <path :d="`M-2.5,${REC_CY} A2.5,3 0 0 1 2.5,${REC_CY}`"
+            fill="none" stroke="#cc5533" stroke-width="1.5" stroke-linecap="round" pointer-events="none"/>
     </g>
 
     <!-- ══ RIGHT PANEL ══ -->
     <rect x="470" y="0" width="122" :height="H" rx="4" fill="#0d0d10" stroke="#1a1a1e"/>
 
-    <!-- Chan nav (profile: chan_down, chan_up) -->
-    <g v-for="(name, j) in ['chan_down','chan_up']" :key="name"
-       @mousedown="pressElem(name)" @mouseup="releaseElem(name)"
-       @mouseenter="hoveredName=name" @mouseleave="hoveredName=null" style="cursor:pointer">
-      <rect :x="RP_X - 22 + j*24" y="17" width="20" height="16" rx="2"
-            :fill="btnFill(name,'#cc8866cc')" :stroke="btnStroke(name,'#aa6644')"/>
-    </g>
+    <!-- ── 2 columns × 6 rows, 16×16, 6px col gap, 20px row spacing, centered on panel (x=531) ── -->
+    <!-- Left col x=512 (center 520), Right col x=534 (center 542), rows every 20px from y=88 -->
+    <!-- Row 1 (y=88): chan -->
+    <rect x="512" y="88" width="16" height="16" rx="2"
+          :fill="btnFill('chan_down','#3a1a08')" :stroke="btnStroke('chan_down','#aa6644')"
+          style="cursor:pointer"
+          @mousedown="pressElem('chan_down')" @mouseup="releaseElem('chan_down')"
+          @mouseenter="hoveredName='chan_down'" @mouseleave="hoveredName=null"/>
+    <text x="520"y="96" text-anchor="middle" dominant-baseline="central"
+          font-family="monospace" font-size="6" fill="#cc8866" pointer-events="none">|◄</text>
+    <rect x="534" y="88" width="16" height="16" rx="2"
+          :fill="btnFill('chan_up','#3a1a08')" :stroke="btnStroke('chan_up','#aa6644')"
+          style="cursor:pointer"
+          @mousedown="pressElem('chan_up')" @mouseup="releaseElem('chan_up')"
+          @mouseenter="hoveredName='chan_up'" @mouseleave="hoveredName=null"/>
+    <text x="542"y="96" text-anchor="middle" dominant-baseline="central"
+          font-family="monospace" font-size="6" fill="#cc8866" pointer-events="none">►|</text>
 
-    <!-- Bank nav (profile: bank_down, bank_up) -->
-    <rect :x="RP_X - 22" y="46" width="20" height="16" rx="2"
-          :fill="btnFill('bank_down','#cc8866cc')" :stroke="btnStroke('bank_down','#aa6644')"
+    <!-- Row 2 (y=108): bank -->
+    <rect x="512" y="108" width="16" height="16" rx="2"
+          :fill="btnFill('bank_down','#3a1a08')" :stroke="btnStroke('bank_down','#aa6644')"
           style="cursor:pointer"
           @mousedown="bankDown"
           @mouseenter="hoveredName='bank_down'" @mouseleave="hoveredName=null"/>
-    <rect :x="RP_X + 2" y="46" width="20" height="16" rx="2"
-          :fill="btnFill('bank_up','#cc8866cc')" :stroke="btnStroke('bank_up','#aa6644')"
+    <text x="520"y="116" text-anchor="middle" dominant-baseline="central"
+          font-family="monospace" font-size="6" fill="#cc8866" pointer-events="none">◄◄</text>
+    <rect x="534" y="108" width="16" height="16" rx="2"
+          :fill="btnFill('bank_up','#3a1a08')" :stroke="btnStroke('bank_up','#aa6644')"
           style="cursor:pointer"
           @mousedown="bankUp"
           @mouseenter="hoveredName='bank_up'" @mouseleave="hoveredName=null"/>
+    <text x="542"y="116" text-anchor="middle" dominant-baseline="central"
+          font-family="monospace" font-size="6" fill="#cc8866" pointer-events="none">▶▶</text>
 
-    <!-- Trans nav (profile: trans_down, trans_up) -->
-    <g v-for="(name, j) in ['trans_down','trans_up']" :key="name"
-       @mousedown="pressElem(name)" @mouseup="releaseElem(name)"
-       @mouseenter="hoveredName=name" @mouseleave="hoveredName=null" style="cursor:pointer">
-      <rect :x="RP_X - 22 + j*24" y="76" width="20" height="16" rx="2"
-            :fill="btnFill(name,'#cc8866cc')" :stroke="btnStroke(name,'#aa6644')"/>
-    </g>
+    <!-- Row 3 (y=128): transport nav -->
+    <rect x="512" y="128" width="16" height="16" rx="2"
+          :fill="btnFill('trans_down','#3a1a08')" :stroke="btnStroke('trans_down','#aa6644')"
+          style="cursor:pointer"
+          @mousedown="pressElem('trans_down')" @mouseup="releaseElem('trans_down')"
+          @mouseenter="hoveredName='trans_down'" @mouseleave="hoveredName=null"/>
+    <text x="520"y="136" text-anchor="middle" dominant-baseline="central"
+          font-family="monospace" font-size="6" fill="#cc8866" pointer-events="none">◄◄</text>
+    <rect x="534" y="128" width="16" height="16" rx="2"
+          :fill="btnFill('trans_up','#3a1a08')" :stroke="btnStroke('trans_up','#aa6644')"
+          style="cursor:pointer"
+          @mousedown="pressElem('trans_up')" @mouseup="releaseElem('trans_up')"
+          @mouseenter="hoveredName='trans_up'" @mouseleave="hoveredName=null"/>
+    <text x="542"y="136" text-anchor="middle" dominant-baseline="central"
+          font-family="monospace" font-size="6" fill="#cc8866" pointer-events="none">▶▶</text>
 
-    <!-- Transport -->
-    <g v-for="(name, j) in ['trans_play','trans_stop','rec','trans_cycle']" :key="name"
-       @click="toggleElem(name)"
-       @mouseenter="hoveredName=name" @mouseleave="hoveredName=null" style="cursor:pointer">
-      <rect :x="RP_X - 44 + j*22" y="106" width="20" height="18" rx="2"
-            :fill="btnFill(name,'#33333355')" :stroke="btnStroke(name,'#555')" stroke-width="0.8"/>
-    </g>
+    <!-- Row 4 (y=148): play / stop -->
+    <rect x="512" y="148" width="16" height="16" rx="2"
+          :fill="btnFill('trans_play','#0e2a0e')" :stroke="btnStroke('trans_play','#448844')"
+          style="cursor:pointer"
+          @click="toggleElem('trans_play')"
+          @mouseenter="hoveredName='trans_play'" @mouseleave="hoveredName=null"/>
+    <text x="520"y="156" text-anchor="middle" dominant-baseline="central"
+          font-family="monospace" font-size="10" fill="#44cc44" pointer-events="none">▶</text>
+    <rect x="534" y="148" width="16" height="16" rx="2"
+          :fill="btnFill('trans_stop','#3a2008')" :stroke="btnStroke('trans_stop','#aa8833')"
+          style="cursor:pointer"
+          @click="toggleElem('trans_stop')"
+          @mouseenter="hoveredName='trans_stop'" @mouseleave="hoveredName=null"/>
+    <text x="542"y="156" text-anchor="middle" dominant-baseline="central"
+          font-family="monospace" font-size="9" fill="#ddaa44" pointer-events="none">■</text>
 
-    <!-- Mixer / Read / Write -->
-    <g v-for="(name, j) in ['mixer','read','write']" :key="name"
-       @click="toggleElem(name)"
-       @mouseenter="hoveredName=name" @mouseleave="hoveredName=null" style="cursor:pointer">
-      <rect :x="RP_X - 48 + j*32" y="132" width="30" height="14" rx="2"
-            :fill="btnFill(name,'#33333344')" :stroke="btnStroke(name,'#555')" stroke-width="0.8"/>
-    </g>
+    <!-- Row 5 (y=168): record / cycle -->
+    <rect x="512" y="168" width="16" height="16" rx="2"
+          :fill="btnFill('trans_record','#3a0808')" :stroke="btnStroke('trans_record','#aa3322')"
+          style="cursor:pointer"
+          @click="toggleElem('trans_record')"
+          @mouseenter="hoveredName='trans_record'" @mouseleave="hoveredName=null"/>
+    <text x="520"y="176" text-anchor="middle" dominant-baseline="central"
+          font-family="monospace" font-size="10" fill="#ee4433" pointer-events="none">●</text>
+    <rect x="534" y="168" width="16" height="16" rx="2"
+          :fill="btnFill('trans_cycle','#081428')" :stroke="btnStroke('trans_cycle','#2244aa')"
+          style="cursor:pointer"
+          @click="toggleElem('trans_cycle')"
+          @mouseenter="hoveredName='trans_cycle'" @mouseleave="hoveredName=null"/>
+    <text x="542"y="176" text-anchor="middle" dominant-baseline="central"
+          font-family="monospace" font-size="9" fill="#4466cc" pointer-events="none">↩</text>
 
-    <!-- Jog wheel (profile: jog) -->
-    <g :transform="`translate(${RP_X}, 210)`"
+    <!-- Row 6 (y=188): zoom -->
+    <rect x="512" y="188" width="16" height="16" rx="2"
+          :fill="btnFill('zoom_left','#280e1a')" :stroke="btnStroke('zoom_left','#994466')"
+          style="cursor:pointer"
+          @click="toggleElem('zoom_left')"
+          @mouseenter="hoveredName='zoom_left'" @mouseleave="hoveredName=null"/>
+    <text x="520"y="196" text-anchor="middle" dominant-baseline="central"
+          font-family="monospace" font-size="9" fill="#cc5588" pointer-events="none">←</text>
+    <rect x="534" y="188" width="16" height="16" rx="2"
+          :fill="btnFill('zoom_down','#0e2a0e')" :stroke="btnStroke('zoom_down','#448844')"
+          style="cursor:pointer"
+          @click="toggleElem('zoom_down')"
+          @mouseenter="hoveredName='zoom_down'" @mouseleave="hoveredName=null"/>
+    <text x="542"y="196" text-anchor="middle" dominant-baseline="central"
+          font-family="monospace" font-size="9" fill="#44cc44" pointer-events="none">↓</text>
+
+    <!-- Jog wheel (shifted right, beside the Mixer/Read/Write column) -->
+    <g transform="translate(531, 260)"
        @mousedown="startJogDrag"
        @mouseenter="hoveredName='jog'" @mouseleave="hoveredName=null"
        style="cursor:ns-resize">
@@ -383,6 +481,7 @@ function btnStroke(name, defaultStroke = '#3a3a3c') {
             stroke="#18c8da" stroke-width="2" stroke-linecap="round"
             :transform="`rotate(${jogAngle})`"/>
     </g>
+    <text x="531" y="303" text-anchor="middle" font-family="monospace" font-size="5" fill="#333338" pointer-events="none">jog</text>
 
     <!-- Hover tooltip -->
     <g v-if="hoveredName"

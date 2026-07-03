@@ -38,28 +38,28 @@
         "address": 94,
         "channel": 1,
         "interfaceType": "button",
-        "label": "play",
+        "label": "trans_play",
         "type": "note_toggle"
       },
       {
         "address": 93,
         "channel": 1,
         "interfaceType": "button",
-        "label": "stop",
+        "label": "trans_stop",
         "type": "note_toggle"
       },
       {
         "address": 95,
         "channel": 1,
         "interfaceType": "button",
-        "label": "rec",
+        "label": "trans_record",
         "type": "note_toggle"
       },
       {
         "address": 86,
         "channel": 1,
         "interfaceType": "button",
-        "label": "rep",
+        "label": "trans_cycle",
         "role": "nav.reload",
         "type": "note"
       },
@@ -67,14 +67,14 @@
         "address": 83,
         "channel": 1,
         "interfaceType": "button",
-        "label": "read",
+        "label": "auto_read",
         "type": "note_toggle"
       },
       {
         "address": 81,
         "channel": 1,
         "interfaceType": "button",
-        "label": "write",
+        "label": "auto_write",
         "type": "note_toggle"
       },
       {
@@ -97,7 +97,7 @@
         "address": 0,
         "channel": 16,
         "interfaceType": "fader",
-        "label": "fader_M_video",
+        "label": "fader_16",
         "role": "fixed.masterVideo",
         "type": "pitch_bend"
       },
@@ -105,7 +105,7 @@
         "address": 0,
         "channel": 15,
         "interfaceType": "fader",
-        "label": "fader_M_dmx",
+        "label": "fader_15",
         "role": "fixed.masterDMX",
         "type": "pitch_bend"
       },
@@ -113,7 +113,7 @@
         "address": 0,
         "channel": 14,
         "interfaceType": "fader",
-        "label": "fader_Speed",
+        "label": "fader_14",
         "role": "fixed.engineSpeed",
         "type": "pitch_bend"
       },
@@ -519,6 +519,292 @@
         "label": "solo_13",
         "role": "param.13.mediaSubpage",
         "type": "note_toggle"
+      },
+      {
+        "address": 37,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "sel_14",
+        "role": "param.14.layerSubpage",
+        "type": "note"
+      },
+      {
+        "address": 38,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "sel_15",
+        "role": "param.15.layerSubpage",
+        "type": "note"
+      },
+      {
+        "address": 39,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "sel_16",
+        "role": "param.16.layerSubpage",
+        "type": "note"
+      },
+      {
+        "address": 29,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "mute_14",
+        "type": "note_toggle"
+      },
+      {
+        "address": 30,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "mute_15",
+        "type": "note_toggle"
+      },
+      {
+        "address": 31,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "mute_16",
+        "type": "note_toggle"
+      },
+      {
+        "address": 21,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "solo_14",
+        "role": "param.14.mediaSubpage",
+        "type": "note_toggle"
+      },
+      {
+        "address": 22,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "solo_15",
+        "role": "param.15.mediaSubpage",
+        "type": "note_toggle"
+      },
+      {
+        "address": 23,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "solo_16",
+        "role": "param.16.mediaSubpage",
+        "type": "note_toggle"
+      },
+      {
+        "address": 40,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "track",
+        "type": "note_toggle"
+      },
+      {
+        "address": 43,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "edit",
+        "type": "note_toggle"
+      },
+      {
+        "address": 44,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "sends",
+        "type": "note_toggle"
+      },
+      {
+        "address": 45,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "pan",
+        "type": "note_toggle"
+      },
+      {
+        "address": 58,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "audio",
+        "type": "note_toggle"
+      },
+      {
+        "address": 59,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "vi",
+        "type": "note_toggle"
+      },
+      {
+        "address": 60,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "bus",
+        "type": "note_toggle"
+      },
+      {
+        "address": 61,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "vca",
+        "type": "note_toggle"
+      },
+      {
+        "address": 62,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "all",
+        "type": "note_toggle"
+      },
+      {
+        "address": 70,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "shift",
+        "type": "note"
+      },
+      {
+        "address": 16,
+        "channel": 1,
+        "interfaceType": "encoder",
+        "label": "param",
+        "type": "encoder_relative"
+      },
+      {
+        "address": -1,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "arm",
+        "type": "note_toggle"
+      },
+      {
+        "address": -1,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "solo_clear",
+        "type": "note_toggle"
+      },
+      {
+        "address": -1,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "mute_clear",
+        "type": "note_toggle"
+      },
+      {
+        "address": -1,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "bypass",
+        "type": "note_toggle"
+      },
+      {
+        "address": -1,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "macro",
+        "type": "note_toggle"
+      },
+      {
+        "address": -1,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "link",
+        "type": "note_toggle"
+      },
+      {
+        "address": -1,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "auto_latch",
+        "type": "note_toggle"
+      },
+      {
+        "address": -1,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "auto_trim",
+        "type": "note_toggle"
+      },
+      {
+        "address": -1,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "auto_off",
+        "type": "note_toggle"
+      },
+      {
+        "address": -1,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "auto_touch",
+        "type": "note_toggle"
+      },
+      {
+        "address": -1,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "fkey_chan",
+        "type": "note_toggle"
+      },
+      {
+        "address": -1,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "fkey_zoom",
+        "type": "note_toggle"
+      },
+      {
+        "address": -1,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "fkey_scroll",
+        "type": "note_toggle"
+      },
+      {
+        "address": -1,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "fkey_bank",
+        "type": "note_toggle"
+      },
+      {
+        "address": -1,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "fkey_master",
+        "type": "note_toggle"
+      },
+      {
+        "address": -1,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "fkey_click",
+        "type": "note_toggle"
+      },
+      {
+        "address": -1,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "fkey_section",
+        "type": "note_toggle"
+      },
+      {
+        "address": -1,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "fkey_marker",
+        "type": "note_toggle"
+      },
+      {
+        "address": -1,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "trans_rewind",
+        "type": "note_toggle"
+      },
+      {
+        "address": -1,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "trans_ffwd",
+        "type": "note_toggle"
       }
     ],
     "midiInPort": "PreSonus FP16 Port 1",
@@ -889,7 +1175,7 @@
         "address": 86,
         "channel": 1,
         "interfaceType": "button",
-        "label": "rep",
+        "label": "trans_cycle",
         "role": "nav.reload",
         "type": "note"
       },
@@ -919,35 +1205,35 @@
         "address": 94,
         "channel": 1,
         "interfaceType": "button",
-        "label": "play",
+        "label": "trans_play",
         "type": "note_toggle"
       },
       {
         "address": 93,
         "channel": 1,
         "interfaceType": "button",
-        "label": "stop",
+        "label": "trans_stop",
         "type": "note_toggle"
       },
       {
         "address": 95,
         "channel": 1,
         "interfaceType": "button",
-        "label": "rec",
+        "label": "trans_record",
         "type": "note_toggle"
       },
       {
         "address": 74,
         "channel": 1,
         "interfaceType": "button",
-        "label": "read",
+        "label": "auto_read",
         "type": "note_toggle"
       },
       {
         "address": 75,
         "channel": 1,
         "interfaceType": "button",
-        "label": "write",
+        "label": "auto_write",
         "type": "note_toggle"
       },
       {
@@ -1332,6 +1618,27 @@
         "interfaceType": "button",
         "label": "sel_8",
         "role": "param.8.layerSubpage",
+        "type": "note_toggle"
+      },
+      {
+        "address": -1,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "zoom_left",
+        "type": "note_toggle"
+      },
+      {
+        "address": -1,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "zoom_down",
+        "type": "note_toggle"
+      },
+      {
+        "address": -1,
+        "channel": 1,
+        "interfaceType": "button",
+        "label": "lock",
         "type": "note_toggle"
       }
     ],
