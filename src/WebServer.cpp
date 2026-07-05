@@ -77,6 +77,7 @@ class APIRequestHandler : public HTTPRequestHandler {
 			{"/api/profiles",     &WebServer::profilesFetcher,    "profilesFetcher"},
 			{"/api/profile",      &WebServer::profileFetcher,     "profileFetcher"},
 			{"/api/learn/status", &WebServer::learnStatusFetcher, "learnStatusFetcher"},
+			{"/api/display",      &WebServer::displayFetcher,     "displayFetcher"},
 		};
 
 		// POST <path> → parse body, pass to handler, reply {"status": <ok>}
@@ -90,6 +91,7 @@ class APIRequestHandler : public HTTPRequestHandler {
 			{"/api/profile",      &WebServer::profileSaver,  "saved"},
 			{"/api/learn/inject", &WebServer::learnInjector, "ok"},
 			{"/api/learn/assign", &WebServer::learnAssigner, "assigned"},
+			{"/api/midi",         &WebServer::midiInjector,  "ok"},
 		};
 
 		if (method == "GET") {

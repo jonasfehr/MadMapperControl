@@ -84,5 +84,17 @@ export const apiClient = {
   async learnInject(payload) {
     const response = await axios.post(`${API_BASE}/learn/inject`, payload)
     return response.data
+  },
+
+  // Emulator bridge: inject raw MIDI into the active surface (same path as hardware)
+  async injectMidi(payload) {
+    const response = await axios.post(`${API_BASE}/midi`, payload)
+    return response.data
+  },
+
+  // Live device display state (page, parameter labels/values, cue grid)
+  async fetchDisplay() {
+    const response = await axios.get(`${API_BASE}/display`)
+    return response.data
   }
 }

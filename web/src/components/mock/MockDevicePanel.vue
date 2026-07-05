@@ -50,14 +50,48 @@ function onBankChange(delta) {
   bankOffset.value = Math.max(0, Math.min(maxBanks, bankOffset.value + delta))
 }
 
+// ── Active device profile (components drive the emulated controls) ─
+const activeProfile = ref(null)
+const displayState  = ref(null)
+let displayPoll = null
+
+const profileComponents = computed(() => activeProfile.value?.components || [])
+
+// Map components' roles to the bindings shape the surfaces use for tint/tooltips
+const bindingsMap = computed(() => {
+  const m = {}
+  for (const c of profileComponents.value) {
+    if (!c.role) continue
+    const t = c.type === 'note_toggle' ? 'note'
+            : (c.type === 'encoder_relative' || c.type === 'encoder' || c.type === 'cc_toggle') ? 'cc'
+            : c.type
+    m[`${t}:${c.channel}:${c.address}`] = { role: c.role, label: c.label }
+  }
+  return m
+})
+
+async function fetchActiveProfile() {
+  try { activeProfile.value = await apiClient.fetchProfile() } catch (_) {}
+}
+
+async function pollDisplay() {
+  try {
+    const d = await apiClient.fetchDisplay()
+    displayState.value = d
+    // Auto-select the emulated device matching the backend surface
+    const name = d?.profile || ''
+    const want = name.includes('Push') ? 'push3' : name.includes('Platform') ? 'platformm' : name ? 'fp16' : null
+    if (want && selectedId.value !== want && !userPickedDevice.value) selectedId.value = want
+    if (name && activeProfile.value?.name !== name) fetchActiveProfile()
+  } catch (_) {}
+}
+const userPickedDevice = ref(false)
+function pickDevice(id) { userPickedDevice.value = true; selectedId.value = id }
+
 // ── MIDI learn bridge ─────────────────────────────────────────────
 const learnActive  = ref(false)
 const learnCapture = ref(null)
 let learnPoll = null
-
-async function tryInject(payload) {
-  try { await apiClient.learnInject(payload) } catch (_) {}
-}
 
 async function pollLearnStatus() {
   try {
@@ -68,29 +102,34 @@ async function pollLearnStatus() {
   } catch (_) {}
 }
 
-onMounted(() => { learnPoll = setInterval(pollLearnStatus, 400) })
-onUnmounted(() => clearInterval(learnPoll))
+onMounted(() => {
+  learnPoll = setInterval(pollLearnStatus, 400)
+  displayPoll = setInterval(pollDisplay, 300)
+  fetchActiveProfile()
+  pollDisplay()
+})
+onUnmounted(() => { clearInterval(learnPoll); clearInterval(displayPoll) })
 
-// ── MIDI log ───────────────────────────────────────────────────────
-// MIDI status bytes
+// ── MIDI input from the emulated surface ──────────────────────────
+// Injected into the app's real MIDI pipeline — the emulator substitutes the controller.
 const STATUS_NOTE_ON = 144
 const STATUS_CC      = 176
 const STATUS_PITCH   = 224
 
-function onNoteOn(ev) {
-  log(`Note On  ch:${ev.ch}  note:${ev.note}  vel:${ev.vel}`)
-  tryInject({ channel: ev.ch, status: STATUS_NOTE_ON, control: 0, pitch: ev.note, value: ev.vel })
-}
-function onNoteOff(ev) {
-  log(`Note Off ch:${ev.ch}  note:${ev.note}`)
-}
-function onCC(ev) {
-  log(`CC       ch:${ev.ch}  cc:${ev.cc}  val:${ev.val}`)
-  tryInject({ channel: ev.ch, status: STATUS_CC, control: ev.cc, pitch: 0, value: ev.val })
-}
-function onPitchBend(ev) {
-  log(`Pitch    ch:${ev.ch}  val:${ev.val}`)
-  tryInject({ channel: ev.ch, status: STATUS_PITCH, control: 0, pitch: 0, value: ev.val })
+function onMidiInput(ev) {
+  if (ev.type === '__learn_click__') return
+  const status = ev.type === 'note' ? STATUS_NOTE_ON : ev.type === 'pitch_bend' ? STATUS_PITCH : STATUS_CC
+  const payload = {
+    channel: ev.channel,
+    status,
+    control: status === STATUS_CC ? ev.address : 0,
+    pitch:   status === STATUS_NOTE_ON ? ev.address : 0,
+    value:   ev.value,
+  }
+  const kind = status === STATUS_NOTE_ON ? 'Note' : status === STATUS_PITCH ? 'Pitch' : 'CC'
+  log(`${kind.padEnd(5)} ch:${ev.channel}  addr:${ev.address}  val:${ev.value}${ev.name ? '  (' + ev.name + ')' : ''}`)
+  apiClient.injectMidi(payload).catch(() => {})
+  if (learnActive.value) apiClient.learnInject(payload).catch(() => {})
 }
 
 const bankLabel = computed(() => {
@@ -114,8 +153,8 @@ function clearLog() { midiLog.value = [] }
     <div class="mock-header">
       <div class="mock-title-group">
         <span class="mock-title">Device Emulator</span>
-        <span v-if="currentPageName" class="page-badge">
-          <span class="page-dot"></span>{{ currentPageName }}
+        <span v-if="displayState?.page || currentPageName" class="page-badge">
+          <span class="page-dot"></span>{{ displayState?.page || currentPageName }}
         </span>
         <span v-if="resolvedChannels.length" class="ch-badge">
           {{ resolvedChannels.length }} ch mapped
@@ -125,11 +164,12 @@ function clearLog() { midiLog.value = [] }
         </span>
       </div>
       <div class="device-select">
+        <span v-if="displayState?.virtual" class="virtual-badge">VIRTUAL</span>
         <button
           v-for="d in DEVICES" :key="d.id"
           class="dev-btn"
           :class="{ active: selectedId === d.id }"
-          @click="selectedId = d.id"
+          @click="pickDevice(d.id)"
         >{{ d.label }}</button>
       </div>
     </div>
@@ -153,10 +193,11 @@ function clearLog() { midiLog.value = [] }
       <component
         :is="currentDev.component"
         :channels="deviceChannels"
-        @note-on="onNoteOn"
-        @note-off="onNoteOff"
-        @cc="onCC"
-        @pitch-bend="onPitchBend"
+        :components="profileComponents"
+        :bindings="bindingsMap"
+        :display="displayState"
+        mode="emulator"
+        @midi-input="onMidiInput"
         @bank-change="onBankChange"
       />
     </div>
@@ -281,7 +322,17 @@ function clearLog() { midiLog.value = [] }
   border-radius: var(--radius-xs, 2px);
   font-variant-numeric: tabular-nums;
 }
-.device-select { display: flex; gap: 4px; }
+.device-select { display: flex; gap: 4px; align-items: center; }
+.virtual-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #e0a030;
+  border: 1px solid #7a5a20;
+  border-radius: var(--radius-xs, 2px);
+  padding: 2px 7px;
+  background: #2a2010;
+}
 .dev-btn {
   height: 26px;
   padding: 0 10px;

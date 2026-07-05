@@ -92,6 +92,7 @@ class ofApp : public ofBaseApp {
 	bool showMidiIn = false;
 	bool showStatusString = false;
 	bool noDeviceConnected = false; // true when no MIDI profile matches connected ports
+	bool virtualSurface = false;    // surface created from profile without MIDI ports (web emulator)
 
 	// OSC functions
 	void oscSelectSurface(string name);
@@ -207,6 +208,22 @@ class ofApp : public ofBaseApp {
 	// Re-applies bindings from disk without full MadMapper re-query
 	void applyBindingsUpdate();
 	std::atomic_bool hasPendingBindingsUpdate{false};
+
+	// ── Emulator bridge ───────────────────────────────────────────────────────
+	// The web emulator substitutes the hardware controller: it injects MIDI into
+	// the same processing chain and mirrors the device display state.
+	struct DisplaySnapshot {
+		std::string page;
+		std::string profileName;
+		bool isVirtual = false;
+		std::vector<std::string> labels;
+		std::vector<float> values;
+	};
+	DisplaySnapshot displaySnapshot;
+	TimelineGridState displayCueGrid;
+	std::mutex displayMutex;
+	ofJson getDisplayJson();
+	void injectMidiMessage(const ofJson& body);
 
   private:
 	// Shared core of selectSurface/selectMedia: opens the matching subpage or

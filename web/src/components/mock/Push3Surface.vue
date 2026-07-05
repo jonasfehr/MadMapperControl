@@ -7,6 +7,8 @@ const props = defineProps({
   bindings:    { type: Object, default: () => ({}) },
   mode:        { type: String, default: 'emulator' },
   highlighted: { type: String, default: null },
+  // Live device display state mirrored from the app (page, labels, values, cue grid)
+  display:     { type: Object, default: null },
 })
 const emit = defineEmits(['midi-input', 'bank-change'])
 
@@ -101,12 +103,34 @@ function startBigKnobDrag(valRef, name, key, e) {
   knobDrag.value = {valRef,isEnc:false,startY:e.clientY,startVal:valRef.value,startAngle:bigKnobAngles[key],name,key}
   window.addEventListener('mousemove',onKnobMove); window.addEventListener('mouseup',onKnobUp)
 }
+// Relative encoders (Push encoders/jog) expect 7-bit two's-complement tick deltas,
+// not absolute values — emit the tick difference since the last event.
+function emitEncoderTicks(kd, delta) {
+  const sent = kd.sentTicks || 0
+  let diff = Math.max(-63, Math.min(63, delta - sent))
+  if (!diff) return
+  kd.sentTicks = sent + diff
+  sendNamedCC(kd.name, diff > 0 ? diff : 128 + diff)
+}
+function isRelativeEncoder(name) {
+  if (props.mode === 'map' || props.mode === 'learn') return false
+  const el = elemFor(name)
+  return !!el && (el.type === 'encoder_relative')
+}
 function onKnobMove(e) {
   if (!knobDrag.value) return
-  const {idx,valRef,isEnc,startY,startVal,startAngle,name,key} = knobDrag.value
+  const kd = knobDrag.value
+  const {idx,valRef,isEnc,startY,startVal,startAngle,name,key} = kd
   const delta = Math.round((startY-e.clientY)*1.5)
-  if (isEnc) { encVals[idx]=Math.max(0,Math.min(127,startVal+delta)); encAngles[idx]=((startAngle+delta*4)%360+360)%360; sendNamedCC(name,encVals[idx]) }
-  else { valRef.value=Math.max(0,Math.min(127,startVal+delta)); bigKnobAngles[key]=((startAngle+delta*4)%360+360)%360; sendNamedCC(name,valRef.value) }
+  if (isEnc) {
+    encVals[idx]=Math.max(0,Math.min(127,startVal+delta)); encAngles[idx]=((startAngle+delta*4)%360+360)%360
+    if (isRelativeEncoder(name)) emitEncoderTicks(kd, delta)
+    else sendNamedCC(name,encVals[idx])
+  } else {
+    valRef.value=Math.max(0,Math.min(127,startVal+delta)); bigKnobAngles[key]=((startAngle+delta*4)%360+360)%360
+    if (isRelativeEncoder(name)) emitEncoderTicks(kd, delta)
+    else sendNamedCC(name,valRef.value)
+  }
 }
 function onKnobUp() {
   dragEncIdx.value=-1; bigKnobDragKey.value=null; knobDrag.value=null
@@ -122,7 +146,31 @@ function tsMove(e) { if(tsActive.value) tsCompute(e) }
 function tsEnd() { tsActive.value=false; window.removeEventListener('mousemove',tsMove); window.removeEventListener('mouseup',tsEnd) }
 function tsCompute(e) { if(!tsRectRef.value) return; const r=tsRectRef.value.getBoundingClientRect(); const y=Math.max(0,Math.min(1,(e.clientY-r.top)/r.height)); tsPos.value=1-y; sendNamedCC('touch_strip',Math.round((1-y)*127)) }
 
-const displaySlots = computed(()=>Array.from({length:8},(_,i)=>{ const ch=props.channels[i]; return ch?(ch.label||ch.path||''):'' }))
+// Prefer the mirrored device display (same labels/order/values as the hardware);
+// fall back to the client-side channel derivation (mapping/learn views).
+const displaySlots = computed(()=>{
+  const live = props.display?.labels
+  if (live && live.length) return Array.from({length:8},(_,i)=>live[i]||'')
+  return Array.from({length:8},(_,i)=>{ const ch=props.channels[i]; return ch?(ch.label||ch.path||''):'' })
+})
+const displayValues = computed(()=>{
+  const live = props.display?.values
+  if (live && live.length) return Array.from({length:8},(_,i)=>live[i] ?? null)
+  return Array.from({length:8},(_,i)=>props.channels[i]?.value ?? null)
+})
+// Cue grid → pad colors. Device row 0 is the bottom row; SVG pads draw top-down.
+const cuePadColors = computed(()=>{
+  const grid = props.display?.cueGrid
+  if (!grid || !grid.cells || !grid.cells.length) return null
+  const rows = grid.rows || 8
+  const arr = Array(64).fill(null)
+  for (const c of grid.cells) {
+    const visRow = (rows - 1) - c.row
+    const idx = visRow * 8 + c.col
+    if (idx >= 0 && idx < 64) arr[idx] = c.color
+  }
+  return arr
+})
 function truncate(s,n=10) { if(!s) return ''; return s.length>n?s.slice(0,n-1)+'…':s }
 function barW(val,maxW) { return val==null?0:Math.max(0,Math.min(maxW,val*maxW)) }
 function padName(i) { return `pad_${Math.floor(i/8)+1}_${(i%8)+1}` }
@@ -195,9 +243,10 @@ function btnStroke(name, def='#3a3a3c') {
   return def
 }
 function padFill(i) {
-  if(padColors.value[i]) return padColors.value[i]
   const name=padName(i)
   if(btnState[name]) return '#18c8da'
+  if(cuePadColors.value?.[i]) return cuePadColors.value[i]
+  if(padColors.value[i]) return padColors.value[i]
   if(isHighlightedName(name)) return '#243a24'
   return '#1a1a1e'
 }
@@ -453,17 +502,17 @@ const highlightOverlay = computed(()=>{
     <g v-for="i in 8" :key="'dsp-'+i">
       <text v-if="displaySlots[i-1]" :x="DISPLAY_X+10+(i-1)*(DISPLAY_W/8)" :y="DISPLAY_Y+18"
             font-family="monospace" font-size="7" fill="#18c8da" opacity="0.7">{{ truncate(displaySlots[i-1],9) }}</text>
-      <template v-if="channels[i-1]">
+      <template v-if="displaySlots[i-1]">
         <rect :x="DISPLAY_X+4+(i-1)*(DISPLAY_W/8)" :y="DISPLAY_Y+28" :width="DISPLAY_W/8-8" height="8" rx="1.5" fill="#0a0f12"/>
-        <rect v-if="channels[i-1].value!=null"
+        <rect v-if="displayValues[i-1]!=null"
               :x="DISPLAY_X+4+(i-1)*(DISPLAY_W/8)" :y="DISPLAY_Y+28"
-              :width="barW(channels[i-1].value,DISPLAY_W/8-8)" height="8" rx="1.5" fill="#18c8da" opacity="0.65"/>
+              :width="barW(displayValues[i-1],DISPLAY_W/8-8)" height="8" rx="1.5" fill="#18c8da" opacity="0.65"/>
       </template>
       <line v-if="i<8" :x1="DISPLAY_X+i*(DISPLAY_W/8)" :y1="DISPLAY_Y+4"
             :x2="DISPLAY_X+i*(DISPLAY_W/8)" :y2="DISPLAY_Y+DISPLAY_H-4" stroke="#1e1e26" stroke-width="0.5"/>
     </g>
     <text :x="DISPLAY_X+DISPLAY_W/2" :y="DISPLAY_Y+DISPLAY_H-8" text-anchor="middle"
-          font-family="monospace" font-size="7" fill="#18c8da" opacity="0.15" letter-spacing="3">PUSH 3</text>
+          font-family="monospace" font-size="7" fill="#18c8da" :opacity="display?.page ? 0.6 : 0.15" letter-spacing="3">{{ display?.page || 'PUSH 3' }}</text>
 
     <!-- Media buttons (profile: media_1..8) -->
     <g v-for="i in 8" :key="'ldb-'+i"

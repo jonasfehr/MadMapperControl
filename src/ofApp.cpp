@@ -500,11 +500,14 @@ void ofApp::update() {
 			const auto currentInPorts = ofxMidiIn().getInPortList();
 			if (currentInPorts != lastKnownInPorts) {
 				lastKnownInPorts = currentInPorts;
-				if (noDeviceConnected) {
-					tryConnectMidiDevice();
+				if (noDeviceConnected || virtualSurface) {
+					tryConnectMidiDevice(); // upgrades a virtual surface when hardware appears
 				} else if (activeProfile) {
 					bool stillPresent = midiPortMatches(currentInPorts, activeProfile->midiInPort);
-					if (!stillPresent) disconnectMidiDevice();
+					if (!stillPresent) {
+						disconnectMidiDevice();
+						tryConnectMidiDevice(); // fall back to the virtual surface
+					}
 				}
 			}
 		}
@@ -705,6 +708,8 @@ void ofApp::draw() {
 			if (showStatusString) drawStatusString();
 			if (noDeviceConnected) {
 				ofDrawBitmapStringHighlight("No MIDI controller connected", 15, 30);
+			} else if (virtualSurface) {
+				ofDrawBitmapStringHighlight("VIRTUAL surface — control via web emulator", 15, 30);
 			}
 		} else {
 			std::string s = "MADMAPPER HTTP ENDPOINT NOT FOUND - TRY AGAIN!";
@@ -732,6 +737,7 @@ void ofApp::draw() {
 		if (cueFollowActiveBank) windowInfo << "*";
 	}
 	if (noDeviceConnected) windowInfo << " NO MIDI";
+	if (virtualSurface) windowInfo << " VIRTUAL";
 
 	ofSetWindowTitle(windowInfo.str());
 }
@@ -999,6 +1005,12 @@ void ofApp::disconnectMidiDevice() {
 	surface.reset();
 	activeProfile.reset();
 	noDeviceConnected = true;
+	virtualSurface = false;
+	{
+		std::lock_guard<std::mutex> lock(displayMutex);
+		displaySnapshot = DisplaySnapshot{};
+		displayCueGrid = TimelineGridState{};
+	}
 }
 
 //--------------------------------------------------------------
@@ -1015,10 +1027,28 @@ void ofApp::tryConnectMidiDevice() {
 			break;
 		}
 	}
-	if (!found) return;
 
-	activeProfile = found;
-	ofLogNotice("ofApp") << "MIDI device connected: " << activeProfile->name;
+	if (found) {
+		// Hardware present: replace a virtual surface, keep an existing real one.
+		if (surface && !virtualSurface) return;
+		if (surface && virtualSurface) disconnectMidiDevice();
+		activeProfile = found;
+		virtualSurface = false;
+		ofLogNotice("ofApp") << "MIDI device connected: " << activeProfile->name;
+	} else {
+		if (surface) return; // keep whatever surface is active
+		// No hardware: fall back to a virtual surface so the web emulator can
+		// substitute the controller (same pipeline, no MIDI ports).
+		const std::string wanted = settings.value("emulatorProfile", std::string("Push3"));
+		const DeviceProfile* pick = nullptr;
+		for (const auto& p : *profilesOpt)
+			if (p.name == wanted) { pick = &p; break; }
+		if (!pick && !profilesOpt->empty()) pick = &profilesOpt->front();
+		if (!pick) return;
+		activeProfile = *pick;
+		virtualSurface = true;
+		ofLogNotice("ofApp") << "No matching MIDI hardware — virtual surface active: " << activeProfile->name;
+	}
 
 	if (activeProfile->name.find("Push") != std::string::npos)
 		surface = std::make_unique<Push3Surface>();
@@ -1030,6 +1060,11 @@ void ofApp::tryConnectMidiDevice() {
 	static_cast<ofxMidiDevice*>(surface.get())->setupFromProfile(*activeProfile);
 	surface->onProfileLoaded(*activeProfile);
 	noDeviceConnected = false;
+	{
+		std::lock_guard<std::mutex> lock(displayMutex);
+		displaySnapshot.profileName = activeProfile->name;
+		displaySnapshot.isVirtual = virtualSurface;
+	}
 
 	// Re-bind to current page and re-wire all listeners if already running
 	if (initialised && !madOscQuery.madMapperJson.is_null()
@@ -1103,6 +1138,9 @@ void ofApp::setupWebServer() {
 		saveProfileJson(body);
 		hasPendingBindingsUpdate.store(true);
 	};
+
+	webServer->displayFetcher = [this]() { return getDisplayJson(); };
+	webServer->midiInjector = [this](const ofJson& body) { injectMidiMessage(body); };
 
 	webServer->learnStarter = [this]() { startLearnMode(); };
 	webServer->learnStopper = [this]() { stopLearnMode(); };
@@ -1405,6 +1443,7 @@ ofJson ofApp::getConfig() {
 	}
 	config["initialized"] = initialised;
 	config["noDeviceConnected"] = noDeviceConnected;
+	config["virtualSurface"] = virtualSurface;
 
 	if (activeProfile) {
 		config["activeProfile"] = activeProfile->name;
@@ -1485,6 +1524,10 @@ void ofApp::updatePageDisplay() {
 	if (currentPage == madOscQuery.pages.end()) return;
 	const std::string pageName = currentPage->getName();
 	if (pageName.empty()) return;
+	{
+		std::lock_guard<std::mutex> lock(displayMutex);
+		displaySnapshot.page = pageName;
+	}
 	surface->updatePageDisplay(pageName);
 }
 
@@ -1512,6 +1555,10 @@ void ofApp::rebuildCueGrid(const ofJson& madMapperJson) {
 	subscribeTimelinePaths();
 
 	cueGridActive = !timelineGridState.empty();
+	{
+		std::lock_guard<std::mutex> lock(displayMutex);
+		displayCueGrid = timelineGridState;
+	}
 	surface->updateTimelineGrid(timelineGridState);
 }
 
@@ -1586,6 +1633,11 @@ void ofApp::updateParameterDisplay() {
 		values.push_back(0.f);
 	}
 
+	{
+		std::lock_guard<std::mutex> lock(displayMutex);
+		displaySnapshot.labels = labels;
+		displaySnapshot.values = values;
+	}
 	surface->updateParameterDisplay(labels, values);
 }
 
@@ -1815,6 +1867,50 @@ void ofApp::injectLearnMessage(int channel, int status, int control, int pitch, 
 
 	addLearnMessage(learnMessages, m);
 	learnedMsg = m;
+}
+
+// ── Emulator bridge ───────────────────────────────────────────────────────────
+
+ofJson ofApp::getDisplayJson() {
+	std::lock_guard<std::mutex> lock(displayMutex);
+	ofJson j = ofJson::object();
+	j["page"] = displaySnapshot.page;
+	j["profile"] = displaySnapshot.profileName;
+	j["virtual"] = displaySnapshot.isVirtual;
+	j["labels"] = displaySnapshot.labels;
+	j["values"] = displaySnapshot.values;
+
+	ofJson grid = ofJson::object();
+	grid["rows"] = displayCueGrid.rows;
+	grid["cols"] = displayCueGrid.cols;
+	grid["bank"] = displayCueGrid.bankName;
+	grid["cells"] = ofJson::array();
+	for (const auto& cell : displayCueGrid.cells) {
+		ofJson c = ofJson::object();
+		c["row"] = cell.row;
+		c["col"] = cell.column;
+		c["name"] = cell.name;
+		char hex[8];
+		snprintf(hex, sizeof(hex), "#%02X%02X%02X", cell.color.r, cell.color.g, cell.color.b);
+		c["color"] = hex;
+		c["isPlaying"] = cell.isPlaying;
+		grid["cells"].push_back(c);
+	}
+	j["cueGrid"] = grid;
+	return j;
+}
+
+void ofApp::injectMidiMessage(const ofJson& body) {
+	if (!surface) return;
+	ofxMidiMessage msg;
+	msg.status   = static_cast<MidiStatus>(body.value("status", 176));
+	msg.channel  = body.value("channel", 1);
+	msg.control  = body.value("control", 0);
+	msg.pitch    = body.value("pitch", 0);
+	msg.value    = body.value("value", 0);
+	msg.velocity = body.value("value", 0);
+	// Same entry point as hardware MIDI (RtMidi also calls this off the main thread).
+	static_cast<ofxMidiDevice*>(surface.get())->newMidiMessage(msg);
 }
 
 // ── Profile fetch/save for mapping UI ────────────────────────────────────────
