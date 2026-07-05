@@ -18,6 +18,32 @@ using Poco::Net::HTTPServerRequest;
 using Poco::Net::HTTPServerResponse;
 using Poco::Net::ServerSocket;
 
+namespace {
+	void sendJson(HTTPServerResponse& response, HTTPServerResponse::HTTPStatus status, const std::string& body) {
+		response.setStatus(status);
+		response.setContentLength(body.size());
+		response.send() << body;
+	}
+
+	std::string errorBody(const std::string& message) {
+		ofJson j;
+		j["error"] = message;
+		return j.dump();
+	}
+
+	std::string statusBody(const std::string& status) {
+		ofJson j;
+		j["status"] = status;
+		return j.dump();
+	}
+
+	std::string readBody(HTTPServerRequest& request) {
+		std::stringstream buffer;
+		buffer << request.stream().rdbuf();
+		return buffer.str();
+	}
+}
+
 class APIRequestHandler : public HTTPRequestHandler {
   public:
 	APIRequestHandler(WebServer* server) : webServer(server) {}
@@ -28,8 +54,8 @@ class APIRequestHandler : public HTTPRequestHandler {
 		response.add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
 		response.add("Access-Control-Allow-Headers", "Content-Type");
 
-		std::string path = request.getURI();
-		std::string method = request.getMethod();
+		const std::string path = request.getURI();
+		const std::string method = request.getMethod();
 
 		if (method == "OPTIONS") {
 			response.setStatus(HTTPServerResponse::HTTP_OK);
@@ -37,250 +63,134 @@ class APIRequestHandler : public HTTPRequestHandler {
 			return;
 		}
 
-		if (path == "/api/pages" && method == "GET") {
-			try {
-				if (webServer->pagesFetcher) {
-					ofJson pages = webServer->pagesFetcher();
-					response.setStatus(HTTPServerResponse::HTTP_OK);
-					std::string jsonStr = pages.dump();
-					response.setContentLength(jsonStr.size());
-					response.send() << jsonStr;
-				} else {
-					response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
-					response.send() << R"({"error":"pagesFetcher not set"})";
-				}
-			} catch (const std::exception& e) {
-				ofLogError() << "Exception in /api/pages GET: " << e.what();
-				response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
-				std::stringstream ss;
-				ss << R"({"error":")" << e.what() << R"("})";
-				response.send() << ss.str();
-			}
-		} else if (path == "/api/pages" && method == "POST") {
-			std::istream& is = request.stream();
-			std::stringstream buffer;
-			buffer << is.rdbuf();
-			std::string bodyStr = buffer.str();
+		// GET <path> → dump fetcher() as JSON
+		struct GetRoute {
+			const char* path;
+			WebServer::JsonFetcher WebServer::* fetcher;
+			const char* name;
+		};
+		static const GetRoute getRoutes[] = {
+			{"/api/pages",        &WebServer::pagesFetcher,       "pagesFetcher"},
+			{"/api/parameters",   &WebServer::parametersFetcher,  "parametersFetcher"},
+			{"/api/config",       &WebServer::configFetcher,      "configFetcher"},
+			{"/api/mappings",     &WebServer::mappingsFetcher,    "mappingsFetcher"},
+			{"/api/profiles",     &WebServer::profilesFetcher,    "profilesFetcher"},
+			{"/api/profile",      &WebServer::profileFetcher,     "profileFetcher"},
+			{"/api/learn/status", &WebServer::learnStatusFetcher, "learnStatusFetcher"},
+		};
 
-			try {
-				ofJson updated = ofJson::parse(bodyStr);
-				const bool hasPages = updated.contains("pages") && updated["pages"].is_array();
-				const bool hasCurrentPage = updated.contains("currentPage") && updated["currentPage"].is_string();
-				if (!hasPages && !hasCurrentPage) {
-					response.setStatus(HTTPServerResponse::HTTP_BAD_REQUEST);
-					response.send() << R"({"error":"missing pages or currentPage"})";
-					return;
-				}
-				if (webServer->pagesSaver && hasPages) {
-					webServer->pagesSaver(updated);
-				}
-				if (webServer->pageActivator && hasCurrentPage) {
-					webServer->pageActivator(updated["currentPage"].get<std::string>());
-				}
-				response.setStatus(HTTPServerResponse::HTTP_OK);
-				response.send() << R"({"status":"saved"})";
-			} catch (const std::exception& e) {
-				response.setStatus(HTTPServerResponse::HTTP_BAD_REQUEST);
-				std::stringstream ss;
-				ss << R"({"error":")" << e.what() << R"("})";
-				response.send() << ss.str();
-			}
-		} else if (path == "/api/parameters" && method == "GET") {
-			try {
-				if (webServer->parametersFetcher) {
-					ofJson params = webServer->parametersFetcher();
-					response.setStatus(HTTPServerResponse::HTTP_OK);
-					std::string jsonStr = params.dump();
-					response.setContentLength(jsonStr.size());
-					response.send() << jsonStr;
-				} else {
-					response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
-					response.send() << R"({"error":"parametersFetcher not set"})";
-				}
-			} catch (const std::exception& e) {
-				ofLogError() << "Exception in /api/parameters: " << e.what();
-				response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
-				std::stringstream ss;
-				ss << R"({"error":")" << e.what() << R"("})";
-				response.send() << ss.str();
-			}
-		} else if (path == "/api/config" && method == "GET") {
-			try {
-				if (webServer->configFetcher) {
-					ofJson config = webServer->configFetcher();
-					response.setStatus(HTTPServerResponse::HTTP_OK);
-					std::string jsonStr = config.dump();
-					response.setContentLength(jsonStr.size());
-					response.send() << jsonStr;
-				} else {
-					response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
-					response.send() << R"({"error":"configFetcher not set"})";
-				}
-			} catch (const std::exception& e) {
-				ofLogError() << "Exception in /api/config: " << e.what();
-				response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
-				std::stringstream ss;
-				ss << R"({"error":")" << e.what() << R"("})";
-				response.send() << ss.str();
-			}
-		} else if (path == "/api/config" && method == "POST") {
-			std::istream& is = request.stream();
-			std::stringstream buffer;
-			buffer << is.rdbuf();
-			std::string bodyStr = buffer.str();
+		// POST <path> → parse body, pass to handler, reply {"status": <ok>}
+		struct PostRoute {
+			const char* path;
+			WebServer::JsonHandler WebServer::* handler;
+			const char* okStatus;
+		};
+		static const PostRoute postRoutes[] = {
+			{"/api/mappings",     &WebServer::mappingsSaver, "saved"},
+			{"/api/profile",      &WebServer::profileSaver,  "saved"},
+			{"/api/learn/inject", &WebServer::learnInjector, "ok"},
+			{"/api/learn/assign", &WebServer::learnAssigner, "assigned"},
+		};
 
-			try {
-				ofJson updated = ofJson::parse(bodyStr);
-				if (!updated.is_object() || !updated.contains("servers") || !updated["servers"].is_array()) {
-					response.setStatus(HTTPServerResponse::HTTP_BAD_REQUEST);
-					response.send() << R"({"error":"missing servers array"})";
-					return;
-				}
-				if (!webServer->configSaver) {
-					response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
-					response.send() << R"({"error":"configSaver not set"})";
-					return;
-				}
-				webServer->configSaver(updated);
-				response.setStatus(HTTPServerResponse::HTTP_OK);
-				response.send() << R"({"status":"config update queued"})";
-			} catch (const std::exception& e) {
-				response.setStatus(HTTPServerResponse::HTTP_BAD_REQUEST);
-				std::stringstream ss;
-				ss << R"({"error":")" << e.what() << R"("})";
-				response.send() << ss.str();
+		if (method == "GET") {
+			for (const auto& route : getRoutes) {
+				if (path != route.path) continue;
+				handleGet(response, webServer->*(route.fetcher), route.name);
+				return;
 			}
-		} else if (path == "/api/mappings" && method == "GET") {
-			try {
-				if (webServer->mappingsFetcher) {
-					ofJson j = webServer->mappingsFetcher();
-					std::string s = j.dump();
-					response.setStatus(HTTPServerResponse::HTTP_OK);
-					response.setContentLength(s.size());
-					response.send() << s;
-				} else {
-					response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
-					response.send() << R"({"error":"mappingsFetcher not set"})";
-				}
-			} catch (const std::exception& e) {
-				response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
-				std::stringstream ss; ss << R"({"error":")" << e.what() << R"("})";
-				response.send() << ss.str();
+		} else if (method == "POST") {
+			if (path == "/api/pages") {
+				handlePagesPost(request, response);
+				return;
 			}
-		} else if (path == "/api/mappings" && method == "POST") {
-			std::stringstream buf; buf << request.stream().rdbuf();
-			try {
-				ofJson body = ofJson::parse(buf.str());
-				if (webServer->mappingsSaver) webServer->mappingsSaver(body);
-				response.setStatus(HTTPServerResponse::HTTP_OK);
-				response.send() << R"({"status":"saved"})";
-			} catch (const std::exception& e) {
-				response.setStatus(HTTPServerResponse::HTTP_BAD_REQUEST);
-				std::stringstream ss; ss << R"({"error":")" << e.what() << R"("})";
-				response.send() << ss.str();
+			if (path == "/api/config") {
+				handleConfigPost(request, response);
+				return;
 			}
-		} else if (path == "/api/profiles" && method == "GET") {
-			try {
-				if (webServer->profilesFetcher) {
-					ofJson j = webServer->profilesFetcher();
-					std::string s = j.dump();
-					response.setStatus(HTTPServerResponse::HTTP_OK);
-					response.setContentLength(s.size());
-					response.send() << s;
-				} else {
-					response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
-					response.send() << R"({"error":"profilesFetcher not set"})";
-				}
-			} catch (const std::exception& e) {
-				response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
-				std::stringstream ss; ss << R"({"error":")" << e.what() << R"("})";
-				response.send() << ss.str();
+			if (path == "/api/learn/start") {
+				if (webServer->learnStarter) webServer->learnStarter();
+				sendJson(response, HTTPServerResponse::HTTP_OK, statusBody("learning"));
+				return;
 			}
-		} else if (path == "/api/profile" && method == "GET") {
-			try {
-				if (webServer->profileFetcher) {
-					ofJson j = webServer->profileFetcher();
-					std::string s = j.dump();
-					response.setStatus(HTTPServerResponse::HTTP_OK);
-					response.setContentLength(s.size());
-					response.send() << s;
-				} else {
-					response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
-					response.send() << R"({"error":"profileFetcher not set"})";
-				}
-			} catch (const std::exception& e) {
-				response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
-				std::stringstream ss; ss << R"({"error":")" << e.what() << R"("})";
-				response.send() << ss.str();
+			if (path == "/api/learn/stop") {
+				if (webServer->learnStopper) webServer->learnStopper();
+				sendJson(response, HTTPServerResponse::HTTP_OK, statusBody("stopped"));
+				return;
 			}
-		} else if (path == "/api/profile" && method == "POST") {
-			std::stringstream buf; buf << request.stream().rdbuf();
-			try {
-				ofJson body = ofJson::parse(buf.str());
-				if (webServer->profileSaver) webServer->profileSaver(body);
-				response.setStatus(HTTPServerResponse::HTTP_OK);
-				response.send() << R"({"status":"saved"})";
-			} catch (const std::exception& e) {
-				response.setStatus(HTTPServerResponse::HTTP_BAD_REQUEST);
-				std::stringstream ss; ss << R"({"error":")" << e.what() << R"("})";
-				response.send() << ss.str();
+			for (const auto& route : postRoutes) {
+				if (path != route.path) continue;
+				handlePost(request, response, webServer->*(route.handler), route.okStatus);
+				return;
 			}
-		} else if (path == "/api/learn/start" && method == "POST") {
-			if (webServer->learnStarter) webServer->learnStarter();
-			response.setStatus(HTTPServerResponse::HTTP_OK);
-			response.send() << R"({"status":"learning"})";
-		} else if (path == "/api/learn/stop" && method == "POST") {
-			if (webServer->learnStopper) webServer->learnStopper();
-			response.setStatus(HTTPServerResponse::HTTP_OK);
-			response.send() << R"({"status":"stopped"})";
-		} else if (path == "/api/learn/status" && method == "GET") {
-			try {
-				if (webServer->learnStatusFetcher) {
-					ofJson j = webServer->learnStatusFetcher();
-					std::string s = j.dump();
-					response.setStatus(HTTPServerResponse::HTTP_OK);
-					response.setContentLength(s.size());
-					response.send() << s;
-				} else {
-					response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
-					response.send() << R"({"error":"learnStatusFetcher not set"})";
-				}
-			} catch (const std::exception& e) {
-				response.setStatus(HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR);
-				std::stringstream ss; ss << R"({"error":")" << e.what() << R"("})";
-				response.send() << ss.str();
-			}
-		} else if (path == "/api/learn/inject" && method == "POST") {
-			std::stringstream buf; buf << request.stream().rdbuf();
-			try {
-				ofJson body = ofJson::parse(buf.str());
-				if (webServer->learnInjector) webServer->learnInjector(body);
-				response.setStatus(HTTPServerResponse::HTTP_OK);
-				response.send() << R"({"status":"ok"})";
-			} catch (const std::exception& e) {
-				response.setStatus(HTTPServerResponse::HTTP_BAD_REQUEST);
-				std::stringstream ss; ss << R"({"error":")" << e.what() << R"("})";
-				response.send() << ss.str();
-			}
-		} else if (path == "/api/learn/assign" && method == "POST") {
-			std::stringstream buf; buf << request.stream().rdbuf();
-			try {
-				ofJson body = ofJson::parse(buf.str());
-				if (webServer->learnAssigner) webServer->learnAssigner(body);
-				response.setStatus(HTTPServerResponse::HTTP_OK);
-				response.send() << R"({"status":"assigned"})";
-			} catch (const std::exception& e) {
-				response.setStatus(HTTPServerResponse::HTTP_BAD_REQUEST);
-				std::stringstream ss; ss << R"({"error":")" << e.what() << R"("})";
-				response.send() << ss.str();
-			}
-		} else {
-			response.setStatus(HTTPServerResponse::HTTP_NOT_FOUND);
-			response.send() << R"({"error":"not found"})";
 		}
+
+		sendJson(response, HTTPServerResponse::HTTP_NOT_FOUND, errorBody("not found"));
 	}
 
   private:
+	static void handleGet(HTTPServerResponse& response, const WebServer::JsonFetcher& fetcher, const char* name) {
+		if (!fetcher) {
+			sendJson(response, HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR, errorBody(std::string(name) + " not set"));
+			return;
+		}
+		try {
+			sendJson(response, HTTPServerResponse::HTTP_OK, fetcher().dump());
+		} catch (const std::exception& e) {
+			ofLogError() << "Exception in GET " << name << ": " << e.what();
+			sendJson(response, HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR, errorBody(e.what()));
+		}
+	}
+
+	static void handlePost(HTTPServerRequest& request, HTTPServerResponse& response,
+	                       const WebServer::JsonHandler& handler, const char* okStatus) {
+		try {
+			ofJson body = ofJson::parse(readBody(request));
+			if (handler) handler(body);
+			sendJson(response, HTTPServerResponse::HTTP_OK, statusBody(okStatus));
+		} catch (const std::exception& e) {
+			sendJson(response, HTTPServerResponse::HTTP_BAD_REQUEST, errorBody(e.what()));
+		}
+	}
+
+	void handlePagesPost(HTTPServerRequest& request, HTTPServerResponse& response) {
+		try {
+			ofJson updated = ofJson::parse(readBody(request));
+			const bool hasPages = updated.contains("pages") && updated["pages"].is_array();
+			const bool hasCurrentPage = updated.contains("currentPage") && updated["currentPage"].is_string();
+			if (!hasPages && !hasCurrentPage) {
+				sendJson(response, HTTPServerResponse::HTTP_BAD_REQUEST, errorBody("missing pages or currentPage"));
+				return;
+			}
+			if (webServer->pagesSaver && hasPages) {
+				webServer->pagesSaver(updated);
+			}
+			if (webServer->pageActivator && hasCurrentPage) {
+				webServer->pageActivator(updated["currentPage"].get<std::string>());
+			}
+			sendJson(response, HTTPServerResponse::HTTP_OK, statusBody("saved"));
+		} catch (const std::exception& e) {
+			sendJson(response, HTTPServerResponse::HTTP_BAD_REQUEST, errorBody(e.what()));
+		}
+	}
+
+	void handleConfigPost(HTTPServerRequest& request, HTTPServerResponse& response) {
+		try {
+			ofJson updated = ofJson::parse(readBody(request));
+			if (!updated.is_object() || !updated.contains("servers") || !updated["servers"].is_array()) {
+				sendJson(response, HTTPServerResponse::HTTP_BAD_REQUEST, errorBody("missing servers array"));
+				return;
+			}
+			if (!webServer->configSaver) {
+				sendJson(response, HTTPServerResponse::HTTP_INTERNAL_SERVER_ERROR, errorBody("configSaver not set"));
+				return;
+			}
+			webServer->configSaver(updated);
+			sendJson(response, HTTPServerResponse::HTTP_OK, statusBody("config update queued"));
+		} catch (const std::exception& e) {
+			sendJson(response, HTTPServerResponse::HTTP_BAD_REQUEST, errorBody(e.what()));
+		}
+	}
+
 	WebServer* webServer;
 };
 
@@ -384,12 +294,4 @@ void WebServer::stop() {
 		running = false;
 		ofLogNotice() << "WebServer stopped";
 	}
-}
-
-bool WebServer::isRunning() const {
-	return running;
-}
-
-void WebServer::broadcastParameterUpdate(const std::string& path, float value, int serverId) {
-	// TODO: implement WebSocket broadcasting
 }

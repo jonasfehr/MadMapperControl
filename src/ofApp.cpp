@@ -1,4 +1,6 @@
 #include "ofApp.h"
+#include "CueGridBuilder.h"
+#include "OscQueryJson.h"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -8,12 +10,9 @@
 #include <unordered_set>
 #include <fstream>
 #include <sstream>
-#include "Poco/Net/SocketAddress.h"
-#include "Poco/Net/StreamSocket.h"
-#include "Poco/Timespan.h"
-#include "Poco/Exception.h"
 
-static const ofJson* jsonGet(const ofJson& root, std::initializer_list<const char*> keys);
+using namespace oscq;
+
 static bool midiPortMatches(const std::vector<std::string>& ports, const std::string& name);
 
 namespace {
@@ -96,301 +95,6 @@ namespace {
 		return sanitized;
 	}
 
-	std::optional<int> jsonIntValue(const ofJson& node, std::initializer_list<const char*> keys) {
-		for (auto key : keys) {
-			auto it = node.find(key);
-			if (it == node.end()) continue;
-			if (it->is_number_integer()) return it->get<int>();
-			if (it->is_number()) return static_cast<int>(std::round(it->get<double>()));
-			if (it->is_string()) {
-				try {
-					return ofToInt(it->get<std::string>());
-				} catch (...) {
-				}
-			}
-		}
-		return std::nullopt;
-	}
-
-	std::optional<std::string> jsonStringValue(const ofJson& node, std::initializer_list<const char*> keys) {
-		for (auto key : keys) {
-			auto it = node.find(key);
-			if (it != node.end() && it->is_string()) return it->get<std::string>();
-		}
-		return std::nullopt;
-	}
-
-	std::string firstValueString(const ofJson& node) {
-		auto it = node.find("VALUE");
-		if (it == node.end() || !it->is_array() || it->empty() || !(*it)[0].is_string()) return std::string();
-		return (*it)[0].get<std::string>();
-	}
-
-	std::optional<ofJson> firstValueJson(const ofJson& node) {
-		auto it = node.find("VALUE");
-		if (it == node.end() || !it->is_array() || it->empty()) return std::nullopt;
-		return (*it)[0];
-	}
-
-	bool isBindableOscType(const ofJson& node) {
-		auto itType = node.find("TYPE");
-		if (itType == node.end() || !itType->is_string()) return false;
-		const std::string type = itType->get<std::string>();
-		return type == "f" || type == "d" || type == "i" || type == "h" || type == "T" || type == "F";
-	}
-
-	std::string oscNodeDisplayName(const ofJson& node, const std::string& path) {
-		auto itDescription = node.find("DESCRIPTION");
-		if (itDescription != node.end() && itDescription->is_string()) {
-			const auto description = itDescription->get<std::string>();
-			if (!description.empty()) return description;
-		}
-		auto tokens = ofSplitString(path, "/", true, true);
-		return tokens.empty() ? path : tokens.back();
-	}
-
-	std::vector<std::string> timelineBankNames(const ofJson& root) {
-		std::vector<std::string> names;
-		auto* timelinesNode = jsonGet(root, {"CONTENTS", "timelines", "CONTENTS"});
-		if (!timelinesNode || !timelinesNode->is_object()) return names;
-		for (auto it = timelinesNode->begin(); it != timelinesNode->end(); ++it) {
-			if (!it.value().is_object()) continue;
-			if (it.key() == "editor" || it.key() == "active_bank") continue;
-
-			auto contentsIt = it.value().find("CONTENTS");
-			if (contentsIt == it.value().end() || !contentsIt->is_object()) continue;
-
-			bool hasSetup = contentsIt->find("setup") != contentsIt->end();
-			bool hasByName = contentsIt->find("by_name") != contentsIt->end();
-			if (hasSetup && hasByName) names.push_back(it.key());
-		}
-		std::sort(names.begin(), names.end());
-		return names;
-	}
-
-	const ofJson* resolveNodeByPath(const ofJson& root, const std::string& path) {
-		if (path.empty() || path[0] != '/') return nullptr;
-		const ofJson* node = &root;
-		for (auto& token : ofSplitString(path, "/", true, true)) {
-			if (!node->is_object()) return nullptr;
-			auto contentsIt = node->find("CONTENTS");
-			if (contentsIt != node->end() && contentsIt->is_object()) {
-				auto childIt = contentsIt->find(token);
-				if (childIt != contentsIt->end()) {
-					node = &(*childIt);
-					continue;
-				}
-			}
-			auto directIt = node->find(token);
-			if (directIt == node->end()) return nullptr;
-			node = &(*directIt);
-		}
-		return node;
-	}
-
-	std::optional<ofJson> parseCueSetupValue(const ofJson& root,
-									 const ofJson* bankContents,
-									 std::string raw,
-									 int depth = 0) {
-		if (depth > 4) return std::nullopt;
-		raw = ofTrim(raw);
-		if (raw.empty() || raw == "[]" || raw == "{}") return std::nullopt;
-
-		if (raw.front() == '[' || raw.front() == '{') {
-			return ofJson::parse(raw);
-		}
-
-		if (raw.front() == '"') {
-			auto parsed = ofJson::parse(raw);
-			if (parsed.is_string()) {
-				return parseCueSetupValue(root, bankContents, parsed.get<std::string>(), depth + 1);
-			}
-			if (parsed.is_array() || parsed.is_object()) return parsed;
-		}
-
-		if (raw.front() == '/') {
-			auto* referenced = resolveNodeByPath(root, raw);
-			if (!referenced) return std::nullopt;
-			auto referencedValue = firstValueString(*referenced);
-			if (!referencedValue.empty()) {
-				return parseCueSetupValue(root, bankContents, referencedValue, depth + 1);
-			}
-			if (referenced->is_array() || referenced->is_object()) return *referenced;
-			return std::nullopt;
-		}
-
-		if (bankContents && bankContents->is_object()) {
-			auto it = bankContents->find(raw);
-			if (it != bankContents->end()) {
-				auto referencedValue = firstValueString(*it);
-				if (!referencedValue.empty()) {
-					return parseCueSetupValue(root, bankContents, referencedValue, depth + 1);
-				}
-				if (it->is_array() || it->is_object()) return *it;
-			}
-		}
-
-		auto* editorContents = jsonGet(root, {"CONTENTS", "timelines", "CONTENTS", "editor", "CONTENTS"});
-		if (editorContents && editorContents->is_object()) {
-			auto editorIt = editorContents->find(raw);
-			if (editorIt != editorContents->end()) {
-				auto referencedValue = firstValueString(*editorIt);
-				if (!referencedValue.empty()) {
-					return parseCueSetupValue(root, bankContents, referencedValue, depth + 1);
-				}
-				if (editorIt->is_array() || editorIt->is_object()) return *editorIt;
-			}
-		}
-
-		return std::nullopt;
-	}
-
-	std::string resolveCueBankName(const ofJson& root,
-							  const std::vector<std::string>& availableBanks,
-							  const std::string& configuredBank,
-							  bool followActiveBank) {
-		auto containsBank = [&](const std::string& bankName) {
-			return std::find(availableBanks.begin(), availableBanks.end(), bankName) != availableBanks.end();
-		};
-
-		if (followActiveBank) {
-			auto* activeBankNode = jsonGet(root, {"CONTENTS", "timelines", "CONTENTS", "active_bank"});
-			auto activeBank = activeBankNode ? firstValueString(*activeBankNode) : std::string();
-			if (!activeBank.empty() && containsBank(activeBank)) return activeBank;
-		}
-
-		if (!configuredBank.empty() && containsBank(configuredBank)) return configuredBank;
-		return availableBanks.empty() ? std::string() : availableBanks.front();
-	}
-
-	int normalizeCueIndex(int index) {
-		if (index >= 1 && index <= 8) return index - 1;
-		return index;
-	}
-
-	unsigned char jsonColorComponent(const ofJson& value) {
-		if (!value.is_number()) return 0;
-		double component = value.get<double>();
-		if (component <= 1.0) component *= 255.0;
-		return static_cast<unsigned char>(ofClamp(std::round(component), 0.0, 255.0));
-	}
-
-	ofColor parseCueColorValue(const ofJson& value) {
-		if (value.is_array() && value.size() >= 3) {
-			return ofColor(jsonColorComponent(value[0]),
-						   jsonColorComponent(value[1]),
-						   jsonColorComponent(value[2]));
-		}
-		if (value.is_object()) {
-			auto red = jsonIntValue(value, {"r", "red"});
-			auto green = jsonIntValue(value, {"g", "green"});
-			auto blue = jsonIntValue(value, {"b", "blue"});
-			if (red && green && blue) {
-				return ofColor(static_cast<unsigned char>(*red), static_cast<unsigned char>(*green), static_cast<unsigned char>(*blue));
-			}
-		}
-		if (value.is_number_integer()) {
-			auto rgb = static_cast<uint32_t>(value.get<int>());
-			return ofColor(static_cast<unsigned char>((rgb >> 16) & 0xFF),
-						   static_cast<unsigned char>((rgb >> 8) & 0xFF),
-						   static_cast<unsigned char>(rgb & 0xFF));
-		}
-		if (value.is_string()) {
-			auto colorText = ofToLower(value.get<std::string>());
-			if (!colorText.empty() && colorText[0] == '#') {
-				return ofColor::fromHex(ofHexToInt(colorText.substr(1)));
-			}
-			if (colorText.rfind("0x", 0) == 0) {
-				return ofColor::fromHex(ofHexToInt(colorText.substr(2)));
-			}
-			if (colorText == "red") return ofColor(255, 0, 0);
-			if (colorText == "green") return ofColor(0, 255, 0);
-			if (colorText == "blue") return ofColor(0, 128, 255);
-			if (colorText == "yellow") return ofColor(255, 220, 0);
-			if (colorText == "orange") return ofColor(255, 140, 0);
-			if (colorText == "white") return ofColor::white;
-		}
-		return ofColor::white;
-	}
-
-	ofColor parseCueColor(const ofJson& node) {
-		for (auto key : {"color", "colour", "fill", "rgb"}) {
-			auto it = node.find(key);
-			if (it != node.end()) return parseCueColorValue(*it);
-		}
-		auto red = jsonIntValue(node, {"r", "red"});
-		auto green = jsonIntValue(node, {"g", "green"});
-		auto blue = jsonIntValue(node, {"b", "blue"});
-		if (red && green && blue) {
-			return ofColor(static_cast<unsigned char>(*red), static_cast<unsigned char>(*green), static_cast<unsigned char>(*blue));
-		}
-		return ofColor::white;
-	}
-
-	bool tryBuildCueItem(const ofJson& node,
-					 const std::string& fallbackName,
-					 const std::unordered_map<std::string, std::string>& addressByName,
-					 const std::string& fallbackOscPrefix,
-					 int gridRows,
-					 bool flipTopOrigin,
-					 CueGridItem& outCue) {
-		if (!node.is_object()) return false;
-
-		auto name = jsonStringValue(node, {"name", "cue_name", "cue", "id", "label", "title"});
-		std::string cueName = name ? *name : fallbackName;
-		if (cueName.empty()) return false;
-
-		auto column = jsonIntValue(node, {"column", "col", "x"});
-		auto row = jsonIntValue(node, {"row", "line", "y"});
-		auto posIt = node.find("position");
-		if ((!column || !row) && posIt != node.end() && posIt->is_object()) {
-			if (!column) column = jsonIntValue(*posIt, {"column", "col", "x"});
-			if (!row) row = jsonIntValue(*posIt, {"row", "line", "y"});
-		}
-		if (!column || !row) return false;
-
-		outCue.name = cueName;
-		outCue.column = normalizeCueIndex(*column);
-		int mappedRow = normalizeCueIndex(*row);
-		if (flipTopOrigin && gridRows > 0) {
-			mappedRow = (gridRows - 1) - mappedRow;
-		}
-		outCue.row = mappedRow;
-		outCue.color = parseCueColor(node);
-		outCue.isPlaying = node.value("is_playing", false);
-		outCue.isLastStarted = node.value("is_last_started", false);
-		auto oscIt = addressByName.find(cueName);
-		outCue.oscAddress = oscIt != addressByName.end()
-			? oscIt->second
-			: fallbackOscPrefix + "/" + cueName + "/play_from_beginning";
-		return outCue.isValid();
-	}
-
-	void collectCueItems(const ofJson& node,
-					 const std::string& fallbackName,
-					 const std::unordered_map<std::string, std::string>& addressByName,
-					 const std::string& fallbackOscPrefix,
-					 int gridRows,
-					 bool flipTopOrigin,
-					 std::vector<CueGridItem>& cues) {
-		if (node.is_array()) {
-			for (const auto& entry : node) {
-				collectCueItems(entry, fallbackName, addressByName, fallbackOscPrefix, gridRows, flipTopOrigin, cues);
-			}
-			return;
-		}
-		if (!node.is_object()) return;
-
-		CueGridItem cue;
-		if (tryBuildCueItem(node, fallbackName, addressByName, fallbackOscPrefix, gridRows, flipTopOrigin, cue)) {
-			cues.push_back(cue);
-			return;
-		}
-
-		for (auto it = node.begin(); it != node.end(); ++it) {
-			collectCueItems(it.value(), it.key(), addressByName, fallbackOscPrefix, gridRows, flipTopOrigin, cues);
-		}
-	}
 
 	std::string labelForRoleOrPrefix(ofxMidiDevice* dev, const std::string& role, const std::string& fallbackPrefix, int index) {
 		auto bit = dev->bindings.find(role);
@@ -406,6 +110,16 @@ namespace {
 			return static_cast<char>(std::tolower(c));
 		});
 		return value;
+	}
+
+	// Surface subpage name = path segment before "opacity" in the parameter's OSC address.
+	std::string surfaceSubpageName(MadParameter* parameter) {
+		if (!parameter || !parameter->isSelectable()) return std::string();
+		auto oscAddress = ofSplitString(parameter->getOscAddress(), "/");
+		int i = 0;
+		while (i < (int)oscAddress.size() && oscAddress[i] != "opacity") i++;
+		if (i <= 0 || i >= (int)oscAddress.size()) return std::string();
+		return oscAddress[i - 1];
 	}
 
 	bool pageContainsOscPrefix(MadParameterPage* page, const std::string& prefix) {
@@ -466,50 +180,6 @@ namespace {
 		return false;
 	}
 
-	std::string safeStr(const ofJson& obj, const std::string& key, const std::string& def = "") {
-		auto it = obj.find(key);
-		if (it == obj.end() || !it->is_string()) return def;
-		return it->get<std::string>();
-	}
-
-	int safeInt(const ofJson& obj, const std::string& key, int def = 0) {
-		auto it = obj.find(key);
-		if (it == obj.end() || !it->is_number()) return def;
-		return it->get<int>();
-	}
-
-	std::vector<ofApp::OscServerConfig> parseOscServerConfigs(const ofJson& settings) {
-		std::vector<ofApp::OscServerConfig> configs;
-
-		if (settings.contains("servers") && settings["servers"].is_array()) {
-			size_t index = 0;
-			for (const auto& item : settings["servers"]) {
-				if (!item.is_object()) continue;
-				ofApp::OscServerConfig cfg;
-				cfg.id = safeStr(item, "id", "server_" + ofToString(index));
-				cfg.ip = safeStr(item, "ip", "127.0.0.1");
-				cfg.sendPort = safeInt(item, "sendPort", PORT_RECEIVE);
-				cfg.feedbackPort = safeInt(item, "feedbackPort", PORT_FEEDBACK);
-				cfg.queryPort = safeInt(item, "queryPort", cfg.sendPort);
-				cfg.discovery = safeStr(item, "discovery", "manual");
-				configs.push_back(cfg);
-				++index;
-			}
-		}
-
-		if (configs.empty()) {
-			ofApp::OscServerConfig legacy;
-			legacy.id = "server_0";
-			legacy.ip = safeStr(settings, "ip", "127.0.0.1");
-			legacy.sendPort = safeInt(settings, "sendPort", PORT_RECEIVE);
-			legacy.queryPort = safeInt(settings, "queryPort", legacy.sendPort);
-			legacy.feedbackPort = safeInt(settings, "feedbackPort", PORT_FEEDBACK);
-			legacy.discovery = "manual";
-			configs.push_back(legacy);
-		}
-
-		return configs;
-	}
 }
 
 static MidiComponent* getComponentByRole(ofxMidiDevice* dev, const std::string& role) {
@@ -525,12 +195,14 @@ static MidiComponent* getComponentByRole(ofxMidiDevice* dev, const std::string& 
 void ofApp::setup() {
 	ofSetFrameRate(60);
 	settings = ofLoadJson("settings.json");
-	oscServerConfigs = parseOscServerConfigs(settings);
-	endpointReachability.assign(oscServerConfigs.size(), false);
-	ip = oscServerConfigs.front().ip;
-	sendPort = oscServerConfigs.front().sendPort;
-	queryPort = oscServerConfigs.front().queryPort;
-	feedbackPort = oscServerConfigs.front().feedbackPort;
+	oscServers.setConfigs(OscServerConfig::parseList(settings));
+	oscServers.onPrimaryBecameReachable = [this]() {
+		if (!reconnectInProgress.load()) hasPendingReconnect.store(true);
+	};
+	ip = oscServers.configs().front().ip;
+	sendPort = oscServers.configs().front().sendPort;
+	queryPort = oscServers.configs().front().queryPort;
+	feedbackPort = oscServers.configs().front().feedbackPort;
 	if (settings.contains("cueBankName") && settings["cueBankName"].is_string()) {
 		cueBankName = settings["cueBankName"].get<std::string>();
 	}
@@ -546,8 +218,8 @@ void ofApp::setup() {
 	// Identify which server is "TouchDesigner" for hover encoder routing (default).
 	// loadMappings() will override these from mappings.json if present.
 	tdServerId = SIZE_MAX;
-	for (size_t i = 0; i < oscServerConfigs.size(); ++i) {
-		if (oscServerConfigs[i].id == "TouchDesigner") {
+	for (size_t i = 0; i < oscServers.configs().size(); ++i) {
+		if (oscServers.configs()[i].id == "TouchDesigner") {
 			tdServerId = i;
 			break;
 		}
@@ -555,57 +227,27 @@ void ofApp::setup() {
 
 	loadMappings();
 
-	// Load profiles and select first matching connected device
-	auto profilesOpt = loadDeviceProfiles("device_profiles.json");
-	if (profilesOpt) {
-		const auto inPorts = ofxMidiIn().getInPortList();
-		const auto outPorts = ofxMidiOut().getOutPortList();
-		for (const auto& p : *profilesOpt) {
-			bool inMatch = midiPortMatches(inPorts, p.midiInPort);
-			bool outMatch = midiPortMatches(outPorts, p.midiOutPort);
-			if (inMatch && outMatch) {
-				activeProfile = p;
-				break;
-			}
-		}
-	}
-
-	if (activeProfile) {
-		noDeviceConnected = false;
-		ofLogNotice() << "Using MIDI profile: " << activeProfile->name
-					  << " (in='" << activeProfile->midiInPort
-					  << "', out='" << activeProfile->midiOutPort << "')";
-		if (activeProfile->name.find("Push") != std::string::npos)
-			surface = std::make_unique<Push3Surface>();
-		else if (activeProfile->name.find("Platform") != std::string::npos)
-			surface = std::make_unique<PlatformMSurface>();
-		else
-			surface = std::make_unique<Faderport16Surface>();
-
-		static_cast<ofxMidiDevice*>(surface.get())->setupFromProfile(*activeProfile);
-		// Run device-specific initialization (e.g., Push display) after profile setup.
-		surface->onProfileLoaded(*activeProfile);
-	} else {
-		noDeviceConnected = true;
+	// Select first matching connected device (same path as hot-plug reconnect)
+	noDeviceConnected = true;
+	tryConnectMidiDevice();
+	if (noDeviceConnected) {
 		ofLogWarning() << "No MIDI device/profile matched. Running without controller.";
-		surface.reset();
 	}
 
-	madOscQuery.setup(ip, sendPort, feedbackPort, queryPort);
+	oscServers.setupPrimary();
 	currentPage = madOscQuery.pages.end();
 	previousPage = madOscQuery.pages.end();
 	{
 		std::lock_guard<std::mutex> lock(activePageMutex);
 		activePageName.clear();
 	}
-	gui.setup();
-	refreshEndpointHealth(true);
+	oscServers.refreshEndpointHealth(true);
 
-	if (endpointReachability.empty() || endpointReachability[0]) {
+	if (oscServers.reachable(0)) {
 		madOscQuery.receive();
 		ofSleepMillis(100);
 	}
-	if (endpointReachability.empty() || !endpointReachability[0] || madOscQuery.madMapperJson == nullptr) {
+	if (!oscServers.reachable(0) || madOscQuery.madMapperJson == nullptr) {
 		ofLog(OF_LOG_WARNING) << "Load unsuccessful!";
 	} else {
 		float p = 1;
@@ -617,11 +259,11 @@ void ofApp::setup() {
 				ofLogWarning() << "OSCQuery WebSocket connection failed on port " << queryPort;
 			} else {
 				madOscQuery.subscribeAllParameters();
-				registerServerPathRouting(0, madOscQuery);
+				oscServers.registerPathRouting(0, madOscQuery);
 				subscribeTimelinePaths();
 				ofLogNotice() << "OSCQuery WebSocket connected on port " << queryPort;
 			}
-			setupAdditionalOscServers();
+			oscServers.setupAdditionalServers();
 
 			// Pages were initially built before additional servers existed.
 			// Rebuild once so serverId>0 pages are available at startup.
@@ -639,91 +281,20 @@ void ofApp::setup() {
 	setupWebServer();
 }
 
-ofxMadOscQuery* ofApp::getOscServer(size_t serverId) {
-	if (serverId == 0) return &madOscQuery;
-	const size_t extraIndex = serverId - 1;
-	if (extraIndex >= extraOscQueries.size()) return nullptr;
-	return extraOscQueries[extraIndex].get();
-}
-
-const ofxMadOscQuery* ofApp::getOscServer(size_t serverId) const {
-	if (serverId == 0) return &madOscQuery;
-	const size_t extraIndex = serverId - 1;
-	if (extraIndex >= extraOscQueries.size()) return nullptr;
-	return extraOscQueries[extraIndex].get();
-}
-
-void ofApp::registerServerPathRouting(size_t serverId, const ofxMadOscQuery& server) {
-	for (const auto& kv : server.parameterMap) {
-		oscPathServerRouting.emplace(kv.first, serverId);
-	}
-}
-
-size_t ofApp::serverForOscPath(const std::string& oscPath) const {
-	auto it = oscPathServerRouting.find(oscPath);
-	if (it != oscPathServerRouting.end()) return it->second;
-	return 0;
-}
-
-void ofApp::oscSendToServer(size_t serverId, ofxOscMessage& message) {
-	if (auto* server = getOscServer(serverId)) {
-		server->oscSendToMadMapper(message);
-		return;
-	}
-	madOscQuery.oscSendToMadMapper(message);
-}
-
-void ofApp::setupAdditionalOscServers() {
-	std::lock_guard<std::mutex> lock(oscStateMutex);
-	extraOscQueries.clear();
-	if (oscServerConfigs.size() <= 1) return;
-
-	for (size_t i = 1; i < oscServerConfigs.size(); ++i) {
-		const auto& cfg = oscServerConfigs[i];
-		if (i >= endpointReachability.size() || !endpointReachability[i]) {
-			ofLogWarning("ofApp") << "Skipping unreachable OSCQuery server '" << cfg.id << "' at "
-								 << cfg.ip << ":" << cfg.queryPort;
-			// Don't call setup() for unreachable servers: it would trigger a blocking DNS lookup
-			// and produce a spurious 'ofxOscSender: bad host?' error if hostname can't be resolved.
-			extraOscQueries.push_back(std::make_unique<ofxMadOscQuery>());
-			continue;
-		}
-		auto server = std::make_unique<ofxMadOscQuery>();
-		server->setup(cfg.ip, cfg.sendPort, cfg.feedbackPort, cfg.queryPort);
-		server->receive();
-
-		if (server->madMapperJson.is_null()) {
-			ofLogWarning("ofApp") << "OSCQuery server '" << cfg.id << "' unreachable at "
-									 << cfg.ip << ":" << cfg.queryPort;
-			extraOscQueries.push_back(std::move(server));
-			continue;
-		}
-
-		if (server->connectWebSocket(cfg.queryPort)) {
-			server->subscribeAllParameters();
-			registerServerPathRouting(i, *server);
-			ofLogNotice("ofApp") << "Additional OSCQuery server connected: " << cfg.id
-									  << " (" << cfg.ip << ":" << cfg.queryPort << ")";
-		} else {
-			ofLogWarning("ofApp") << "Additional OSCQuery WebSocket failed: " << cfg.id
-									 << " (" << cfg.ip << ":" << cfg.queryPort << ")";
-		}
-
-		extraOscQueries.push_back(std::move(server));
-	}
-}
-
 // CALBACK FUNCTIONS
 // --------------------------------------------------------
-void ofApp::selectSurface(string& name) {
+void ofApp::selectSubpageFromButton(const std::string& buttonName,
+                                    const std::string& skipRoleSuffix,
+                                    const std::string& oscPrefix,
+                                    const std::function<std::string(MadParameter*)>& subpageNameFor,
+                                    const std::function<void(const std::string&)>& oscFallback) {
+	if (currentPage == madOscQuery.pages.end()) return;
 	if (surface) {
 		auto* dev = static_cast<ofxMidiDevice*>(surface.get());
-		if (isComponentMappedToRole(dev, name, ".mediaSubpage")) return;
-		auto mit = dev->midiComponents.find(name);
+		if (isComponentMappedToRole(dev, buttonName, skipRoleSuffix)) return;
+		auto mit = dev->midiComponents.find(buttonName);
 		if (mit != dev->midiComponents.end() && mit->second.value.get() < 0.5f) return;
 	}
-	
-	if (currentPage == madOscQuery.pages.end()) return;
 
 	// If already on a subpage and button is pressed, go back to main page
 	if ((*currentPage).isSubpage()) {
@@ -732,146 +303,38 @@ void ofApp::selectSurface(string& name) {
 		return;
 	}
 
-	auto result = ofSplitString(name, "_");
-	if (result.empty()) return;
-	int index = ofToInt(result.back());
-	MadParameterPage* sourcePage = &(*currentPage);
-	if ((*currentPage).isSubpage() && previousPage != madOscQuery.pages.end()) {
-		sourcePage = &(*previousPage);
-	}
-	MadParameter* parameter = visibleParameterAt(sourcePage, index);
-	if (!parameter) return;
-	if (parameter->isSelectable()) {
-		auto oscAddress = ofSplitString(parameter->getOscAddress(), "/");
-		int i = 0;
-		while (i < (int)oscAddress.size() && oscAddress[i] != "opacity") {
-			i++;
-		}
-		if (i == 0 || i >= (int)oscAddress.size()) return;
-		string subpageName = oscAddress[i - 1];
+	auto tokens = ofSplitString(buttonName, "_");
+	if (tokens.empty()) return;
+	MadParameter* parameter = visibleParameterAt(&(*currentPage), ofToInt(tokens.back()));
+	if (!parameter || !parameter->isSelectable()) return;
 
-		if ((*currentPage).isSubpage() && normalizePageKey(currentPage->getName()) == normalizePageKey(subpageName)) {
-			if (pageContainsOscPrefix(&(*currentPage), "/surfaces/")) {
-				float p = 1.f;
-				backToCurrent(p);
-				return;
-			}
-		}
+	const std::string subpageName = subpageNameFor(parameter);
+	if (subpageName.empty()) return;
 
-		previousPage = currentPage;
-		if (auto* target = findSubPageByNameAndPrefix(madOscQuery.subPages, subpageName, "/surfaces/")) {
-			MadParameterPage* prevPage = &(*currentPage);
-			for (auto pageIt = madOscQuery.subPages.begin(); pageIt != madOscQuery.subPages.end(); ++pageIt) {
-				if (&(*pageIt) == target) {
-					currentPage = pageIt;
-					setActivePage(&(*currentPage), prevPage);
-					return;
-				}
-			}
-		}
-		oscSelectSurface(subpageName);
-	}
-}
-
-void ofApp::selectGroupContent(string& name) {
-	if (surface) {
-		auto* dev = static_cast<ofxMidiDevice*>(surface.get());
-		auto mit = dev->midiComponents.find(name);
-		if (mit != dev->midiComponents.end() && mit->second.value.get() < 0.5f) return;
-	}
-	auto result = ofSplitString(name, "_");
-	if (result.empty()) return;
-	int index = ofToInt(result.back());
-	if (currentPage->getParameters()->size() < index) return;
-	auto parameter = currentPage->getParameters()->begin();
-	std::advance(parameter, index - 1);
-	if ((*parameter)->isSelectable() && (*parameter)->isGroup()) {
-		auto oscAddress = ofSplitString((*parameter)->getOscAddress(), "/");
-		if (oscAddress.size() < 3) return;
-		string subpageName = oscAddress[2];
-		if ((*currentPage).isSubpage()) return;
-		previousPage = currentPage;
+	previousPage = currentPage;
+	if (auto* target = findSubPageByNameAndPrefix(madOscQuery.subPages, subpageName, oscPrefix)) {
+		MadParameterPage* prevPage = &(*currentPage);
 		for (auto pageIt = madOscQuery.subPages.begin(); pageIt != madOscQuery.subPages.end(); ++pageIt) {
-			if (pageIt->getName() == subpageName + "_SubPage") {
-				MadParameterPage* prevPage = &(*currentPage);
+			if (&(*pageIt) == target) {
 				currentPage = pageIt;
 				setActivePage(&(*currentPage), prevPage);
 				return;
 			}
 		}
-		oscSelectSurface(subpageName);
 	}
+	oscFallback(subpageName);
+}
+
+void ofApp::selectSurface(string& name) {
+	selectSubpageFromButton(name, ".mediaSubpage", "/surfaces/",
+		[](MadParameter* p) { return surfaceSubpageName(p); },
+		[this](const std::string& n) { oscSelectSurface(n); });
 }
 
 void ofApp::selectMedia(string& name) {
-	if (currentPage == madOscQuery.pages.end()) return;
-	if (surface) {
-		auto* dev = static_cast<ofxMidiDevice*>(surface.get());
-		if (isComponentMappedToRole(dev, name, ".layerSubpage")) return;
-		auto mit = dev->midiComponents.find(name);
-		if (mit != dev->midiComponents.end() && mit->second.value.get() < 0.5f) return;
-	}
-
-	// If already on a subpage and button is pressed, go back to main page
-	if ((*currentPage).isSubpage()) {
-		float p = 1.f;
-		backToCurrent(p);
-		return;
-	}
-	
-	// Find the name of the corresponding surface
-	auto result = ofSplitString(name, "_");
-	if (result.empty()) return;
-	int index = ofToInt(result.back());
-	MadParameterPage* sourcePage = &(*currentPage);
-	if ((*currentPage).isSubpage() && previousPage != madOscQuery.pages.end()) {
-		sourcePage = &(*previousPage);
-	}
-	MadParameter* parameter = visibleParameterAt(sourcePage, index);
-	if (!parameter) return;
-	if (parameter->isSelectable()) {
-		string subpageName = parameter->getConnectedMediaName();
-		if (subpageName.empty()) return;
-
-		if ((*currentPage).isSubpage() && normalizePageKey(currentPage->getName()) == normalizePageKey(subpageName)) {
-			if (pageContainsOscPrefix(&(*currentPage), "/media/")) {
-				float p = 1.f;
-				backToCurrent(p);
-				return;
-			}
-		}
-
-		previousPage = currentPage;
-		if (auto* target = findSubPageByNameAndPrefix(madOscQuery.subPages, subpageName, "/media/")) {
-			MadParameterPage* prevPage = &(*currentPage);
-			for (auto pageIt = madOscQuery.subPages.begin(); pageIt != madOscQuery.subPages.end(); ++pageIt) {
-				if (&(*pageIt) == target) {
-					currentPage = pageIt;
-					setActivePage(&(*currentPage), prevPage);
-					return;
-				}
-			}
-		}
-
-		oscSelectMedia(subpageName);
-	}
-}
-void ofApp::showMedia(string& name) {
-	ofRemoveListener(madOscQuery.mediaNameE, this, &ofApp::showMedia);
-
-	if ((*currentPage).isSubpage()) return;
-	previousPage = currentPage;
-
-	std::list<MadParameterPage>::iterator pageIt;
-	for (pageIt = madOscQuery.subPages.begin(); pageIt != madOscQuery.subPages.end(); pageIt++) {
-		if (pageIt->getName() == name) {
-			MadParameterPage* prevPage = &(*currentPage);
-			currentPage = pageIt;
-			setActivePage(&(*currentPage), prevPage);
-			return;
-		}
-	}
-	oscSelectMedia(name);
+	selectSubpageFromButton(name, ".layerSubpage", "/media/",
+		[](MadParameter* p) { return p->getConnectedMediaName(); },
+		[this](const std::string& n) { oscSelectMedia(n); });
 }
 
 void ofApp::backToCurrent(float& p) {
@@ -919,15 +382,6 @@ void ofApp::bankBackward(float& p) {
 	}
 }
 
-void ofApp::reload(float& p) {
-	if (p == 1) {
-		isLoading = true;
-		auto success = reloadFromServer(p);
-		madMapperLoadError = !success;
-	} else
-		isLoading = false;
-}
-
 void ofApp::updateValues(float& p) {
 	if (p == 1 && !isLoading) {
 		isLoading = true;
@@ -971,8 +425,6 @@ void ofApp::removeListeners() {
 	fadeEngineSpeed  = nullptr;
 	speed            = nullptr;
 
-	if (auto* c = ::getComponentByRole(dev, "fixed.tdHoverEncoder"))
-		c->value.removeListener(this, &ofApp::onTdHoverEncoderChange);
 	for (auto& lp : linkedFixedParams) lp.param->unlinkMidiComponent(*lp.component);
 	linkedFixedParams.clear();
 	activeFixedBindings.clear();
@@ -981,37 +433,6 @@ void ofApp::removeListeners() {
 	ofRemoveListener(muteGroup.lastChangedE, this, &ofApp::selectSurface);
 	ofRemoveListener(muteGroup.noneSelectedE, this, &ofApp::backToCurrent);
 	ofRemoveListener(soloGroup.lastChangedE, this, &ofApp::selectMedia);
-}
-
-// TD HOVER ENCODER
-// -------------------------------------------------------------
-void ofApp::onTdHoverEncoderChange(float& v) {
-	if (tdServerId == SIZE_MAX) return;
-
-	const float delta = v - tdHoverEncoderPrevValue;
-	tdHoverEncoderPrevValue = v;
-	if (delta == 0.f) return;
-
-	// Velocity-based acceleration: measure time between ticks to estimate speed.
-	const uint64_t now = ofGetElapsedTimeMillis();
-	const uint64_t dt  = now - tdHoverEncoderLastMs;
-	tdHoverEncoderLastMs = now;
-
-	float accel = 1.f;
-	if (dt > 0 && dt < 500) {  // ignore gaps > 500 ms (user paused)
-		const float velocity = 1000.f / static_cast<float>(dt);  // ticks per second
-		accel = std::min(velocity / kHoverAccelBase, kHoverAccelMax);
-		if (accel < 1.f) accel = 1.f;
-	}
-
-	// Snap to nearest 0.001 so the outgoing value is always a clean decimal.
-	const float scaledDelta = std::round(delta * accel * 1000.f) / 1000.f;
-	if (scaledDelta == 0.f) return;
-
-	ofxOscMessage m;
-	m.setAddress(tdHoverEncoderOscPath);
-	m.addFloatArg(scaledDelta);
-	oscSendToServer(tdServerId, m);
 }
 
 // OSC FUNCTIONS
@@ -1026,7 +447,7 @@ void ofApp::oscSelectSurface(string name, size_t serverId) {
 	ofxOscMessage m;
 	m.setAddress(oscAddress);
 	m.addFloatArg(1);
-	oscSendToServer(serverId, m);
+	oscServers.sendTo(serverId, m);
 }
 
 void ofApp::oscSelectMedia(string name) {
@@ -1039,49 +460,22 @@ void ofApp::oscSelectMedia(string name, size_t serverId) {
 	ofxOscMessage m;
 	m.setAddress(oscAddress);
 	m.addStringArg(name);
-	oscSendToServer(serverId, m);
-}
-
-void ofApp::oscRequestMediaName() {
-	oscRequestMediaName(0);
-}
-
-void ofApp::oscRequestMediaName(size_t serverId) {
-	string oscAddress = "/getControlValues?url=/media/select_by_name";
-	ofxOscMessage m;
-	m.setAddress(oscAddress);
-	m.addFloatArg(1);
-	oscSendToServer(serverId, m);
+	oscServers.sendTo(serverId, m);
 }
 
 //--------------------------------------------------------------
 void ofApp::update() {
 	applyPendingServerConfig();
-	// Health check runs async to avoid blocking main thread on slow DNS lookups (e.g. madmapper.local via mDNS).
-	// Guard with a time check before spawning so we don't create threads at 60fps when idle.
-	{
-		const uint64_t nowCheck = ofGetElapsedTimeMillis();
-		if (!healthCheckInProgress.load() && (nowCheck - lastEndpointHealthCheckMs >= 3000)) {
-			healthCheckInProgress.store(true);
-			std::thread([this]() {
-				refreshEndpointHealth(false);
-				healthCheckInProgress.store(false);
-			}).detach();
-		}
-	}
-	refreshBonjourServices();
+	oscServers.pollHealthAsync();
+	oscServers.refreshBonjourServices();
 
 	if (hasPendingReconnect.exchange(false) && !reconnectInProgress.load()) {
 		reconnectInProgress.store(true);
 		std::thread([this]() {
 			ofLogNotice("ofApp") << "Primary endpoint became reachable — auto-reconnecting OSCQuery...";
 			{
-				std::lock_guard<std::mutex> lock(oscStateMutex);
-				madOscQuery.receive();
-				if (madOscQuery.madMapperJson != nullptr &&
-					madOscQuery.connectWebSocket(queryPort)) {
-					madOscQuery.subscribeAllParameters();
-					registerServerPathRouting(0, madOscQuery);
+				std::lock_guard<std::mutex> lock(oscServers.stateMutex());
+				if (oscServers.connectPrimary()) {
 					subscribeTimelinePaths();
 				}
 			}
@@ -1136,8 +530,6 @@ void ofApp::update() {
 		activatePageByName(pageToActivate);
 	}
 
-	oscParamSync.update();
-
 	if (cueGridRefreshPending && !isLoading && !madMapperLoadError) {
 		const uint64_t now = ofGetElapsedTimeMillis();
 		if (now - lastCueGridRefreshMs >= 120) {
@@ -1151,7 +543,7 @@ void ofApp::update() {
 	// Delta-mode fixed bindings: poll, accelerate, send raw OSC delta.
 	// Absolute-mode bindings are listener-driven via MadParameter::linkMidiComponent
 	// (acceleration lives in MadParameter::onParameterChange). Tune kFixedAccelBase/Max
-	// in ofApp.h; tune MadParameter::encoderAccelBase/Max in MadParameter.h.
+	// and kHoverAccelBase/Max in ofApp.h; tune MadParameter::encoderAccelBase/Max in MadParameter.h.
 	for (auto& fb : activeFixedBindings) {
 		const float v     = fb.component->value.get();
 		const float delta = v - fb.prevValue;
@@ -1165,17 +557,17 @@ void ofApp::update() {
 		float accel = 1.f;
 		if (dt > 0 && dt < 500) {
 			const float velocity = 1000.f / static_cast<float>(dt);
-			accel = std::min(velocity / kFixedAccelBase, kFixedAccelMax);
+			accel = std::min(velocity / fb.accelBase, fb.accelMax);
 			if (accel < 1.f) accel = 1.f;
 		}
 
-		const float scaledDelta = std::round(delta * accel * 1000.f) / 1000.f;
+		const float scaledDelta = std::round(delta * accel * kEncoderSensitivity * 1000.f) / 1000.f;
 		if (scaledDelta == 0.f) continue;
 
 		ofxOscMessage m;
 		m.setAddress(fb.mapping.path);
 		m.addFloatArg(scaledDelta);
-		oscSendToServer(fb.mapping.serverId, m);
+		oscServers.sendTo(fb.mapping.serverId, m);
 	}
 
 	// Throttled refresh so displays (e.g. Push3) show value changes without saturating USB/CPU.
@@ -1195,17 +587,6 @@ void ofApp::setupPages(ofJson madmapperJson) {
 	previousPage = currentPage;
 
 	setActivePage(&(*currentPage), nullptr);
-}
-
-static const ofJson* jsonGet(const ofJson& root, std::initializer_list<const char*> keys) {
-	const ofJson* node = &root;
-	for (auto k : keys) {
-		if (!node->is_object()) return nullptr;
-		auto it = node->find(k);
-		if (it == node->end()) return nullptr;
-		node = &(*it);
-	}
-	return node;
 }
 
 void ofApp::setupUI(ofJson madmapperJson) {
@@ -1260,43 +641,18 @@ void ofApp::setupUI(ofJson madmapperJson) {
 		speed->linkMidiComponent(dev->midiComponents["jog"]);
 	}
 
-	// TD hover encoder — relative encoder on Push3 right side controls the
-	// currently hovered TD parameter by sending normalized deltas via OSC.
-	if (auto* c = ::getComponentByRole(dev, "fixed.tdHoverEncoder")) {
-		tdHoverEncoderPrevValue = c->value.get();
-		c->value.addListener(this, &ofApp::onTdHoverEncoderChange);
-	}
-
-	// Generic fixed OSC mappings: wire all fixed.* bindings (except tdHoverEncoder).
+	// Generic fixed OSC mappings: wire all fixed.* bindings.
 	// For absolute mode, create a MadParameter to get min/max range + MM feedback sync.
-	auto resolveOscPathNode = [](const ofJson& tree, const std::string& path) -> const ofJson* {
-		const ofJson* node = &tree;
-		std::string seg;
-		std::istringstream ss(path);
-		while (std::getline(ss, seg, '/')) {
-			if (seg.empty()) continue;
-			auto cit = node->find("CONTENTS");
-			if (cit == node->end()) return nullptr;
-			auto pit = cit->find(seg);
-			if (pit == cit->end()) return nullptr;
-			node = &(*pit);
-		}
-		return node;
-	};
-
 	activeFixedBindings.clear();
 	linkedFixedParams.clear();
 	for (auto& [key, fm] : fixedMappings) {
-		if (key == "tdHoverEncoder") continue;
 		auto* c = ::getComponentByRole(dev, "fixed." + key);
 		if (!c) continue;
 
 		if (fm.mode == "absolute") {
-			ofxMadOscQuery* query = (fm.serverId == 0) ? &madOscQuery
-			                      : (fm.serverId - 1 < extraOscQueries.size()
-			                         ? extraOscQueries[fm.serverId - 1].get() : nullptr);
+			ofxMadOscQuery* query = oscServers.server(fm.serverId);
 			if (query && query->madMapperJson.is_object()) {
-				if (const ofJson* node = resolveOscPathNode(query->madMapperJson, fm.path)) {
+				if (const ofJson* node = resolveNodeByPath(query->madMapperJson, fm.path)) {
 					MadParameter* param = query->createParameter(*node);
 					if (param) {
 						param->linkMidiComponent(*c); // acceleration + feedback sync built-in
@@ -1308,8 +664,12 @@ void ofApp::setupUI(ofJson madmapperJson) {
 				}
 			}
 		} else {
-			// Delta mode: poll in update() and send raw delta OSC
-			activeFixedBindings.push_back({ c, fm, c->value.get(), 0 });
+			// Delta mode: poll in update() and send raw delta OSC.
+			// The TD hover encoder gets faster acceleration than regular encoders.
+			const bool hover = (key == "tdHoverEncoder");
+			activeFixedBindings.push_back({ c, fm, c->value.get(), 0,
+			                                hover ? kHoverAccelBase : kFixedAccelBase,
+			                                hover ? kHoverAccelMax  : kFixedAccelMax });
 			ofLogNotice("ofApp") << "Fixed binding wired: fixed." << key << " → " << fm.path << " (delta)";
 		}
 	}
@@ -1382,23 +742,15 @@ void ofApp::keyPressed(int key) {
 
 	if (key == 's') {
 		showStatusString = !showStatusString;
-
-		//        platformM.saveMidiComponentsToFile("platformM.json");
 	}
 	if (key == 'm') {
 		showMidiIn = !showMidiIn;
 	}
 
 	if (key == ' ') {
-		//        auto success = reloadFromServer(p);
-		//        madMapperLoadError = !success;
 		madOscQuery.updateValues();
 		rebuildCueGrid(madOscQuery.madMapperJson);
 		updateParameterDisplay();
-	}
-
-	if (key == 'l') {
-		// platformM.setupFromFile("platformM.json");
 	}
 
 	if (key == 'o' && !madMapperLoadError) {
@@ -1464,15 +816,6 @@ void ofApp::updateSubpageMediaButtonFeedback() {
 	if (!surface) return;
 	auto* dev = static_cast<ofxMidiDevice*>(surface.get());
 
-	auto extractSurfaceSubpageName = [](MadParameter* parameter) {
-		if (!parameter || !parameter->isSelectable()) return std::string();
-		auto oscAddress = ofSplitString(parameter->getOscAddress(), "/");
-		int i = 0;
-		while (i < (int)oscAddress.size() && oscAddress[i] != "opacity") i++;
-		if (i <= 0 || i >= (int)oscAddress.size()) return std::string();
-		return oscAddress[i - 1];
-	};
-
 	MadParameterPage* sourcePage = nullptr;
 	if (currentPage != madOscQuery.pages.end()) {
 		sourcePage = &(*currentPage);
@@ -1485,7 +828,7 @@ void ofApp::updateSubpageMediaButtonFeedback() {
 
 	for (int i = 1; i < 17; ++i) {
 		auto* parameter = visibleParameterAt(sourcePage, i);
-		std::string layerSubpage = extractSurfaceSubpageName(parameter);
+		std::string layerSubpage = surfaceSubpageName(parameter);
 		std::string mediaSubpage = (parameter && parameter->isSelectable()) ? parameter->getConnectedMediaName() : std::string();
 
 		std::string surfaceLabel = labelForRoleOrPrefix(dev, "param." + ofToString(i) + ".layerSubpage", "sel_", i);
@@ -1536,8 +879,8 @@ void ofApp::drawStatusString() {
 bool ofApp::reloadFromServer(float& p) {
 	if (p == 1) {
 		try {
-		std::lock_guard<std::mutex> lock(oscStateMutex);
-		if (!endpointReachability.empty() && !endpointReachability[0]) {
+		std::lock_guard<std::mutex> lock(oscServers.stateMutex());
+		if (!oscServers.reachable(0)) {
 			ofLogWarning("ofApp") << "Primary endpoint unreachable - skipping reload";
 			madMapperLoadError = true;
 			return false;
@@ -1579,14 +922,17 @@ bool ofApp::reloadFromServer(float& p) {
 		const ofJson customPageJson = ofLoadJson("custom_page.json");
 		madOscQuery.createCustomPages(static_cast<ofxMidiDevice*>(surface.get()), customPageJson,
 									  madOscQuery.madMapperJson, 0);
+		// Re-subscribe: the rebuild recreated parameterMap, and on late/re-connect
+		// the map was empty (or the socket fresh) when subscribeAllParameters last ran.
+		madOscQuery.subscribeAllParameters();
 
 		// Build pages for extra servers and splice into the main page list
-		for (size_t i = 0; i < extraOscQueries.size(); ++i) {
-			if (i + 1 >= endpointReachability.size() || !endpointReachability[i + 1]) {
+		for (size_t i = 0; i < oscServers.extraCount(); ++i) {
+			if (!oscServers.reachable(i + 1)) {
 				ofLogWarning("ofApp") << "Extra server " << i + 1 << " unreachable, skipping page build";
 				continue;
 			}
-			auto& extraServer = *extraOscQueries[i];
+			auto& extraServer = *oscServers.extra(i);
 			extraServer.receive(); // refresh data from server
 			if (extraServer.madMapperJson.is_null()) {
 				ofLogWarning("ofApp") << "Extra server " << i + 1 << " unreachable, skipping page build";
@@ -1596,7 +942,8 @@ bool ofApp::reloadFromServer(float& p) {
 			extraServer.parameterMap.clear();
 			extraServer.createCustomPages(static_cast<ofxMidiDevice*>(surface.get()), customPageJson,
 										  extraServer.madMapperJson, i + 1);
-			registerServerPathRouting(i + 1, extraServer);
+			extraServer.subscribeAllParameters();
+			oscServers.registerPathRouting(i + 1, extraServer);
 			const size_t extraPageCount = extraServer.pages.size();
 			madOscQuery.pages.splice(madOscQuery.pages.end(), extraServer.pages);
 			ofLogNotice("ofApp") << "Built " << extraPageCount << " pages for extra server " << i + 1;
@@ -1736,38 +1083,38 @@ void ofApp::dragEvent(ofDragInfo dragInfo) {}
 void ofApp::setupWebServer() {
 	webServer = std::make_unique<WebServer>(8080);
 	// Bind API callbacks
-	webServer->setPagesFetcher([this]() { return getPages(); });
-	webServer->setPagesSaver([this](const ofJson& pages) { savePages(pages); });
-	webServer->setPageActivator([this](const std::string& pageName) { requestActivatePageByName(pageName); });
-	webServer->setParametersFetcher([this]() { return getParameters(); });
-	webServer->setConfigFetcher([this]() { return getConfig(); });
-	webServer->setConfigSaver([this](const ofJson& config) { saveConfig(config); });
+	webServer->pagesFetcher = [this]() { return getPages(); };
+	webServer->pagesSaver = [this](const ofJson& pages) { savePages(pages); };
+	webServer->pageActivator = [this](const std::string& pageName) { requestActivatePageByName(pageName); };
+	webServer->parametersFetcher = [this]() { return getParameters(); };
+	webServer->configFetcher = [this]() { return getConfig(); };
+	webServer->configSaver = [this](const ofJson& config) { saveConfig(config); };
 
-	webServer->setMappingsFetcher([this]() { return getMappingsJson(); });
-	webServer->setMappingsSaver([this](const ofJson& body) {
+	webServer->mappingsFetcher = [this]() { return getMappingsJson(); };
+	webServer->mappingsSaver = [this](const ofJson& body) {
 		mappingsJson = body;
 		saveMappings();
 		loadMappings();
 		hasPendingBindingsUpdate.store(true);
-	});
-	webServer->setProfilesFetcher([this]() { return getAllProfilesJson(); });
-	webServer->setProfileFetcher([this]() { return getProfileJson(); });
-	webServer->setProfileSaver([this](const ofJson& body) {
+	};
+	webServer->profilesFetcher = [this]() { return getAllProfilesJson(); };
+	webServer->profileFetcher = [this]() { return getProfileJson(); };
+	webServer->profileSaver = [this](const ofJson& body) {
 		saveProfileJson(body);
 		hasPendingBindingsUpdate.store(true);
-	});
+	};
 
-	webServer->setLearnStarter([this]() { startLearnMode(); });
-	webServer->setLearnStopper([this]() { stopLearnMode(); });
-	webServer->setLearnInjector([this](const ofJson& body) {
+	webServer->learnStarter = [this]() { startLearnMode(); };
+	webServer->learnStopper = [this]() { stopLearnMode(); };
+	webServer->learnInjector = [this](const ofJson& body) {
 		int ch     = body.value("channel", 1);
 		int status = body.value("status",  176); // default CC
 		int ctrl   = body.value("control", 0);
 		int pitch  = body.value("pitch",   0);
 		int val    = body.value("value",   0);
 		injectLearnMessage(ch, status, ctrl, pitch, val);
-	});
-	webServer->setLearnStatusFetcher([this]() {
+	};
+	webServer->learnStatusFetcher = [this]() {
 		std::lock_guard<std::mutex> lock(learnMutex);
 		ofJson j;
 		j["active"]  = learnModeActive;
@@ -1789,8 +1136,8 @@ void ofApp::setupWebServer() {
 			j["messages"].push_back(entry);
 		}
 		return j;
-	});
-	webServer->setLearnAssigner([this](const ofJson& body) {
+	};
+	webServer->learnAssigner = [this](const ofJson& body) {
 		// body: { label, channel, control, type, interfaceType, role }
 		// Writes a new component + binding into the active device profile JSON.
 		if (!activeProfile) return;
@@ -1855,7 +1202,7 @@ void ofApp::setupWebServer() {
 			hasPendingBindingsUpdate.store(true);
 			break;
 		}
-	});
+	};
 
 	webServer->start();
 }
@@ -1943,22 +1290,22 @@ void ofApp::savePages(const ofJson& pages) {
 }
 
 ofJson ofApp::getParameters() {
-	std::lock_guard<std::mutex> lock(oscStateMutex);
+	std::lock_guard<std::mutex> lock(oscServers.stateMutex());
 	// Return all parameters organized by server
 	ofJson result = ofJson::object();
+	const auto& configs = oscServers.configs();
 	std::vector<std::unordered_set<std::string>> emittedPaths;
-	emittedPaths.resize(std::max<size_t>(1, oscServerConfigs.size()));
+	emittedPaths.resize(std::max<size_t>(1, configs.size()));
 
 	// Build server buckets first.
-	for (size_t i = 0; i < oscServerConfigs.size(); ++i) {
+	for (size_t i = 0; i < configs.size(); ++i) {
 		std::string serverId = "server_" + std::to_string(i);
 		ofJson serverInfo = ofJson::object();
-		serverInfo["name"] = oscServerConfigs[i].id;
+		serverInfo["name"] = configs[i].id;
 		serverInfo["id"] = serverId;
-		const bool reachable = i < endpointReachability.size() ? endpointReachability[i] : false;
-		serverInfo["connected"] = reachable && (i == 0
-			? (madOscQuery.madMapperJson != nullptr)
-			: ((i - 1) < extraOscQueries.size() && extraOscQueries[i - 1] != nullptr && extraOscQueries[i - 1]->madMapperJson != nullptr));
+		const bool reachable = oscServers.reachable(i);
+		const ofxMadOscQuery* query = oscServers.server(i);
+		serverInfo["connected"] = reachable && query != nullptr && query->madMapperJson != nullptr;
 		serverInfo["reachable"] = reachable;
 		serverInfo["parameters"] = ofJson::array();
 		result[serverId] = serverInfo;
@@ -2001,14 +1348,15 @@ ofJson ofApp::getParameters() {
 		}
 	};
 
-	if ((endpointReachability.empty() || endpointReachability[0]) && madOscQuery.madMapperJson.is_object()) {
+	if (oscServers.reachable(0) && madOscQuery.madMapperJson.is_object()) {
 		collectParameters(collectParameters, 0, madOscQuery.madMapperJson);
 	}
 
-	for (size_t i = 0; i < extraOscQueries.size(); ++i) {
-		if (i + 1 < endpointReachability.size() && !endpointReachability[i + 1]) continue;
-		if (!extraOscQueries[i] || !extraOscQueries[i]->madMapperJson.is_object()) continue;
-		collectParameters(collectParameters, i + 1, extraOscQueries[i]->madMapperJson);
+	for (size_t i = 0; i < oscServers.extraCount(); ++i) {
+		if (!oscServers.reachable(i + 1)) continue;
+		auto* extra = oscServers.extra(i);
+		if (!extra || !extra->madMapperJson.is_object()) continue;
+		collectParameters(collectParameters, i + 1, extra->madMapperJson);
 	}
 	
 	// Add current state info without touching potentially invalid iterators.
@@ -2021,13 +1369,14 @@ ofJson ofApp::getParameters() {
 }
 
 ofJson ofApp::getConfig() {
-	std::lock_guard<std::mutex> lock(oscStateMutex);
+	std::lock_guard<std::mutex> lock(oscServers.stateMutex());
 	// Return current configuration
 	ofJson config = ofJson::object();
 
+	const auto& configs = oscServers.configs();
 	config["servers"] = ofJson::array();
-	for (size_t i = 0; i < oscServerConfigs.size(); ++i) {
-		const auto& serverConfig = oscServerConfigs[i];
+	for (size_t i = 0; i < configs.size(); ++i) {
+		const auto& serverConfig = configs[i];
 		ofJson sc = ofJson::object();
 		sc["id"] = serverConfig.id;
 		sc["ip"] = serverConfig.ip;
@@ -2035,16 +1384,15 @@ ofJson ofApp::getConfig() {
 		sc["feedbackPort"] = serverConfig.feedbackPort;
 		sc["queryPort"] = serverConfig.queryPort;
 		sc["discovery"] = serverConfig.discovery;
-		sc["reachable"] = i < endpointReachability.size() ? endpointReachability[i] : false;
+		sc["reachable"] = oscServers.reachable(i);
 		config["servers"].push_back(sc);
 	}
 	// Bonjour discovered: live mDNS scan results filtered to exclude already-configured IPs
 	{
 		std::set<std::string> configuredIps;
-		for (auto& s : oscServerConfigs) configuredIps.insert(s.ip);
-		std::lock_guard<std::mutex> bonLock(bonjourMutex);
+		for (auto& s : configs) configuredIps.insert(s.ip);
 		config["bonjourAnnouncements"] = ofJson::array();
-		for (auto& svc : bonjourDiscovered) {
+		for (auto& svc : oscServers.bonjourSnapshot()) {
 			std::string ip = svc.value("ip", std::string());
 			if (configuredIps.count(ip) == 0)
 				config["bonjourAnnouncements"].push_back(svc);
@@ -2103,45 +1451,27 @@ void ofApp::applyPendingServerConfig() {
 
 	ofSavePrettyJson(resolveSettingsPath(), settings);
 
-	std::vector<OscServerConfig> newConfigs = parseOscServerConfigs(settings);
+	std::vector<OscServerConfig> newConfigs = OscServerConfig::parseList(settings);
 	if (newConfigs.empty()) {
 		ofLogError("ofApp") << "applyPendingServerConfig: no valid servers";
 		return;
 	}
 
-	{
-		std::lock_guard<std::mutex> lock(oscStateMutex);
-		oscServerConfigs = std::move(newConfigs);
-		endpointReachability.assign(oscServerConfigs.size(), false);
-		extraOscQueries.clear();
-		oscPathServerRouting.clear();
+	oscServers.applyConfigs(std::move(newConfigs));
+	ip = oscServers.configs().front().ip;
+	sendPort = oscServers.configs().front().sendPort;
+	queryPort = oscServers.configs().front().queryPort;
+	feedbackPort = oscServers.configs().front().feedbackPort;
 
-		ip = oscServerConfigs.front().ip;
-		sendPort = oscServerConfigs.front().sendPort;
-		queryPort = oscServerConfigs.front().queryPort;
-		feedbackPort = oscServerConfigs.front().feedbackPort;
-
-		madOscQuery.disconnectWebSocket();
-		madOscQuery.setup(ip, sendPort, feedbackPort, queryPort);
-	}
-
-	refreshEndpointHealth(true);
-	bool primaryReachable = false;
-	{
-		std::lock_guard<std::mutex> lock(oscStateMutex);
-		primaryReachable = !endpointReachability.empty() && endpointReachability[0];
-	}
-	if (primaryReachable) {
-		std::lock_guard<std::mutex> lock(oscStateMutex);
-		madOscQuery.receive();
-		if (madOscQuery.connectWebSocket(queryPort)) {
-			madOscQuery.subscribeAllParameters();
-			registerServerPathRouting(0, madOscQuery);
+	oscServers.refreshEndpointHealth(true);
+	if (oscServers.reachable(0)) {
+		std::lock_guard<std::mutex> lock(oscServers.stateMutex());
+		if (oscServers.connectPrimary()) {
 			subscribeTimelinePaths();
 		}
 	}
 
-	setupAdditionalOscServers();
+	oscServers.setupAdditionalServers();
 	hasPendingReload.store(true);
 	{
 		auto cpIt = configToApply.find("currentPage");
@@ -2149,136 +1479,6 @@ void ofApp::applyPendingServerConfig() {
 			requestActivatePageByName(cpIt->get<std::string>());
 	}
 }
-
-bool ofApp::endpointReachable(const OscServerConfig& cfg, std::string* error) const {
-	try {
-		Poco::Net::SocketAddress address(cfg.ip, cfg.queryPort);
-		Poco::Net::StreamSocket socket;
-		Poco::Timespan timeout(0, 0, 0, 0, 350000);
-		socket.connect(address, timeout);
-		socket.close();
-		return true;
-	} catch (const Poco::Exception& e) {
-		if (error) *error = e.displayText();
-		return false;
-	} catch (const std::exception& e) {
-		if (error) *error = e.what();
-		return false;
-	} catch (...) {
-		if (error) *error = "unknown error";
-		return false;
-	}
-}
-
-void ofApp::refreshBonjourServices() {
-	const uint64_t nowMs = ofGetElapsedTimeMillis();
-	if (bonjourScanInProgress.load() || (nowMs - lastBonjourScanMs) < 15000) return;
-	lastBonjourScanMs = nowMs;
-	bonjourScanInProgress.store(true);
-
-	std::thread([this]() {
-		std::vector<ofJson> found;
-#ifdef TARGET_LINUX
-		FILE* pipe = popen("avahi-browse -t -r -p _oscjson._tcp 2>/dev/null", "r");
-		if (pipe) {
-			char buf[512];
-			std::map<std::string, ofJson> byKey;
-			while (fgets(buf, sizeof(buf), pipe)) {
-				std::string line(buf);
-				if (line.empty() || line[0] != '=') continue;
-				// format: =;iface;proto;name;type;domain;hostname;address;port;txt
-				std::vector<std::string> parts;
-				std::stringstream ss(line);
-				std::string tok;
-				while (std::getline(ss, tok, ';')) parts.push_back(tok);
-				if (parts.size() < 9) continue;
-				std::string name = parts[3];
-				std::string ip   = parts[7];
-				int port = 0;
-				try { port = std::stoi(parts[8]); } catch (...) { continue; }
-				if (ip.empty() || port <= 0) continue;
-				// Strip ":port" suffix from name if present (e.g. "MadMapper:9001" → "MadMapper")
-				std::string id = name;
-				auto colon = id.rfind(':');
-				if (colon != std::string::npos) {
-					std::string suf = id.substr(colon + 1);
-					if (!suf.empty() && std::all_of(suf.begin(), suf.end(), ::isdigit))
-						id = id.substr(0, colon);
-				}
-				ofJson svc;
-				svc["id"] = id;
-				svc["ip"] = ip;
-				svc["queryPort"] = port;
-				svc["sendPort"]  = port;
-				svc["feedbackPort"] = 9893;
-				byKey[name + ip] = svc;
-			}
-			pclose(pipe);
-			for (auto& kv : byKey) found.push_back(kv.second);
-		}
-#endif
-		{
-			std::lock_guard<std::mutex> lock(bonjourMutex);
-			bonjourDiscovered = std::move(found);
-		}
-		bonjourScanInProgress.store(false);
-	}).detach();
-}
-
-void ofApp::refreshEndpointHealth(bool force) {
-	const uint64_t nowMs = ofGetElapsedTimeMillis();
-	if (!force && (nowMs - lastEndpointHealthCheckMs) < 3000) return;
-	lastEndpointHealthCheckMs = nowMs;
-
-	std::vector<OscServerConfig> configsSnapshot;
-	{
-		std::lock_guard<std::mutex> lock(oscStateMutex);
-		configsSnapshot = oscServerConfigs;
-		if (endpointReachability.size() < configsSnapshot.size()) {
-			endpointReachability.resize(configsSnapshot.size(), false);
-		}
-	}
-	if (configsSnapshot.empty()) return;
-	std::vector<bool> probed(configsSnapshot.size(), false);
-	std::vector<std::string> errors(configsSnapshot.size());
-
-	for (size_t i = 0; i < configsSnapshot.size(); ++i) {
-		probed[i] = endpointReachable(configsSnapshot[i], &errors[i]);
-	}
-
-	bool primaryBecameReachable = false;
-	std::vector<std::string> becameReachable;
-	std::vector<std::string> becameUnreachable;
-	{
-		std::lock_guard<std::mutex> lock(oscStateMutex);
-		for (size_t i = 0; i < configsSnapshot.size(); ++i) {
-			const bool reachable = probed[i];
-			const bool oldValue = endpointReachability[i];
-			endpointReachability[i] = reachable;
-
-			if (reachable != oldValue) {
-				if (reachable) {
-					becameReachable.push_back(configsSnapshot[i].id + " (" + configsSnapshot[i].ip + ":" + ofToString(configsSnapshot[i].queryPort) + ")");
-					if (i == 0) primaryBecameReachable = true;
-				} else {
-					becameUnreachable.push_back(configsSnapshot[i].id + " (" + configsSnapshot[i].ip + ":" + ofToString(configsSnapshot[i].queryPort) + ") reason=" + errors[i]);
-				}
-			}
-		}
-	}
-
-	for (const auto& msg : becameReachable) {
-		ofLogNotice("ofApp") << "Endpoint reachable again: " << msg;
-	}
-	for (const auto& msg : becameUnreachable) {
-		ofLogWarning("ofApp") << "Endpoint unreachable: " << msg;
-	}
-
-	if (primaryBecameReachable && !reconnectInProgress.load()) {
-		hasPendingReconnect.store(true);
-	}
-}
-
 
 void ofApp::updatePageDisplay() {
 	if (!surface) return;
@@ -2297,98 +1497,20 @@ void ofApp::rebuildCueGrid(const ofJson& madMapperJson) {
 		return;
 	}
 
-	int gridRows = 8;
-	int gridCols = 8;
-	bool flipTopOrigin = true;
+	CueGridBuilder builder;
 	if (activeProfile && activeProfile->grid) {
-		gridRows = activeProfile->grid->rows;
-		gridCols = activeProfile->grid->cols;
-		flipTopOrigin = activeProfile->grid->flipTopOrigin;
+		builder.rows = activeProfile->grid->rows;
+		builder.cols = activeProfile->grid->cols;
+		builder.flipTopOrigin = activeProfile->grid->flipTopOrigin;
 	}
-	timelineGridState.rows = gridRows;
-	timelineGridState.cols = gridCols;
+	builder.configuredBank = cueBankName;
+	builder.followActiveBank = cueFollowActiveBank;
 
-	availableCueBanks = timelineBankNames(madMapperJson);
-	cueBankName = resolveCueBankName(madMapperJson, availableCueBanks, cueBankName, cueFollowActiveBank);
+	timelineGridState = builder.build(madMapperJson);
+	availableCueBanks = builder.availableBanks;
+	cueBankName = builder.resolvedBank;
 	subscribeTimelinePaths();
-	if (cueBankName.empty()) {
-		surface->updateTimelineGrid(timelineGridState);
-		return;
-	}
 
-	auto* bankContents = jsonGet(madMapperJson, {"CONTENTS", "timelines", "CONTENTS", cueBankName.c_str(), "CONTENTS"});
-	auto* setupNode = bankContents ? jsonGet(*bankContents, {"setup"}) : nullptr;
-	auto* byNameNode = bankContents ? jsonGet(*bankContents, {"by_name", "CONTENTS"}) : nullptr;
-	if (!bankContents || !setupNode || !byNameNode) {
-		surface->updateTimelineGrid(timelineGridState);
-		return;
-	}
-
-	std::unordered_map<std::string, std::string> addressByName;
-	for (auto it = byNameNode->begin(); it != byNameNode->end(); ++it) {
-		if (!it.value().is_object()) continue;
-		const ofJson* playFromBeginning = jsonGet(it.value(), {"CONTENTS", "play_from_beginning", "FULL_PATH"});
-		const ofJson* play = jsonGet(it.value(), {"CONTENTS", "play", "FULL_PATH"});
-		const ofJson* fullPath = jsonGet(it.value(), {"FULL_PATH"});
-		if (playFromBeginning && playFromBeginning->is_string()) {
-			addressByName[it.key()] = playFromBeginning->get<std::string>();
-		} else if (play && play->is_string()) {
-			addressByName[it.key()] = play->get<std::string>();
-		} else if (fullPath && fullPath->is_string()) {
-			addressByName[it.key()] = fullPath->get<std::string>() + "/play_from_beginning";
-		}
-	}
-
-	ofJson setupJson;
-	try {
-		auto setupValue = firstValueJson(*setupNode);
-		if (!setupValue) {
-			surface->updateTimelineGrid(timelineGridState);
-			return;
-		}
-		if (setupValue->is_string()) {
-			auto setupJsonOpt = parseCueSetupValue(madMapperJson, bankContents, setupValue->get<std::string>());
-			if (!setupJsonOpt) {
-				surface->updateTimelineGrid(timelineGridState);
-				return;
-			}
-			setupJson = *setupJsonOpt;
-		} else if (setupValue->is_array() || setupValue->is_object()) {
-			setupJson = *setupValue;
-		} else {
-			surface->updateTimelineGrid(timelineGridState);
-			return;
-		}
-	} catch (const std::exception& exception) {
-		ofLogWarning("ofApp") << "Failed to parse cue setup JSON: " << exception.what();
-		surface->updateTimelineGrid(timelineGridState);
-		return;
-	}
-	collectCueItems(setupJson,
-					std::string(),
-					addressByName,
-					"/timelines/" + cueBankName + "/by_name",
-					gridRows,
-					flipTopOrigin,
-					timelineGridState.cells);
-
-	std::unordered_map<std::string, CueGridItem> deduped;
-	for (const auto& cue : timelineGridState.cells) {
-		if (!cue.isValid()) continue;
-		deduped[ofToString(cue.row) + ":" + ofToString(cue.column)] = cue;
-	}
-
-	timelineGridState.cells.clear();
-	for (const auto& entry : deduped) {
-		timelineGridState.cells.push_back(entry.second);
-	}
-
-	std::sort(timelineGridState.cells.begin(), timelineGridState.cells.end(), [](const CueGridItem& left, const CueGridItem& right) {
-		if (left.row != right.row) return left.row < right.row;
-		return left.column < right.column;
-	});
-
-	timelineGridState.bankName = cueBankName;
 	cueGridActive = !timelineGridState.empty();
 	surface->updateTimelineGrid(timelineGridState);
 }
@@ -2421,7 +1543,7 @@ void ofApp::triggerCue(const CueGridItem& cue) {
 	if (cue.oscAddress.empty()) return;
 	ofxOscMessage message;
 	message.setAddress(cue.oscAddress);
-	oscSendToServer(serverForOscPath(cue.oscAddress), message);
+	oscServers.sendTo(oscServers.serverIdForPath(cue.oscAddress), message);
 }
 
 void ofApp::onWebSocketPathUpdate(std::string& path) {
@@ -2543,11 +1665,20 @@ void ofApp::loadMappings() {
 		}
 	}
 
-	// Update tdHoverEncoder from mappings if present
+	// The hover encoder is always relative; mappings.json overrides path/server.
+	// Without an entry, synthesize one from the legacy settings.json defaults so
+	// it wires up like any other delta-mode fixed binding.
 	auto it = fixedMappings.find("tdHoverEncoder");
 	if (it != fixedMappings.end()) {
+		it->second.mode = "delta";
 		tdHoverEncoderOscPath = it->second.path;
 		tdServerId = it->second.serverId;
+	} else if (tdServerId != SIZE_MAX) {
+		FixedMapping fm;
+		fm.path = tdHoverEncoderOscPath;
+		fm.serverId = tdServerId;
+		fm.mode = "delta";
+		fixedMappings["tdHoverEncoder"] = fm;
 	}
 
 	// Parse page goto entries

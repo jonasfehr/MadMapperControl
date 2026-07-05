@@ -3,14 +3,13 @@
 #include "DeviceProfile.h"
 #include "Faderport16Surface.h"
 #include "MidiControlSurface.h"
+#include "OscServerManager.h"
 #include "PlatformMSurface.h"
 #include "Push3Surface.h"
 #include "WebServer.h"
 #include "ofMain.h"
-#include "ofxGui.h"
 #include "ofxMadOscQuery.h"
 #include "ofxMidiDevice.h"
-#include "ofxOscParameterSync.h"
 #include <cstddef>
 #include <memory>
 #include <mutex>
@@ -19,28 +18,8 @@
 #include <thread>
 #include <unordered_map>
 
-#define HOST "localhost"
-#define PORT_RECEIVE 8010
-#define PORT_FEEDBACK 9893
-
-class writeLogToWindow : public ofBaseLoggerChannel {
-  public:
-	/// \brief Destroy the console logger channel.
-	virtual ~writeLogToWindow() {};
-	void log(ofLogLevel level, const std::string& module, const std::string& message);
-};
-
 class ofApp : public ofBaseApp {
   public:
-	struct OscServerConfig {
-		std::string id;
-		std::string ip = "127.0.0.1";
-		int sendPort = PORT_RECEIVE;
-		int feedbackPort = PORT_FEEDBACK;
-		int queryPort = PORT_RECEIVE;
-		std::string discovery = "manual";
-	};
-
 	void setup();
 	void update();
 	void draw();
@@ -63,7 +42,8 @@ class ofApp : public ofBaseApp {
 	int queryPort;
 	int feedbackPort;
 	int sendPort;
-	ofxMadOscQuery madOscQuery;
+	OscServerManager oscServers;
+	ofxMadOscQuery& madOscQuery = oscServers.primary(); // primary MadMapper connection
 	std::unique_ptr<MidiControlSurface> surface;
 	std::optional<DeviceProfile> activeProfile;
 
@@ -100,15 +80,12 @@ class ofApp : public ofBaseApp {
 	MidiComponentGroup soloGroup;
 	MidiComponentGroup muteGroup;
 	void selectSurface(string& name);
-	void selectGroupContent(string& name);
 	void selectMedia(string& name);
-	void showMedia(string& name);
 	void triggerCue(const CueGridItem& cue);
 	void onWebSocketPathUpdate(std::string& path);
 	void subscribeTimelinePaths();
 	void backToCurrent(float& p);
 	bool reloadFromServer(float& p);
-	void reload(float& p);
 	void updateValues(float& p);
 
 	bool isLoading;
@@ -121,15 +98,9 @@ class ofApp : public ofBaseApp {
 	void oscSelectSurface(string name, size_t serverId);
 	void oscSelectMedia(string name);
 	void oscSelectMedia(string name, size_t serverId);
-	void oscRequestMediaName();
-	void oscRequestMediaName(size_t serverId);
 
 	void removeListeners();
 
-	ofxOscParameterSync oscParamSync;
-	ofxPanel gui;
-
-	vector<MadParameter> madParameters;
 	TimelineGridState timelineGridState;
 	std::vector<std::string> availableCueBanks;
 	std::string cueBankName = "Bank-1";
@@ -138,13 +109,9 @@ class ofApp : public ofBaseApp {
 	std::atomic<bool> cueGridRefreshPending{false};
 	uint64_t lastCueGridRefreshMs = 0;
 
-	MidiComponent* getComponentByRole(const std::string& role);
-
 	// TD hover encoder — Push3 master encoder routes relative MIDI to the
-	// currently hovered TouchDesigner parameter via OSC.
-	void onTdHoverEncoderChange(float& v);
-	float    tdHoverEncoderPrevValue = 0.f;
-	uint64_t tdHoverEncoderLastMs   = 0;
+	// currently hovered TouchDesigner parameter via OSC. Wired as a regular
+	// delta-mode fixed binding (see loadMappings), only with faster acceleration.
 	std::string tdHoverEncoderOscPath = "/ParHoverMIDI_VSN1/knob_delta";
 	static constexpr float kHoverAccelBase = 8.f;
 	static constexpr float kHoverAccelMax  = 12.f;
@@ -177,6 +144,8 @@ class ofApp : public ofBaseApp {
 		FixedMapping   mapping;
 		float          prevValue = 0.f;
 		uint64_t       lastMs    = 0;
+		float          accelBase = 6.f;
+		float          accelMax  = 8.f;
 	};
 
 	// Absolute-mode fixed binding: linked via MadParameter (acceleration built-in)
@@ -189,6 +158,8 @@ class ofApp : public ofBaseApp {
 	// Acceleration for fixed delta-mode encoders (absolute-mode accel is in MadParameter).
 	static constexpr float kFixedAccelBase = 6.f;
 	static constexpr float kFixedAccelMax  = 8.f;
+	// Global scale on outgoing deltas (matches MadParameter::encoderSensitivity).
+	static constexpr float kEncoderSensitivity = 0.8f;
 
 	ofJson mappingsJson;
 	std::unordered_map<std::string, FixedMapping> fixedMappings;
@@ -238,12 +209,13 @@ class ofApp : public ofBaseApp {
 	std::atomic_bool hasPendingBindingsUpdate{false};
 
   private:
-	ofxMadOscQuery* getOscServer(size_t serverId);
-	const ofxMadOscQuery* getOscServer(size_t serverId) const;
-	void setupAdditionalOscServers();
-	void registerServerPathRouting(size_t serverId, const ofxMadOscQuery& server);
-	void oscSendToServer(size_t serverId, ofxOscMessage& message);
-	size_t serverForOscPath(const std::string& oscPath) const;
+	// Shared core of selectSurface/selectMedia: opens the matching subpage or
+	// falls back to a raw OSC select message.
+	void selectSubpageFromButton(const std::string& buttonName,
+	                             const std::string& skipRoleSuffix,
+	                             const std::string& oscPrefix,
+	                             const std::function<std::string(MadParameter*)>& subpageNameFor,
+	                             const std::function<void(const std::string&)>& oscFallback);
 
 	// Web Server API methods
 	void setupWebServer();
@@ -253,17 +225,10 @@ class ofApp : public ofBaseApp {
 	ofJson getConfig();
 	void saveConfig(const ofJson& config);
 	void applyPendingServerConfig();
-	void refreshEndpointHealth(bool force = false);
-	bool endpointReachable(const OscServerConfig& cfg, std::string* error = nullptr) const;
 
-	std::vector<OscServerConfig> oscServerConfigs;
-	std::vector<std::unique_ptr<ofxMadOscQuery>> extraOscQueries;
-	std::vector<bool> endpointReachability;
-	std::unordered_map<std::string, size_t> oscPathServerRouting;
 	std::unique_ptr<WebServer> webServer;
 	std::mutex pendingPageMutex;
 	std::mutex pendingConfigMutex;
-	std::mutex oscStateMutex;
 	std::mutex activePageMutex;
 	std::string pendingPageName;
 	std::string activePageName;
@@ -273,8 +238,6 @@ class ofApp : public ofBaseApp {
 	bool reloadRequested = false;
 	uint64_t lastReloadMs = 0;
 	bool hasPendingConfigUpdate = false;
-	uint64_t lastEndpointHealthCheckMs = 0;
-	std::atomic_bool healthCheckInProgress{false};
 	std::atomic_bool hasPendingReconnect{false};
 	std::atomic_bool reconnectInProgress{false};
 
@@ -282,10 +245,4 @@ class ofApp : public ofBaseApp {
 	void disconnectMidiDevice();
 	uint64_t lastMidiScanMs = 0;
 	std::vector<std::string> lastKnownInPorts;
-
-	void refreshBonjourServices();
-	std::vector<ofJson> bonjourDiscovered;
-	std::mutex bonjourMutex;
-	uint64_t lastBonjourScanMs = 0;
-	std::atomic_bool bonjourScanInProgress{false};
 };
