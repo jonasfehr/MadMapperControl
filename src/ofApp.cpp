@@ -1002,6 +1002,13 @@ void ofApp::disconnectMidiDevice() {
 	ofLogNotice("ofApp") << "MIDI device disconnected: "
 	                     << (activeProfile ? activeProfile->name : "unknown");
 	if (initialised && currentPage != madOscQuery.pages.end()) removeListeners();
+	// Groups and pages hold pointers into the surface's components — drop them
+	// before the surface is destroyed or they dangle after a surface swap.
+	selectGroup.clear();
+	muteGroup.clear();
+	soloGroup.clear();
+	for (auto& page : madOscQuery.pages) page.setMidiDevice(nullptr);
+	for (auto& page : madOscQuery.subPages) page.setMidiDevice(nullptr);
 	surface.reset();
 	activeProfile.reset();
 	noDeviceConnected = true;
@@ -1066,9 +1073,16 @@ void ofApp::tryConnectMidiDevice() {
 		displaySnapshot.isVirtual = virtualSurface;
 	}
 
-	// Re-bind to current page and re-wire all listeners if already running
+	// Re-bind to current page and re-wire all listeners if already running.
+	// Pages were built against the previous surface — re-point them first.
 	if (initialised && !madOscQuery.madMapperJson.is_null()
 	    && currentPage != madOscQuery.pages.end()) {
+		auto* dev = static_cast<ofxMidiDevice*>(surface.get());
+		for (auto& page : madOscQuery.pages) page.setMidiDevice(dev);
+		for (auto& page : madOscQuery.subPages) page.setMidiDevice(dev);
+		selectGroup.clear();
+		muteGroup.clear();
+		soloGroup.clear();
 		setupUI(madOscQuery.madMapperJson);
 		setActivePage(&(*currentPage), nullptr);
 	}
