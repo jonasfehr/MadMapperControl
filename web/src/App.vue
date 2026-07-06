@@ -59,6 +59,25 @@
           <span class="tb-label">Mapping</span>
         </button>
 
+        <!-- Emulator -->
+        <button
+          class="toolbar-btn"
+          :class="{ active: activeView === 'emulator' }"
+          @click="activeView = 'emulator'"
+          title="Device Emulator — substitutes the hardware controller"
+        >
+          <svg class="tb-icon" viewBox="0 0 20 20" fill="none">
+            <rect x="2" y="4" width="16" height="12" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+            <circle cx="6"  cy="8" r="1.6" fill="currentColor" opacity="0.9"/>
+            <circle cx="10" cy="8" r="1.6" fill="currentColor" opacity="0.7"/>
+            <circle cx="14" cy="8" r="1.6" fill="currentColor" opacity="0.5"/>
+            <rect x="4.5"  y="12" width="3" height="2" rx="0.5" fill="currentColor" opacity="0.5"/>
+            <rect x="8.5"  y="12" width="3" height="2" rx="0.5" fill="currentColor" opacity="0.5"/>
+            <rect x="12.5" y="12" width="3" height="2" rx="0.5" fill="currentColor" opacity="0.5"/>
+          </svg>
+          <span class="tb-label">Emulator</span>
+        </button>
+
       </div>
 
       <!-- Right side: server status + live page -->
@@ -103,6 +122,13 @@
             :config="config"
             :pages="pages"
             :all-parameters="allParameterEntries"
+          />
+        </section>
+        <section v-show="activeView === 'emulator'" class="main-panel">
+          <MockDevicePanel
+            :pages="pages"
+            :config="config"
+            :allParameters="allParameterEntries"
           />
         </section>
       </template>
