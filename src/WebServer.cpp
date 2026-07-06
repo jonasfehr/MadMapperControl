@@ -205,6 +205,9 @@ class StaticFileHandler : public HTTPRequestHandler {
 		if (resourcePath == "/") resourcePath = "/index.html";
 
 		std::string filePath = basePath + resourcePath;
+		const bool isAsset = filePath.find(".js") != std::string::npos
+		                  || filePath.find(".css") != std::string::npos
+		                  || filePath.find(".json") != std::string::npos;
 
 		std::ifstream file(filePath, std::ios::binary);
 		if (file.good()) {
@@ -215,15 +218,26 @@ class StaticFileHandler : public HTTPRequestHandler {
 				response.setContentType("text/css");
 			else if (filePath.find(".json") != std::string::npos)
 				response.setContentType("application/json");
-			else
+			else {
 				response.setContentType("text/html");
+				// index.html must never be cached — it references hashed bundles
+				// that change on every web build.
+				response.add("Cache-Control", "no-cache");
+			}
 			response.send() << file.rdbuf();
+		} else if (isAsset) {
+			// A missing asset means the browser holds a stale index.html.
+			// Serving the SPA fallback here would hand HTML to a <script> tag
+			// and silently break the app — 404 makes the failure visible.
+			response.setStatus(HTTPServerResponse::HTTP_NOT_FOUND);
+			response.send() << "Asset not found (stale cache? reload the page)";
 		} else {
 			std::string indexPath = basePath + "/index.html";
 			std::ifstream indexFile(indexPath, std::ios::binary);
 			if (indexFile.good()) {
 				response.setStatus(HTTPServerResponse::HTTP_OK);
 				response.setContentType("text/html");
+				response.add("Cache-Control", "no-cache");
 				response.send() << indexFile.rdbuf();
 			} else {
 				ofLogError() << "StaticFileHandler: index.html not found at " << indexPath;
