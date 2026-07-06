@@ -106,12 +106,11 @@
           Surface
           <span class="page-badge" v-if="currentPageName">{{ currentPageName }}</span>
           <div class="mode-switcher">
-            <button class="mode-btn" :class="{ active: surfaceMode === 'emulator' }" @click="surfaceMode = 'emulator'" title="Inject MIDI as if physical controller">Emulator</button>
-            <button class="mode-btn" :class="{ active: surfaceMode === 'learn' }"   @click="surfaceMode = 'learn'"   title="Touch surface → learn MIDI + assign role">Learn</button>
-            <button class="mode-btn" :class="{ active: surfaceMode === 'map' }"     @click="surfaceMode = 'map'"     title="Click element → reassign role without MIDI">Map</button>
+            <button class="mode-btn" :class="{ active: surfaceMode === 'learn' }" @click="surfaceMode = surfaceMode === 'learn' ? 'passive' : 'learn'" title="Touch surface → learn MIDI + assign role">Learn</button>
+            <button class="mode-btn" :class="{ active: surfaceMode === 'map' }"   @click="surfaceMode = surfaceMode === 'map' ? 'passive' : 'map'"   title="Click element → reassign role without MIDI">Map</button>
           </div>
         </div>
-        <div class="surface-wrap">
+        <div class="surface-wrap" :class="{ passive: surfaceMode === 'passive' }">
           <component
             :is="surfaceComponent"
             :channels="deviceChannels"
@@ -343,7 +342,7 @@ const capturedDesc = computed(() => {
 
 // ── Mock surface ──────────────────────────────────────────────────
 const bankOffset       = ref(0)
-const surfaceMode      = ref('emulator')   // 'emulator' | 'learn' | 'map'
+const surfaceMode      = ref('passive')    // 'passive' | 'learn' | 'map'
 const selectedCompLabel = ref(null)
 
 const highlightedMidiKey = computed(() => {
@@ -406,23 +405,10 @@ function logMidi(msg) {
 }
 
 // ── Mock surface event handlers ───────────────────────────────────
-const STATUS_NOTE_ON = 144
-const STATUS_CC      = 176
-const STATUS_PITCH   = 224
-
-async function injectMidi({ type, channel, address, value }) {
-  try {
-    await apiClient.learnInject({
-      channel,
-      status:  type === 'note' ? STATUS_NOTE_ON : type === 'cc' ? STATUS_CC : STATUS_PITCH,
-      control: type === 'cc'   ? address : 0,
-      pitch:   type === 'note' ? address : 0,
-      value
-    })
-  } catch (_) {}
-}
 
 function onMidiInput(ev) {
+  // Passive unless Learn or Map is engaged — the Emulator tab handles control.
+  if (surfaceMode.value !== 'map' && surfaceMode.value !== 'learn') return
   const { type, channel, address, value, name: elemName } = ev
 
   // Surface element not yet in profile — create stub and start learn to capture its MIDI address
@@ -501,8 +487,6 @@ function onMidiInput(ev) {
     return
   }
 
-  // emulator mode: inject MIDI as if this were the physical controller
-  injectMidi(ev)
 }
 
 function onBankChange(delta) {
@@ -945,6 +929,7 @@ onUnmounted(() => { stopLearnPoll(); apiClient.learnStop().catch(() => {}) })
 .mode-btn:hover { background: var(--bg-hover); color: var(--text-muted); }
 .mode-btn.active { background: var(--bg-active); border-color: var(--accent-dim); color: var(--accent); }
 .surface-wrap { padding: 12px; overflow-x: auto; }
+.surface-wrap.passive { pointer-events: none; opacity: 0.55; }
 .bank-nav { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-top: 1px solid var(--border-soft); }
 .bank-label { font-size: 11px; color: var(--text-muted); flex: 1; text-align: center; }
 
