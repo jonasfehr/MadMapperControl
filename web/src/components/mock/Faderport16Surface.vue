@@ -7,6 +7,8 @@ const props = defineProps({
   bindings:    { type: Object,  default: () => ({}) },
   mode:        { type: String,  default: 'emulator' },
   highlighted: { type: String,  default: null },
+  // Live device display state mirrored from the app (page, labels, values)
+  display:     { type: Object,  default: null },
 })
 const emit = defineEmits(['midi-input', 'bank-change'])
 
@@ -214,10 +216,24 @@ function bankDown() { emit('bank-change', -1); pressElem('bank_down') }
 function bankUp()   { emit('bank-change', +1); pressElem('bank_up') }
 
 // ── channel label ─────────────────────────────────────────────────
-function chLabel(i) { return props.channels[i]?.label || '' }
+function chLabel(i) {
+  const live = props.display?.labels
+  if (live && live.length) return live[i] || ''
+  return props.channels[i]?.label || ''
+}
 
-// Motorfader: track channel parameter values
+// Motorfaders: follow the mirrored device display values (same order and
+// liveness as the hardware); fall back to client-derived channel values.
+watch(() => props.display?.values, (vals) => {
+  if (!vals) return
+  vals.forEach((v, i) => {
+    if (v != null && i < 16 && dragging.value?.idx !== i)
+      faderVals[i] = Math.round(v * 127)
+  })
+}, { immediate: true, deep: true })
+
 watch(() => props.channels, (channels) => {
+  if (props.display?.values) return // display mirror takes precedence
   channels.forEach((ch, i) => {
     if (ch?.value != null && dragging.value?.idx !== i)
       faderVals[i] = Math.round(ch.value * 127)

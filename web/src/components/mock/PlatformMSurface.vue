@@ -7,6 +7,8 @@ const props = defineProps({
   bindings:    { type: Object, default: () => ({}) },
   mode:        { type: String, default: 'emulator' },
   highlighted: { type: String, default: null },
+  // Live device display state mirrored from the app (page, labels, values)
+  display:     { type: Object, default: null },
 })
 
 const emit = defineEmits(['midi-input', 'bank-change'])
@@ -209,17 +211,29 @@ function onMouseUp() { dragging.value = null }
 function bankDown() { emit('bank-change', -1); pressElem('bank_down') }
 function bankUp()   { emit('bank-change', +1); pressElem('bank_up') }
 
-// Motorfader
+// Motorfaders: follow the mirrored device display values (same order and
+// liveness as the hardware); fall back to client-derived channel values.
+watch(() => props.display?.values, (vals) => {
+  if (!vals) return
+  vals.forEach((v, i) => {
+    if (v != null && i < 8 && dragging.value?.idx !== i)
+      faderVals[i] = Math.round(v * 127)
+  })
+}, { immediate: true, deep: true })
+
 watch(() => props.channels, (channels) => {
+  if (props.display?.values) return // display mirror takes precedence
   channels.forEach((ch, i) => {
     if (ch?.value != null && dragging.value?.idx !== i)
       faderVals[i] = Math.round(ch.value * 127)
   })
 }, { immediate: true, deep: true })
 
-const chLabels = computed(() =>
-  Array.from({ length: 8 }, (_, i) => props.channels[i]?.label || '')
-)
+const chLabels = computed(() => {
+  const live = props.display?.labels
+  if (live && live.length) return Array.from({ length: 8 }, (_, i) => live[i] || '')
+  return Array.from({ length: 8 }, (_, i) => props.channels[i]?.label || '')
+})
 
 // ── colour helpers ────────────────────────────────────────────────
 function btnFill(name, defaultFill = '#1e1e22') {
