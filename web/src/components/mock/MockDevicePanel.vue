@@ -139,6 +139,61 @@ const bankLabel = computed(() => {
   return `Bank ${bankOffset.value + 1}/${banks}`
 })
 
+// ── Mapped Controls ────────────────────────────────────────────────
+// A guaranteed-complete list of every role-bound component in the active
+// profile. The hand-drawn surfaces are device-specific and may not expose
+// (or correctly wire) every mapped control — this list always can.
+function midiTypeOf(c) {
+  if (c.type === 'note' || c.type === 'note_toggle') return 'note'
+  if (c.type === 'pitch_bend') return 'pitch_bend'
+  return 'cc' // cc, cc_toggle, encoder, encoder_relative
+}
+function kindOf(c) {
+  if (c.type === 'encoder_relative') return 'relative'
+  if (c.type === 'pitch_bend') return 'fader'
+  if (c.type === 'encoder') return 'knob'
+  return 'button'
+}
+function shortRole(r) { return r.replace(/^(nav|action|fixed|param)\./, '') }
+
+const controlGroups = computed(() => {
+  const groups = { Navigation: [], Parameters: [], Fixed: [], Other: [] }
+  for (const c of profileComponents.value) {
+    if (!c.role) continue
+    const item = { ...c, kind: kindOf(c), midiType: midiTypeOf(c) }
+    const r = c.role
+    if (r.startsWith('nav.') || r.startsWith('action.')) groups.Navigation.push(item)
+    else if (r.startsWith('param.')) groups.Parameters.push(item)
+    else if (r.startsWith('fixed.')) groups.Fixed.push(item)
+    else groups.Other.push(item)
+  }
+  groups.Parameters.sort((a, b) => {
+    const na = parseInt(a.role.split('.')[1]) || 0
+    const nb = parseInt(b.role.split('.')[1]) || 0
+    return na - nb || a.role.localeCompare(b.role)
+  })
+  return Object.entries(groups).filter(([, list]) => list.length)
+})
+const mappedCount = computed(() => profileComponents.value.filter(c => c.role).length)
+
+// Momentary press → release so buttons re-trigger every click (a stuck value
+// never fires the change listener again on the C++ side).
+function triggerButton(c) {
+  onMidiInput({ type: c.midiType, channel: c.channel, address: c.address, value: 127, name: c.label })
+  setTimeout(() => onMidiInput({ type: c.midiType, channel: c.channel, address: c.address, value: 0, name: c.label }), 120)
+}
+// Relative encoder: 7-bit two's-complement tick (+1 = 1, −1 = 127).
+function nudge(c, dir) {
+  onMidiInput({ type: 'cc', channel: c.channel, address: c.address, value: dir > 0 ? 1 : 127, name: c.label })
+}
+function setControl(c, e) {
+  const norm = Number(e.target.value) / 100
+  if (c.midiType === 'pitch_bend')
+    onMidiInput({ type: 'pitch_bend', channel: c.channel, address: 0, value: Math.round(norm * 16383), name: c.label })
+  else
+    onMidiInput({ type: 'cc', channel: c.channel, address: c.address, value: Math.round(norm * 127), name: c.label })
+}
+
 function log(msg) {
   midiLog.value.unshift({ t: new Date().toISOString().slice(11, 23), msg })
   if (midiLog.value.length > 80) midiLog.value.length = 80
@@ -200,6 +255,41 @@ function clearLog() { midiLog.value = [] }
         @midi-input="onMidiInput"
         @bank-change="onBankChange"
       />
+    </div>
+
+    <!-- Mapped Controls — guaranteed-complete trigger list -->
+    <div v-if="mappedCount" class="mapped-controls">
+      <div class="mc-head">
+        <span class="mc-title">Mapped Controls</span>
+        <span class="mc-sub">{{ mappedCount }} bound — every mapped feature, guaranteed reachable</span>
+      </div>
+      <div class="mc-groups">
+        <div v-for="[group, list] in controlGroups" :key="group" class="mc-group">
+          <div class="mc-group-label">{{ group }}</div>
+          <div class="mc-items">
+            <template v-for="c in list" :key="c.label">
+              <button
+                v-if="c.kind === 'button'"
+                class="mc-btn"
+                @mousedown="triggerButton(c)"
+                :title="c.label + '  →  ' + c.role"
+              >
+                <span class="mc-role">{{ shortRole(c.role) }}</span>
+                <span class="mc-lbl">{{ c.label }}</span>
+              </button>
+              <div v-else-if="c.kind === 'relative'" class="mc-enc" :title="c.label + '  →  ' + c.role">
+                <button class="mc-nudge" @click="nudge(c, -1)">−</button>
+                <span class="mc-role">{{ shortRole(c.role) }}</span>
+                <button class="mc-nudge" @click="nudge(c, 1)">+</button>
+              </div>
+              <div v-else class="mc-fader" :title="c.label + '  →  ' + c.role">
+                <span class="mc-role">{{ shortRole(c.role) }}</span>
+                <input type="range" min="0" max="100" value="0" @input="setControl(c, $event)" />
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- MIDI log -->
@@ -353,6 +443,91 @@ function clearLog() { midiLog.value = [] }
 
 /* ── surface ─────────────────────────────────────────────────────── */
 .surface-wrap { overflow-x: auto; padding-bottom: 4px; }
+
+/* ── mapped controls ─────────────────────────────────────────────── */
+.mapped-controls {
+  background: var(--bg-panel, #1e1e1e);
+  border: 1px solid var(--border-strong, #333);
+  border-radius: var(--radius-xs, 2px);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.mc-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 5px 10px;
+  background: var(--bg-shell, #111);
+  border-bottom: 1px solid var(--border-strong, #333);
+}
+.mc-title {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-dim, #555);
+}
+.mc-sub { font-size: 9px; color: var(--text-dim, #444); }
+.mc-groups { display: flex; flex-direction: column; gap: 2px; padding: 8px; }
+.mc-group { display: flex; gap: 8px; align-items: flex-start; }
+.mc-group-label {
+  flex: 0 0 74px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim, #555);
+  padding-top: 6px;
+}
+.mc-items { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; }
+.mc-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 62px;
+  padding: 4px 7px;
+  border-radius: var(--radius-xs, 2px);
+  border: 1px solid var(--border-strong, #333);
+  background: var(--bg-panel-soft, #252525);
+  cursor: pointer;
+  transition: background 60ms, border-color 60ms;
+}
+.mc-btn:hover { background: var(--bg-active, #1a3035); border-color: var(--accent, #18c8da); }
+.mc-btn:active { background: var(--accent, #18c8da); }
+.mc-role { font-size: 10px; color: var(--accent, #18c8da); font-weight: 600; }
+.mc-lbl { font-size: 8px; color: var(--text-dim, #666); font-family: var(--font-mono, monospace); }
+.mc-enc {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 5px;
+  border: 1px solid var(--border-strong, #333);
+  border-radius: var(--radius-xs, 2px);
+  background: var(--bg-panel-soft, #252525);
+}
+.mc-enc .mc-role { min-width: 54px; text-align: center; }
+.mc-nudge {
+  width: 20px; height: 20px;
+  border-radius: var(--radius-xs, 2px);
+  border: 1px solid var(--border-strong, #333);
+  background: var(--bg-panel, #1e1e1e);
+  color: var(--text-base, #aaa);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+.mc-nudge:hover { background: var(--bg-active, #1a3035); color: var(--accent, #18c8da); }
+.mc-fader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 7px;
+  border: 1px solid var(--border-strong, #333);
+  border-radius: var(--radius-xs, 2px);
+  background: var(--bg-panel-soft, #252525);
+}
+.mc-fader input[type="range"] { width: 90px; accent-color: var(--accent, #18c8da); }
 
 /* ── midi log ────────────────────────────────────────────────────── */
 .midi-log {
