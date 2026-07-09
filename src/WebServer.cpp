@@ -89,9 +89,10 @@ class APIRequestHandler : public HTTPRequestHandler {
 		static const PostRoute postRoutes[] = {
 			{"/api/mappings",     &WebServer::mappingsSaver, "saved"},
 			{"/api/profile",      &WebServer::profileSaver,  "saved"},
-			{"/api/learn/inject", &WebServer::learnInjector, "ok"},
-			{"/api/learn/assign", &WebServer::learnAssigner, "assigned"},
-			{"/api/midi",         &WebServer::midiInjector,  "ok"},
+			{"/api/learn/inject",     &WebServer::learnInjector, "ok"},
+			{"/api/learn/assign",     &WebServer::learnAssigner, "assigned"},
+			{"/api/midi",             &WebServer::midiInjector,  "ok"},
+			{"/api/emulator/surface", &WebServer::emulatorSurfaceSetter, "ok"},
 		};
 
 		if (method == "GET") {

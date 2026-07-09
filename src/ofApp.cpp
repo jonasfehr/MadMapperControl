@@ -227,6 +227,9 @@ void ofApp::setup() {
 
 	loadMappings();
 
+	// Which profile the web emulator drives when no hardware is present.
+	emulatorProfileName = settings.value("emulatorProfile", std::string("Push3"));
+
 	// Select first matching connected device (same path as hot-plug reconnect)
 	noDeviceConnected = true;
 	tryConnectMidiDevice();
@@ -491,6 +494,25 @@ void ofApp::update() {
 	if (hasPendingBindingsUpdate.exchange(false)) {
 		applyBindingsUpdate();
 	}
+
+	// Web emulator requested a different virtual surface — swap on the main thread.
+	// Real hardware always wins; we only re-point the surface the emulator owns.
+	if (hasPendingEmulatorSwitch.exchange(false)) {
+		std::string wanted;
+		{
+			std::lock_guard<std::mutex> lock(emulatorMutex);
+			wanted = pendingEmulatorProfile;
+		}
+		if (!wanted.empty() && virtualSurface && wanted != emulatorProfileName) {
+			emulatorProfileName = wanted;
+			disconnectMidiDevice();
+			tryConnectMidiDevice();
+			ofLogNotice("ofApp") << "Emulator surface switched to " << emulatorProfileName;
+		}
+	}
+
+	// Deliver any web-injected MIDI on the main thread (after a possible swap).
+	drainInjectedMidi();
 
 	// MIDI hot-plug: scan for port changes every 2 seconds
 	{
@@ -1046,12 +1068,12 @@ void ofApp::tryConnectMidiDevice() {
 		if (surface) return; // keep whatever surface is active
 		// No hardware: fall back to a virtual surface so the web emulator can
 		// substitute the controller (same pipeline, no MIDI ports).
-		const std::string wanted = settings.value("emulatorProfile", std::string("Push3"));
 		const DeviceProfile* pick = nullptr;
 		for (const auto& p : *profilesOpt)
-			if (p.name == wanted) { pick = &p; break; }
+			if (p.name == emulatorProfileName) { pick = &p; break; }
 		if (!pick && !profilesOpt->empty()) pick = &profilesOpt->front();
 		if (!pick) return;
+		emulatorProfileName = pick->name;
 		activeProfile = *pick;
 		virtualSurface = true;
 		ofLogNotice("ofApp") << "No matching MIDI hardware — virtual surface active: " << activeProfile->name;
@@ -1155,6 +1177,7 @@ void ofApp::setupWebServer() {
 
 	webServer->displayFetcher = [this]() { return getDisplayJson(); };
 	webServer->midiInjector = [this](const ofJson& body) { injectMidiMessage(body); };
+	webServer->emulatorSurfaceSetter = [this](const ofJson& body) { requestEmulatorSurface(body); };
 
 	webServer->learnStarter = [this]() { startLearnMode(); };
 	webServer->learnStopper = [this]() { stopLearnMode(); };
@@ -1915,7 +1938,9 @@ ofJson ofApp::getDisplayJson() {
 }
 
 void ofApp::injectMidiMessage(const ofJson& body) {
-	if (!surface) return;
+	// Called on the WebServer thread — only enqueue here. The message is
+	// delivered to the surface on the main thread in drainInjectedMidi(),
+	// so it can't race with page changes or a surface swap.
 	ofxMidiMessage msg;
 	msg.status   = static_cast<MidiStatus>(body.value("status", 176));
 	msg.channel  = body.value("channel", 1);
@@ -1923,8 +1948,29 @@ void ofApp::injectMidiMessage(const ofJson& body) {
 	msg.pitch    = body.value("pitch", 0);
 	msg.value    = body.value("value", 0);
 	msg.velocity = body.value("value", 0);
-	// Same entry point as hardware MIDI (RtMidi also calls this off the main thread).
-	static_cast<ofxMidiDevice*>(surface.get())->newMidiMessage(msg);
+	std::lock_guard<std::mutex> lock(midiInjectMutex);
+	injectedMidiQueue.push_back(msg);
+}
+
+void ofApp::drainInjectedMidi() {
+	std::vector<ofxMidiMessage> pending;
+	{
+		std::lock_guard<std::mutex> lock(midiInjectMutex);
+		if (injectedMidiQueue.empty()) return;
+		pending.swap(injectedMidiQueue);
+	}
+	if (!surface) return;
+	auto* dev = static_cast<ofxMidiDevice*>(surface.get());
+	for (auto& msg : pending) dev->newMidiMessage(msg);
+}
+
+void ofApp::requestEmulatorSurface(const ofJson& body) {
+	if (!body.is_object()) return;
+	auto it = body.find("profile");
+	if (it == body.end() || !it->is_string()) return;
+	std::lock_guard<std::mutex> lock(emulatorMutex);
+	pendingEmulatorProfile = it->get<std::string>();
+	hasPendingEmulatorSwitch.store(true);
 }
 
 // ── Profile fetch/save for mapping UI ────────────────────────────────────────

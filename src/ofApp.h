@@ -224,6 +224,20 @@ class ofApp : public ofBaseApp {
 	std::mutex displayMutex;
 	ofJson getDisplayJson();
 	void injectMidiMessage(const ofJson& body);
+	// Injected MIDI is queued on the HTTP thread and drained on the main thread,
+	// so it never races with page changes or a surface swap (which fire the same
+	// component listeners and rebuild the surface).
+	std::mutex midiInjectMutex;
+	std::vector<ofxMidiMessage> injectedMidiQueue;
+	void drainInjectedMidi();
+
+	// Which profile the virtual surface emulates when no hardware is connected.
+	std::string emulatorProfileName;
+	// Web can request a different virtual surface; the swap runs on the main thread.
+	void requestEmulatorSurface(const ofJson& body);
+	std::mutex emulatorMutex;
+	std::string pendingEmulatorProfile;
+	std::atomic_bool hasPendingEmulatorSwitch{false};
 
   private:
 	// Shared core of selectSurface/selectMedia: opens the matching subpage or

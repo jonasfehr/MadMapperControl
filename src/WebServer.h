@@ -40,8 +40,9 @@ class WebServer {
 	JsonFetcher learnStatusFetcher;
 	JsonHandler learnAssigner;
 	JsonHandler learnInjector;
-	JsonFetcher displayFetcher; // live device display state for the emulator
-	JsonHandler midiInjector;   // raw MIDI from the emulator into the surface
+	JsonFetcher displayFetcher;        // live device display state for the emulator
+	JsonHandler midiInjector;          // raw MIDI from the emulator into the surface
+	JsonHandler emulatorSurfaceSetter; // switch which profile the virtual surface emulates
 
   private:
 	int port;

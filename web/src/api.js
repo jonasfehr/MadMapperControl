@@ -96,5 +96,11 @@ export const apiClient = {
   async fetchDisplay() {
     const response = await axios.get(`${API_BASE}/display`)
     return response.data
+  },
+
+  // Switch which profile the virtual surface emulates (virtual mode only)
+  async setEmulatorSurface(profile) {
+    const response = await axios.post(`${API_BASE}/emulator/surface`, { profile })
+    return response.data
   }
 }

@@ -12,10 +12,12 @@ const props = defineProps({
   allParameters: { type: Array,   default: () => [] },
 })
 
+// Each emulated device maps to a profile in device_profiles.json by name —
+// control-button naming differs per device, so the surface reads its own profile.
 const DEVICES = [
-  { id: 'push3',     label: 'Ableton Push 3',  component: Push3Surface,      maxCh: 64 },
-  { id: 'fp16',      label: 'Faderport 16',     component: Faderport16Surface, maxCh: 14 },
-  { id: 'platformm', label: 'Platform M+',      component: PlatformMSurface,  maxCh: 8  },
+  { id: 'push3',     label: 'Ableton Push 3', component: Push3Surface,       maxCh: 64, profile: 'Push3' },
+  { id: 'fp16',      label: 'Faderport 16',    component: Faderport16Surface, maxCh: 14, profile: 'Faderport16' },
+  { id: 'platformm', label: 'Platform M+',     component: PlatformMSurface,   maxCh: 8,  profile: 'PlatformM' },
 ]
 
 const selectedId  = ref('push3')
@@ -50,12 +52,16 @@ function onBankChange(delta) {
   bankOffset.value = Math.max(0, Math.min(maxBanks, bankOffset.value + delta))
 }
 
-// ── Active device profile (components drive the emulated controls) ─
-const activeProfile = ref(null)
-const displayState  = ref(null)
+// ── Per-device profiles (each surface reads its own mapping) ───────
+const allProfiles  = ref([])
+const displayState = ref(null)
 let displayPoll = null
 
-const profileComponents = computed(() => activeProfile.value?.components || [])
+// The profile for the currently-selected surface (not necessarily the backend's).
+const surfaceProfile = computed(() =>
+  allProfiles.value.find(p => p.name === currentDev.value.profile) || null
+)
+const profileComponents = computed(() => surfaceProfile.value?.components || [])
 
 // Map components' roles to the bindings shape the surfaces use for tint/tooltips
 const bindingsMap = computed(() => {
@@ -70,23 +76,35 @@ const bindingsMap = computed(() => {
   return m
 })
 
-async function fetchActiveProfile() {
-  try { activeProfile.value = await apiClient.fetchProfile() } catch (_) {}
+async function fetchProfiles() {
+  try { allProfiles.value = await apiClient.fetchProfiles() } catch (_) {}
 }
+
+// Device switching is only meaningful in virtual mode; connected hardware is
+// authoritative and the emulator mirrors it.
+const canSwitch = computed(() => displayState.value?.virtual !== false)
+const userPickedDevice = ref(false)
 
 async function pollDisplay() {
   try {
     const d = await apiClient.fetchDisplay()
     displayState.value = d
-    // Auto-select the emulated device matching the backend surface
     const name = d?.profile || ''
-    const want = name.includes('Push') ? 'push3' : name.includes('Platform') ? 'platformm' : name ? 'fp16' : null
-    if (want && selectedId.value !== want && !userPickedDevice.value) selectedId.value = want
-    if (name && activeProfile.value?.name !== name) fetchActiveProfile()
+    const want = DEVICES.find(dev => dev.profile === name)?.id
+    // Hardware wins; in virtual mode respect a manual pick.
+    if (want && want !== selectedId.value && (d.virtual === false || !userPickedDevice.value)) {
+      selectedId.value = want
+    }
   } catch (_) {}
 }
-const userPickedDevice = ref(false)
-function pickDevice(id) { userPickedDevice.value = true; selectedId.value = id }
+
+function pickDevice(id) {
+  if (!canSwitch.value) return
+  userPickedDevice.value = true
+  selectedId.value = id
+  const dev = DEVICES.find(d => d.id === id)
+  if (dev) apiClient.setEmulatorSurface(dev.profile).catch(() => {})
+}
 
 // ── MIDI learn bridge ─────────────────────────────────────────────
 const learnActive  = ref(false)
@@ -105,7 +123,7 @@ async function pollLearnStatus() {
 onMounted(() => {
   learnPoll = setInterval(pollLearnStatus, 400)
   displayPoll = setInterval(pollDisplay, 300)
-  fetchActiveProfile()
+  fetchProfiles()
   pollDisplay()
 })
 onUnmounted(() => { clearInterval(learnPoll); clearInterval(displayPoll) })
@@ -224,6 +242,8 @@ function clearLog() { midiLog.value = [] }
           v-for="d in DEVICES" :key="d.id"
           class="dev-btn"
           :class="{ active: selectedId === d.id }"
+          :disabled="!canSwitch && selectedId !== d.id"
+          :title="!canSwitch ? 'Hardware connected — emulator mirrors the active device' : d.label"
           @click="pickDevice(d.id)"
         >{{ d.label }}</button>
       </div>
@@ -435,6 +455,7 @@ function clearLog() { midiLog.value = [] }
   transition: background 60ms, color 60ms;
 }
 .dev-btn:hover  { background: var(--bg-panel-soft, #252525); color: var(--text-base, #aaa); }
+.dev-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .dev-btn.active {
   background: var(--bg-active, #1a3035);
   border-color: var(--accent, #18c8da);
