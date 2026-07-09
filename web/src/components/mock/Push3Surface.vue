@@ -87,7 +87,10 @@ function sendNamedCC(name, value) {
 
 const knobDrag = ref(null)
 const encVals  = reactive(Array(8).fill(64))
-const volVal   = ref(64); const swingVal = ref(64); const jogVal = ref(64)
+// Keyed by knob name, not per-ref: a ref passed through a template expression
+// auto-unwraps to its value, so the handler would receive a number and throw
+// on assignment (strict mode) before the knob could rotate.
+const bigKnobVals = reactive({ volume: 64, tempo: 64, jog: 64 })
 
 function startEncDrag(idx, e) {
   e.preventDefault(); dragEncIdx.value = idx
@@ -96,11 +99,11 @@ function startEncDrag(idx, e) {
   knobDrag.value = {idx,isEnc:true,startY:e.clientY,startVal:encVals[idx],startAngle:encAngles[idx],name}
   window.addEventListener('mousemove',onKnobMove); window.addEventListener('mouseup',onKnobUp)
 }
-function startBigKnobDrag(valRef, name, key, e) {
+function startBigKnobDrag(name, e) {
   e.preventDefault()
   if (props.mode==='map'||props.mode==='learn') { if (elemFor(name)) sendNamedCC(name,1); else emit('midi-input',{type:'__learn_click__',name,value:1}) }
-  bigKnobDragKey.value = key
-  knobDrag.value = {valRef,isEnc:false,startY:e.clientY,startVal:valRef.value,startAngle:bigKnobAngles[key],name,key}
+  bigKnobDragKey.value = name
+  knobDrag.value = {isEnc:false,startY:e.clientY,startVal:bigKnobVals[name],startAngle:bigKnobAngles[name],name,key:name}
   window.addEventListener('mousemove',onKnobMove); window.addEventListener('mouseup',onKnobUp)
 }
 // Relative encoders (Push encoders/jog) expect 7-bit two's-complement tick deltas,
@@ -127,9 +130,9 @@ function onKnobMove(e) {
     if (isRelativeEncoder(name)) emitEncoderTicks(kd, delta)
     else sendNamedCC(name,encVals[idx])
   } else {
-    valRef.value=Math.max(0,Math.min(127,startVal+delta)); bigKnobAngles[key]=((startAngle+delta*4)%360+360)%360
+    bigKnobVals[key]=Math.max(0,Math.min(127,startVal+delta)); bigKnobAngles[key]=((startAngle+delta*4)%360+360)%360
     if (isRelativeEncoder(name)) emitEncoderTicks(kd, delta)
-    else sendNamedCC(name,valRef.value)
+    else sendNamedCC(name,bigKnobVals[key])
   }
 }
 function onKnobUp() {
@@ -421,7 +424,7 @@ const highlightOverlay = computed(()=>{
 
     <!-- Volume knob -->
     <g :transform="`translate(${VOL_X},${VOL_Y})`"
-       @mousedown="e=>startBigKnobDrag(volVal,'volume','volume',e)"
+       @mousedown="e=>startBigKnobDrag('volume',e)"
        @mouseenter="hoveredName='volume'" @mouseleave="hoveredName=null" style="cursor:ns-resize">
       <circle cx="0" cy="0" :r="VOL_R" :fill="bindingForName('volume')?'#1e2428':'#1e1e20'" stroke="#484848" stroke-width="1.5"/>
       <circle cx="0" cy="0" :r="VOL_R-4" fill="none" stroke="#2e2e32" stroke-width="0.8"/>
@@ -458,7 +461,7 @@ const highlightOverlay = computed(()=>{
 
     <!-- Tempo knob -->
     <g :transform="`translate(${TEMPO_X},${TEMPO_Y})`"
-       @mousedown="e=>startBigKnobDrag(swingVal,'tempo','tempo',e)"
+       @mousedown="e=>startBigKnobDrag('tempo',e)"
        @mouseenter="hoveredName='tempo'" @mouseleave="hoveredName=null" style="cursor:ns-resize">
       <circle cx="0" cy="0" :r="TEMPO_R" :fill="bindingForName('tempo')?'#1e2428':'#1e1e20'" stroke="#484848" stroke-width="1.2"/>
       <circle cx="0" cy="0" :r="TEMPO_R-4" fill="none" stroke="#2e2e32" stroke-width="0.6"/>
@@ -576,7 +579,7 @@ const highlightOverlay = computed(()=>{
 
     <!-- Jog wheel -->
     <g :transform="`translate(${JOG_X},${JOG_Y})`"
-       @mousedown="e=>startBigKnobDrag(jogVal,'jog','jog',e)"
+       @mousedown="e=>startBigKnobDrag('jog',e)"
        @mouseenter="hoveredName='jog'" @mouseleave="hoveredName=null" style="cursor:ns-resize">
       <circle cx="0" cy="0" :r="JOG_R" :fill="bindingForName('jog')?'#1e2428':'#1e1e20'" stroke="#484848" stroke-width="1.5"/>
       <circle cx="0" cy="0" :r="JOG_R-6" fill="none" stroke="#2e2e32" stroke-width="0.8"/>

@@ -61,8 +61,10 @@ const FKEY_LABELS    = FKEY_NAMES.map(n => n.replace('fkey_', ''))
 
 // ── state ─────────────────────────────────────────────────────────
 const faderVals   = reactive(Array(16).fill(64))
-const panVal      = ref(64)
-const rightPanVal = ref(64)
+// Indexed by encoder (0 = param, 1 = jog), not per-ref: a ref passed through a
+// template expression auto-unwraps to its value, so the handler would receive a
+// number and throw on assignment (strict mode) before the knob could rotate.
+const panVals = reactive([64, 64])
 const btnState    = reactive({})
 
 // ── hover tooltip ─────────────────────────────────────────────────
@@ -158,7 +160,7 @@ const panDrag    = ref(null)
 const dragPanIdx = ref(-1)
 const panAngles  = reactive([0, 0])
 
-function startPanDrag(encIdx, valRef, e) {
+function startPanDrag(encIdx, e) {
   e.preventDefault()
   if (props.mode === 'map' || props.mode === 'learn') {
     const name = encIdx === 0 ? 'param' : 'jog'
@@ -167,19 +169,29 @@ function startPanDrag(encIdx, valRef, e) {
     else emit('midi-input', { type: '__learn_click__', name, value: 1 })
   }
   dragPanIdx.value = encIdx
-  panDrag.value = { encIdx, valRef, startY: e.clientY, startVal: valRef.value, startAngle: panAngles[encIdx] }
+  panDrag.value = { encIdx, startY: e.clientY, startVal: panVals[encIdx], startAngle: panAngles[encIdx], sentTicks: 0 }
   window.addEventListener('mousemove', onPanMove)
   window.addEventListener('mouseup', onPanUp)
 }
 function onPanMove(e) {
   if (!panDrag.value) return
-  const { encIdx, valRef, startY, startVal, startAngle } = panDrag.value
+  const pd = panDrag.value
+  const { encIdx, startY, startVal, startAngle } = pd
   const delta = Math.round((startY - e.clientY) * 1.5)
-  valRef.value = Math.max(0, Math.min(127, startVal + delta))
+  panVals[encIdx] = Math.max(0, Math.min(127, startVal + delta))
   panAngles[encIdx] = ((startAngle + delta * 4) % 360 + 360) % 360
   const name = encIdx === 0 ? 'param' : 'jog'
   const el = elemFor(name)
-  if (el) emit('midi-input', { type: 'cc', channel: el.channel, address: el.address, value: valRef.value, name })
+  if (!el) return
+  if (el.type === 'encoder_relative') {
+    // 7-bit two's-complement tick delta since the last event.
+    const diff = Math.max(-63, Math.min(63, delta - pd.sentTicks))
+    if (!diff) return
+    pd.sentTicks += diff
+    emit('midi-input', { type: 'cc', channel: el.channel, address: el.address, value: diff > 0 ? diff : 128 + diff, name })
+  } else {
+    emit('midi-input', { type: 'cc', channel: el.channel, address: el.address, value: panVals[encIdx], name })
+  }
 }
 function onPanUp() {
   dragPanIdx.value = -1
@@ -267,7 +279,7 @@ function btnStroke(name, defaultStroke = '#3a3a3c') {
     <!-- ══ LEFT COLUMN ══ -->
     <!-- Pan encoder -->
     <g transform="translate(29, 32)"
-       @mousedown="e => startPanDrag(0, panVal, e)"
+       @mousedown="e => startPanDrag(0, e)"
        @mouseenter="hoveredName='param'" @mouseleave="hoveredName=null"
        style="cursor:ns-resize">
       <circle r="22" :fill="bindingForName('param')?'#1e2428':'#1a2066'"
@@ -388,7 +400,7 @@ function btnStroke(name, defaultStroke = '#3a3a3c') {
 
     <!-- Right pan encoder (centered in right panel) -->
     <g :transform="`translate(${RIGHT_X + 77}, 168)`"
-       @mousedown="e => startPanDrag(1, rightPanVal, e)"
+       @mousedown="e => startPanDrag(1, e)"
        @mouseenter="hoveredName='jog'" @mouseleave="hoveredName=null"
        style="cursor:ns-resize">
       <circle r="20" :fill="bindingForName('jog')?'#1e2428':'#1a2066'"
