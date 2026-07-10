@@ -39,14 +39,16 @@ fi
 
 if [ "$DO_BUILD" = 1 ]; then
   say "Building app (make -j8 Debug)"
-  make -C "$ROOT" -j8 Debug > "$LOG.build" 2>&1; brc=$?
-  tail -3 "$LOG.build"
-  [ $brc -eq 0 ] || { tail -40 "$LOG.build"; die "BUILD FAILED"; }
+  BUILDLOG="$(mktemp -t mmc_eval_build)"
+  make -C "$ROOT" -j8 Debug > "$BUILDLOG" 2>&1; brc=$?
+  tail -3 "$BUILDLOG"
+  [ $brc -eq 0 ] || { tail -40 "$BUILDLOG"; die "BUILD FAILED"; }
 fi
 [ -x "$BIN" ] || die "binary not found: $BIN"
 
 # Take over port 8080 from any existing instance of this app.
-pkill -x "$BINNAME" 2>/dev/null && sleep 1
+STOPPED_EXISTING=0
+if pkill -x "$BINNAME" 2>/dev/null; then STOPPED_EXISTING=1; sleep 1; fi
 
 say "Launching app"
 ( cd "$(dirname "$BIN")" && exec "./$BINNAME" ) > "$LOG" 2>&1 &
@@ -73,5 +75,6 @@ else
   printf "\033[31mAPP CRASHED\033[0m\n"; tail -30 "$LOG"; rc=1
 fi
 
+[ "$STOPPED_EXISTING" = 1 ] && echo "note: a previously running instance of $BINNAME was stopped; restart it if needed."
 [ $rc -eq 0 ] && printf "\n\033[1;32mGROUND TRUTH: PASS\033[0m\n" || printf "\n\033[1;31mGROUND TRUTH: FAIL\033[0m\n"
 exit $rc

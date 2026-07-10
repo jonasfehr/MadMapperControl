@@ -15,6 +15,9 @@ bash scripts/eval.sh           # ground-truth evaluator: build + launch + probe 
 bash scripts/eval.sh --web     # …also rebuild the web UI first
 ```
 
+`eval.sh` **stops any running instance of the app** to claim port 8080 (and stops
+its own on exit) — if the user is mid-session with the app, say so before running.
+
 Runtime: the app serves the web UI + REST API on **:8080**. It runs without
 MadMapper or MIDI hardware (see *Virtual surface* below), so most work is
 verifiable locally. **After any change, run `bash scripts/eval.sh` — it is the
@@ -31,7 +34,9 @@ source of truth for "does it still work".** (Or invoke the `evaluate` skill.)
 - `src/WebServer.{h,cpp}` — REST API + static file serving (table-driven routes).
 - `bin/data/*.json` — `device_profiles.json` (surfaces + role bindings),
   `settings.json` (servers, `emulatorProfile`), `custom_page.json`, `mappings.json`,
-  `subpages.json`.
+  `subpages.json`. **The running app writes these** (web UI saves, MIDI learn),
+  so `git status` diffs there may be app-generated — review before committing,
+  never blind `git add -A`.
 - `web/src/` — Vue UI. `components/mock/` holds the per-device emulator surfaces.
 
 Two **custom addons live in separate git repos** and are often edited alongside

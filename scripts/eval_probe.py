@@ -9,12 +9,17 @@ SKIP so the check is meaningful in virtual mode (no hardware, no MadMapper).
 Exit code is non-zero if any assertion FAILed. Run via scripts/eval.sh.
 """
 import json
+import re
 import sys
 import time
+import urllib.error
 import urllib.request
 
 BASE = "http://localhost:8080"
-G, R, Y, X = "\033[32m", "\033[31m", "\033[33m", "\033[0m"
+if sys.stdout.isatty():
+    G, R, Y, X = "\033[32m", "\033[31m", "\033[33m", "\033[0m"
+else:
+    G = R = Y = X = ""
 passed = failed = skipped = 0
 
 
@@ -29,6 +34,11 @@ def get(path, tries=4):
             if i == tries - 1:
                 raise
             time.sleep(0.75)
+
+
+def get_text(path):
+    with urllib.request.urlopen(BASE + path, timeout=5) as r:
+        return r.status, r.read().decode()
 
 
 def post(path, body):
@@ -106,6 +116,31 @@ try:
     ok(f"/api/profiles — {[p['name'] for p in profiles]}, active={active}")
 except Exception as e:
     bad(f"/api/profiles — {e}")
+
+# ── Web UI bundle contract ───────────────────────────────────────────────────
+# Guards the stale-cache invariant: index.html must reference a bundle that
+# actually exists (catches "edited web/ but forgot npm run build"), and a
+# missing asset must 404 — never SPA-fallback to HTML fed to a <script> tag.
+print("\nWeb UI bundle")
+try:
+    s, html = get_text("/")
+    m = re.search(r"assets/index-[a-z0-9]+\.js", html)
+    if s != 200 or not m:
+        bad(f"GET / — HTTP {s}, bundle ref {'found' if m else 'MISSING'}")
+    else:
+        bundle = m.group(0)
+        try:
+            s2, _ = get_text("/" + bundle)
+            (ok if s2 == 200 else bad)(f"{bundle} serves (HTTP {s2})")
+        except Exception as e:
+            bad(f"{bundle} referenced by index.html but not served — {e}")
+    try:
+        get_text("/assets/index-doesnotexist.js")
+        bad("missing asset returned 200 (SPA fallback regression)")
+    except urllib.error.HTTPError as e:
+        (ok if e.code == 404 else bad)(f"missing asset -> HTTP {e.code}")
+except Exception as e:
+    bad(f"web bundle — {e}")
 
 # ── Emulator: MIDI injection reaches the surface ─────────────────────────────
 print("\nEmulator — MIDI injection")
