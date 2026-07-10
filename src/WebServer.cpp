@@ -7,7 +7,11 @@
 #include "Poco/Net/HTTPServerResponse.h"
 #include "Poco/Net/HTTPServerParams.h"
 #include "Poco/Net/ServerSocket.h"
+#include "Poco/Net/WebSocket.h"
+#include "Poco/Net/NetException.h"
+#include "Poco/Timespan.h"
 #include "Poco/Exception.h"
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 
@@ -197,6 +201,61 @@ class APIRequestHandler : public HTTPRequestHandler {
 	WebServer* webServer;
 };
 
+// ── WebSocket handler ─────────────────────────────────────────────────────────
+// Upgrades the connection and parks this server thread servicing it (consuming
+// pings/close frames) until the client disconnects or the server stops.
+// Outbound traffic is pushed from WebServer::broadcast on other threads.
+class WSRequestHandler : public HTTPRequestHandler {
+  public:
+	WSRequestHandler(WebServer* server) : webServer(server) {}
+
+	void handleRequest(HTTPServerRequest& request, HTTPServerResponse& response) override {
+		std::shared_ptr<Poco::Net::WebSocket> ws;
+		try {
+			ws = std::make_shared<Poco::Net::WebSocket>(request, response);
+		} catch (const std::exception& e) {
+			ofLogWarning() << "WebSocket upgrade failed: " << e.what();
+			return;
+		}
+		// Short send timeout so one stuck client can't block broadcast;
+		// 1 s receive timeout so this loop can notice server shutdown.
+		ws->setSendTimeout(Poco::Timespan(0, 250000));
+		ws->setReceiveTimeout(Poco::Timespan(1, 0));
+		{
+			std::lock_guard<std::mutex> lock(webServer->wsMutex);
+			webServer->wsClients.push_back(ws);
+		}
+		webServer->wsGeneration++;
+		ofLogNotice() << "WebSocket client connected";
+
+		char buffer[1024];
+		int flags = 0;
+		bool open = true;
+		while (open && webServer->running.load()) {
+			try {
+				int n = ws->receiveFrame(buffer, sizeof(buffer), flags);
+				const int op = flags & Poco::Net::WebSocket::FRAME_OP_BITMASK;
+				if (n == 0 || op == Poco::Net::WebSocket::FRAME_OP_CLOSE) open = false;
+				// Inbound payloads are ignored — clients use the REST API to act.
+			} catch (const Poco::TimeoutException&) {
+				// idle tick — re-check running flag
+			} catch (...) {
+				open = false;
+			}
+		}
+
+		{
+			std::lock_guard<std::mutex> lock(webServer->wsMutex);
+			auto& v = webServer->wsClients;
+			v.erase(std::remove(v.begin(), v.end(), ws), v.end());
+		}
+		ofLogNotice() << "WebSocket client disconnected";
+	}
+
+  private:
+	WebServer* webServer;
+};
+
 class StaticFileHandler : public HTTPRequestHandler {
   public:
 	StaticFileHandler(const std::string& baseDir) : basePath(baseDir) {}
@@ -261,7 +320,9 @@ class WebServerFactory : public HTTPRequestHandlerFactory {
 
 	HTTPRequestHandler* createRequestHandler(const HTTPServerRequest& request) override {
 		std::string path = request.getURI();
-		if (path.find("/api/") == 0) {
+		if (path == "/ws") {
+			return new WSRequestHandler(webServer);
+		} else if (path.find("/api/") == 0) {
 			return new APIRequestHandler(webServer);
 		} else {
 			return new StaticFileHandler(basePath);
@@ -288,7 +349,9 @@ void WebServer::start() {
 		WebServerFactory* factory = new WebServerFactory(this);
 		Poco::Net::HTTPServerParams* params = new Poco::Net::HTTPServerParams();
 		params->setMaxQueued(100);
-		params->setMaxThreads(4);
+		// Each WebSocket client parks one server thread for its lifetime, so
+		// leave enough headroom for several browsers plus REST traffic.
+		params->setMaxThreads(16);
 		httpServer = std::make_unique<HTTPServer>(factory, svs, params);
 		httpServer->start();
 		running = true;
@@ -307,8 +370,34 @@ void WebServer::start() {
 
 void WebServer::stop() {
 	if (running && httpServer) {
-		httpServer->stop();
 		running = false;
+		// Unblock parked WebSocket handler threads so HTTPServer::stop can finish.
+		{
+			std::lock_guard<std::mutex> lock(wsMutex);
+			for (auto& ws : wsClients) {
+				try { ws->shutdown(); } catch (...) {}
+			}
+			wsClients.clear();
+		}
+		httpServer->stop();
 		ofLogNotice() << "WebServer stopped";
 	}
+}
+
+void WebServer::broadcast(const std::string& message) {
+	std::lock_guard<std::mutex> lock(wsMutex);
+	for (auto it = wsClients.begin(); it != wsClients.end();) {
+		try {
+			(*it)->sendFrame(message.data(), static_cast<int>(message.size()),
+			                 Poco::Net::WebSocket::FRAME_TEXT);
+			++it;
+		} catch (...) {
+			it = wsClients.erase(it); // slow/dead client — drop it
+		}
+	}
+}
+
+bool WebServer::hasClients() {
+	std::lock_guard<std::mutex> lock(wsMutex);
+	return !wsClients.empty();
 }

@@ -89,6 +89,10 @@ substitutes the controller. Bridge endpoints:
 - `POST /api/midi` — inject one MIDI message (queued, applied on the main thread).
 - `POST /api/emulator/surface` `{ "profile": "Faderport16" }` — swap the virtual
   surface (virtual mode only; hardware always wins).
+- `WS /ws` — push channel: `{"type":"display",...}` on state change and
+  `{"type":"midi","events":[...]}` mirroring hardware + injected MIDI. The web
+  UI uses it when available and falls back to polling. Broadcasting happens
+  only from `pushWebSocketUpdates()` in `update()` (main thread).
 
 ## Git
 

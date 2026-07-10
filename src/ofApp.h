@@ -231,6 +231,21 @@ class ofApp : public ofBaseApp {
 	std::vector<ofxMidiMessage> injectedMidiQueue;
 	void drainInjectedMidi();
 
+	// ── WebSocket push (app → browsers) ──────────────────────────────────────
+	// Display state on change + a mirror of all MIDI traffic (hardware and
+	// web-injected) so the web UI sees what the controller is doing live.
+	struct MirroredMidi {
+		ofxMidiMessage msg;
+		bool fromHardware = false;
+	};
+	std::mutex mirrorMutex;
+	std::vector<MirroredMidi> mirrorQueue;
+	MidiLearnListener midiMirrorListener; // taps hardware midiIn
+	std::string lastDisplayBroadcast;
+	uint64_t lastDisplayBroadcastMs = 0;
+	uint64_t lastWsGeneration = 0; // resend display state to newly connected clients
+	void pushWebSocketUpdates();
+
 	// Which profile the virtual surface emulates when no hardware is connected.
 	std::string emulatorProfileName;
 	// Web can request a different virtual surface; the swap runs on the main thread.
@@ -271,6 +286,10 @@ class ofApp : public ofBaseApp {
 	bool hasPendingConfigUpdate = false;
 	std::atomic_bool hasPendingReconnect{false};
 	std::atomic_bool reconnectInProgress{false};
+
+	// Persist the active page (debounced) so a restart resumes mid-show state.
+	bool settingsPageDirty = false;
+	uint64_t lastSettingsPageSaveMs = 0;
 
 	void tryConnectMidiDevice();
 	void disconnectMidiDevice();

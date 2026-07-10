@@ -1,12 +1,16 @@
 #pragma once
 
 #include "ofJson.h"
+#include <atomic>
 #include <functional>
 #include <memory>
+#include <mutex>
+#include <vector>
 
 // Forward declarations
 namespace Poco::Net {
 	class HTTPServer;
+	class WebSocket;
 }
 
 // REST API + static file server for the web config UI.
@@ -23,6 +27,13 @@ class WebServer {
 
 	void start();
 	void stop();
+
+	// ── WebSocket push (app → browsers, endpoint /ws) ─────────────────────────
+	// Thread-safe; a slow/broken client is dropped rather than blocking.
+	void broadcast(const std::string& message);
+	bool hasClients();
+	// Bumped on every client connect — lets the app force a full state resend.
+	uint64_t clientGeneration() const { return wsGeneration.load(); }
 
 	JsonFetcher pagesFetcher;
 	JsonHandler pagesSaver;
@@ -46,6 +57,13 @@ class WebServer {
 
   private:
 	int port;
-	bool running = false;
+	std::atomic<bool> running{false};
+
+	std::vector<std::shared_ptr<Poco::Net::WebSocket>> wsClients;
+	std::mutex wsMutex;
+	std::atomic<uint64_t> wsGeneration{0};
+	// Declared last: its destructor joins the handler threads, which still
+	// touch wsClients/wsMutex — those must outlive it.
 	std::unique_ptr<Poco::Net::HTTPServer> httpServer;
+	friend class WSRequestHandler;
 };

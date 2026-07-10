@@ -32,7 +32,7 @@ OF_INSTALL_DIR="$HOME/openFrameworks"
 ADDONS_DIR="$OF_INSTALL_DIR/addons"
 APPS_DIR="$OF_INSTALL_DIR/apps/myApps"
 PROJECT_DIR="$APPS_DIR/MadMapperControl_MM6_V2"
-PROJECT_BRANCH="multiServer"
+PROJECT_BRANCH="master"
 NODE_MAJOR="20"
 
 # Detect architecture
@@ -146,8 +146,8 @@ clone_or_update() {
 }
 
 mkdir -p "$ADDONS_DIR"
-clone_or_update "https://github.com/jonasfehr/ofxMadOscQuery.git" "$ADDONS_DIR/ofxMadOscQuery" "multiServer"
-clone_or_update "https://github.com/jonasfehr/ofxMidiDevice.git"   "$ADDONS_DIR/ofxMidiDevice"   "faderport16"
+clone_or_update "https://github.com/jonasfehr/ofxMadOscQuery.git" "$ADDONS_DIR/ofxMadOscQuery" "master"
+clone_or_update "https://github.com/jonasfehr/ofxMidiDevice.git"   "$ADDONS_DIR/ofxMidiDevice"   "master"
 clone_or_update "https://github.com/d3cod3/ofxMidi.git"            "$ADDONS_DIR/ofxMidi"
 ok "Addons ready"
 

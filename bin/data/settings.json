@@ -1,4 +1,5 @@
 {
+    "currentPage": "All Surfaces",
     "enableWebSocket": true,
     "feedbackPort": 9893,
     "ip": "127.0.0.1",

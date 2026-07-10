@@ -142,6 +142,38 @@ try:
 except Exception as e:
     bad(f"web bundle — {e}")
 
+# ── WebSocket push (/ws) ─────────────────────────────────────────────────────
+# The app must accept the upgrade and push a display-state frame to a fresh
+# client (client-generation reset), without needing any state change.
+print("\nWebSocket")
+try:
+    import base64
+    import os
+    import socket
+    key = base64.b64encode(os.urandom(16)).decode()
+    sock = socket.create_connection(("localhost", 8080), timeout=4)
+    sock.sendall((
+        "GET /ws HTTP/1.1\r\nHost: localhost:8080\r\n"
+        "Upgrade: websocket\r\nConnection: Upgrade\r\n"
+        f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n"
+    ).encode())
+    resp = sock.recv(2048).decode(errors="replace")
+    if "101" in resp.split("\r\n", 1)[0]:
+        ok("/ws upgrade -> 101 Switching Protocols")
+        sock.settimeout(3)
+        # Skip any handshake remainder; wait for the first pushed text frame.
+        try:
+            frame = sock.recv(8192)
+            is_text = bool(frame) and (frame[0] & 0x0F) == 0x1
+            (ok if is_text else bad)(f"display frame pushed to new client ({len(frame)} bytes)")
+        except socket.timeout:
+            bad("no frame pushed within 3 s of connecting")
+    else:
+        bad(f"/ws upgrade failed: {resp.splitlines()[0] if resp else 'no response'}")
+    sock.close()
+except Exception as e:
+    bad(f"/ws — {e}")
+
 # ── Emulator: MIDI injection reaches the surface ─────────────────────────────
 print("\nEmulator — MIDI injection")
 try:

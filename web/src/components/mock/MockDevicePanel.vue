@@ -85,17 +85,56 @@ async function fetchProfiles() {
 const canSwitch = computed(() => displayState.value?.virtual !== false)
 const userPickedDevice = ref(false)
 
+function applyDisplay(d) {
+  displayState.value = d
+  const name = d?.profile || ''
+  const want = DEVICES.find(dev => dev.profile === name)?.id
+  // Hardware wins; in virtual mode respect a manual pick.
+  if (want && want !== selectedId.value && (d.virtual === false || !userPickedDevice.value)) {
+    selectedId.value = want
+  }
+}
+
 async function pollDisplay() {
+  if (wsConnected.value) return // display is pushed over the WebSocket
+  try { applyDisplay(await apiClient.fetchDisplay()) } catch (_) {}
+}
+
+// ── WebSocket push (display + MIDI mirror), polling as fallback ────
+const wsConnected = ref(false)
+let ws = null
+let wsRetry = null
+let wsClosed = false
+
+function connectWS() {
+  if (wsClosed) return
   try {
-    const d = await apiClient.fetchDisplay()
-    displayState.value = d
-    const name = d?.profile || ''
-    const want = DEVICES.find(dev => dev.profile === name)?.id
-    // Hardware wins; in virtual mode respect a manual pick.
-    if (want && want !== selectedId.value && (d.virtual === false || !userPickedDevice.value)) {
-      selectedId.value = want
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+    ws = new WebSocket(`${proto}://${location.host}/ws`)
+    ws.onopen = () => { wsConnected.value = true }
+    ws.onmessage = (e) => {
+      try {
+        const m = JSON.parse(e.data)
+        if (m.type === 'display') applyDisplay(m.data)
+        else if (m.type === 'midi') for (const ev of m.events) logMirrored(ev)
+      } catch (_) {}
     }
-  } catch (_) {}
+    ws.onclose = () => {
+      wsConnected.value = false
+      if (!wsClosed) wsRetry = setTimeout(connectWS, 2000)
+    }
+    ws.onerror = () => { try { ws.close() } catch (_) {} }
+  } catch (_) {
+    wsRetry = setTimeout(connectWS, 2000)
+  }
+}
+
+function logMirrored(ev) {
+  if (ev.src === 'web') return // this client already logged it when sending
+  const kind = ev.status === 144 ? 'Note' : ev.status === 224 ? 'Pitch' : 'CC'
+  const addr = ev.status === 144 ? ev.pitch : ev.control
+  const val  = ev.status === 144 ? ev.velocity : ev.value
+  log(`HW ${kind.padEnd(5)} ch:${ev.channel}  addr:${addr}  val:${val}`)
 }
 
 function pickDevice(id) {
@@ -122,11 +161,18 @@ async function pollLearnStatus() {
 
 onMounted(() => {
   learnPoll = setInterval(pollLearnStatus, 400)
-  displayPoll = setInterval(pollDisplay, 300)
+  displayPoll = setInterval(pollDisplay, 300) // no-op while the WebSocket is up
   fetchProfiles()
   pollDisplay()
+  connectWS()
 })
-onUnmounted(() => { clearInterval(learnPoll); clearInterval(displayPoll) })
+onUnmounted(() => {
+  clearInterval(learnPoll)
+  clearInterval(displayPoll)
+  wsClosed = true
+  clearTimeout(wsRetry)
+  try { ws?.close() } catch (_) {}
+})
 
 // ── MIDI input from the emulated surface ──────────────────────────
 // Injected into the app's real MIDI pipeline — the emulator substitutes the controller.
@@ -237,6 +283,7 @@ function clearLog() { midiLog.value = [] }
         </span>
       </div>
       <div class="device-select">
+        <span class="ws-badge" :class="{ live: wsConnected }" :title="wsConnected ? 'WebSocket push' : 'HTTP polling fallback'">{{ wsConnected ? 'LIVE' : 'POLL' }}</span>
         <span v-if="displayState?.virtual" class="virtual-badge">VIRTUAL</span>
         <button
           v-for="d in DEVICES" :key="d.id"
@@ -433,6 +480,20 @@ function clearLog() { midiLog.value = [] }
   font-variant-numeric: tabular-nums;
 }
 .device-select { display: flex; gap: 4px; align-items: center; }
+.ws-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 2px 7px;
+  border-radius: var(--radius-xs, 2px);
+  color: var(--text-dim, #555);
+  border: 1px solid var(--border-strong, #333);
+}
+.ws-badge.live {
+  color: #4caf50;
+  border-color: #2d5a2d;
+  background: #12220f;
+}
 .virtual-badge {
   font-size: 9px;
   font-weight: 700;

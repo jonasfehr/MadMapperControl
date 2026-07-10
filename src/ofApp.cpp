@@ -36,6 +36,14 @@ namespace {
 		return dataPath;
 	}
 
+	// Keep the previous version of a config file as <name>.bak before
+	// overwriting — insurance against a bad save corrupting show config.
+	void backupBeforeSave(const std::string& path) {
+		if (ofFile::doesFileExist(path, false)) {
+			ofFile::copyFromTo(path, path + ".bak", false, true);
+		}
+	}
+
 	ofJson ensurePagesShape(const ofJson& data) {
 		ofJson shaped = ofJson::object();
 		shaped["pages"] = (data.is_object() && data.contains("pages") && data["pages"].is_array())
@@ -274,6 +282,11 @@ void ofApp::setup() {
 			initialised = true;
 			float rebuildAllPages = 1.f;
 			reloadFromServer(rebuildAllPages);
+
+			// Resume the page that was active before the last shutdown/crash.
+			if (settings.contains("currentPage") && settings["currentPage"].is_string()) {
+				requestActivatePageByName(settings["currentPage"].get<std::string>());
+			}
 		} else {
 			initialised = true;
 		}
@@ -514,6 +527,17 @@ void ofApp::update() {
 	// Deliver any web-injected MIDI on the main thread (after a possible swap).
 	drainInjectedMidi();
 
+	// Persist the active page, debounced, so a restart resumes mid-show state.
+	{
+		const uint64_t nowPage = ofGetElapsedTimeMillis();
+		if (settingsPageDirty && (nowPage - lastSettingsPageSaveMs) >= 2000) {
+			settingsPageDirty = false;
+			lastSettingsPageSaveMs = nowPage;
+			backupBeforeSave(resolveSettingsPath());
+			ofSavePrettyJson(resolveSettingsPath(), settings);
+		}
+	}
+
 	// MIDI hot-plug: scan for port changes every 2 seconds
 	{
 		const uint64_t nowMidi = ofGetElapsedTimeMillis();
@@ -605,6 +629,9 @@ void ofApp::update() {
 			lastDisplayRefreshMs = nowMsDisplay;
 		}
 	}
+
+	// Push display state + mirrored MIDI to connected web clients.
+	pushWebSocketUpdates();
 }
 
 void ofApp::setupPages(ofJson madmapperJson) {
@@ -831,6 +858,12 @@ void ofApp::setActivePage(MadParameterPage* page, MadParameterPage* prevPage) {
 		std::lock_guard<std::mutex> lock(activePageMutex);
 		activePageName = page->getName();
 	}
+	// Remember across restarts (written debounced in update()).
+	if (initialised && !page->getName().empty()
+	    && settings.value("currentPage", std::string()) != page->getName()) {
+		settings["currentPage"] = page->getName();
+		settingsPageDirty = true;
+	}
 
 	ofLog() << "Active page set to " << page->getName() << endl;
 	
@@ -1031,6 +1064,8 @@ void ofApp::disconnectMidiDevice() {
 	soloGroup.clear();
 	for (auto& page : madOscQuery.pages) page.setMidiDevice(nullptr);
 	for (auto& page : madOscQuery.subPages) page.setMidiDevice(nullptr);
+	static_cast<ofxMidiDevice*>(surface.get())->midiIn.removeListener(&midiMirrorListener);
+	midiMirrorListener.callback = nullptr;
 	surface.reset();
 	activeProfile.reset();
 	noDeviceConnected = true;
@@ -1094,6 +1129,14 @@ void ofApp::tryConnectMidiDevice() {
 		displaySnapshot.profileName = activeProfile->name;
 		displaySnapshot.isVirtual = virtualSurface;
 	}
+
+	// Mirror hardware MIDI to the web UI's MIDI monitor (runs on the RtMidi
+	// thread — only enqueue; pushWebSocketUpdates broadcasts on the main thread).
+	midiMirrorListener.callback = [this](ofxMidiMessage& m) {
+		std::lock_guard<std::mutex> lock(mirrorMutex);
+		if (mirrorQueue.size() < 256) mirrorQueue.push_back({m, true});
+	};
+	static_cast<ofxMidiDevice*>(surface.get())->midiIn.addListener(&midiMirrorListener);
 
 	// Re-bind to current page and re-wire all listeners if already running.
 	// Pages were built against the previous surface — re-point them first.
@@ -1272,6 +1315,7 @@ void ofApp::setupWebServer() {
 				}
 			}
 
+			backupBeforeSave(path);
 			ofSavePrettyJson(path, profiles);
 			ofLogNotice("ofApp") << "Learn assign saved: " << label << " → " << body.value("role", std::string("(no role)"));
 			hasPendingBindingsUpdate.store(true);
@@ -1347,6 +1391,7 @@ void ofApp::savePages(const ofJson& pages) {
 			contentChanged = true;
 		}
 
+		backupBeforeSave(resolveCustomPagesPath());
 		ofSaveJson(resolveCustomPagesPath(), validated);
 		ofLogNotice() << "Saved custom_page.json with " << validated["pages"].size() << " pages";
 
@@ -1525,6 +1570,7 @@ void ofApp::applyPendingServerConfig() {
 		settings["feedbackPort"] = first.value("feedbackPort", PORT_FEEDBACK);
 	}
 
+	backupBeforeSave(resolveSettingsPath());
 	ofSavePrettyJson(resolveSettingsPath(), settings);
 
 	std::vector<OscServerConfig> newConfigs = OscServerConfig::parseList(settings);
@@ -1790,6 +1836,7 @@ void ofApp::loadMappings() {
 void ofApp::saveMappings() {
 	const std::string path = ofToDataPath("mappings.json", true);
 	try {
+		backupBeforeSave(path);
 		ofSavePrettyJson(path, mappingsJson);
 	} catch (const std::exception& e) {
 		ofLogError("ofApp") << "saveMappings failed: " << e.what();
@@ -1961,7 +2008,65 @@ void ofApp::drainInjectedMidi() {
 	}
 	if (!surface) return;
 	auto* dev = static_cast<ofxMidiDevice*>(surface.get());
-	for (auto& msg : pending) dev->newMidiMessage(msg);
+	for (auto& msg : pending) {
+		dev->newMidiMessage(msg);
+		std::lock_guard<std::mutex> lock(mirrorMutex);
+		if (mirrorQueue.size() < 256) mirrorQueue.push_back({msg, false});
+	}
+}
+
+void ofApp::pushWebSocketUpdates() {
+	if (!webServer) return;
+	if (!webServer->hasClients()) {
+		std::lock_guard<std::mutex> lock(mirrorMutex);
+		mirrorQueue.clear(); // nobody listening — don't accumulate
+		return;
+	}
+
+	// MIDI mirror (hardware + web-injected)
+	std::vector<MirroredMidi> events;
+	{
+		std::lock_guard<std::mutex> lock(mirrorMutex);
+		events.swap(mirrorQueue);
+	}
+	if (!events.empty()) {
+		ofJson j = ofJson::object();
+		j["type"] = "midi";
+		j["events"] = ofJson::array();
+		for (const auto& e : events) {
+			ofJson ev = ofJson::object();
+			ev["src"] = e.fromHardware ? "hw" : "web";
+			ev["status"] = static_cast<int>(e.msg.status);
+			ev["channel"] = e.msg.channel;
+			ev["control"] = e.msg.control;
+			ev["pitch"] = e.msg.pitch;
+			ev["value"] = e.msg.value;
+			ev["velocity"] = e.msg.velocity;
+			j["events"].push_back(ev);
+		}
+		webServer->broadcast(j.dump());
+	}
+
+	// A new client needs the current state even if nothing changed since.
+	const uint64_t gen = webServer->clientGeneration();
+	if (gen != lastWsGeneration) {
+		lastWsGeneration = gen;
+		lastDisplayBroadcast.clear();
+	}
+
+	// Display state — throttled, only when it actually changed
+	const uint64_t now = ofGetElapsedTimeMillis();
+	if (now - lastDisplayBroadcastMs >= 100) {
+		lastDisplayBroadcastMs = now;
+		ofJson d = ofJson::object();
+		d["type"] = "display";
+		d["data"] = getDisplayJson();
+		std::string payload = d.dump();
+		if (payload != lastDisplayBroadcast) {
+			lastDisplayBroadcast = payload;
+			webServer->broadcast(payload);
+		}
+	}
 }
 
 void ofApp::requestEmulatorSurface(const ofJson& body) {
@@ -2015,6 +2120,7 @@ void ofApp::saveProfileJson(const ofJson& updated) {
 		for (auto& profile : profiles) {
 			if (profile.value("name", std::string()) == targetName) {
 				profile = updated;
+				backupBeforeSave(path);
 				ofSavePrettyJson(path, profiles);
 				ofLogNotice("ofApp") << "Saved profile: " << targetName;
 				return;
