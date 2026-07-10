@@ -161,8 +161,9 @@ const displayValues = computed(()=>{
   if (live && live.length) return Array.from({length:8},(_,i)=>live[i] ?? null)
   return Array.from({length:8},(_,i)=>props.channels[i]?.value ?? null)
 })
-// Cue grid → pad colors. Device row 0 is the bottom row; SVG pads draw top-down.
-const cuePadColors = computed(()=>{
+// Cue grid → pads. Device row 0 is the bottom row; SVG pads draw top-down.
+// A running cue pulses like the hardware pad does.
+const cuePads = computed(()=>{
   const grid = props.display?.cueGrid
   if (!grid || !grid.cells || !grid.cells.length) return null
   const rows = grid.rows || 8
@@ -170,10 +171,15 @@ const cuePadColors = computed(()=>{
   for (const c of grid.cells) {
     const visRow = (rows - 1) - c.row
     const idx = visRow * 8 + c.col
-    if (idx >= 0 && idx < 64) arr[idx] = c.color
+    if (idx >= 0 && idx < 64) arr[idx] = { color: c.color, playing: !!c.isPlaying }
   }
   return arr
 })
+const cuePadColors = computed(()=>{
+  const pads = cuePads.value
+  return pads ? pads.map(p => p?.color ?? null) : null
+})
+function padPlaying(i) { return !!cuePads.value?.[i]?.playing }
 function truncate(s,n=10) { if(!s) return ''; return s.length>n?s.slice(0,n-1)+'…':s }
 function barW(val,maxW) { return val==null?0:Math.max(0,Math.min(maxW,val*maxW)) }
 function padName(i) { return `pad_${Math.floor(i/8)+1}_${(i%8)+1}` }
@@ -537,7 +543,8 @@ const highlightOverlay = computed(()=>{
        @mousedown="pressElem(padName(i-1))" @mouseup="releaseElem(padName(i-1))"
        @mouseenter="hoveredName=padName(i-1)" @mouseleave="hoveredName=null" style="cursor:pointer">
       <rect :x="padX(i-1)" :y="padY(i-1)" :width="PAD_W" :height="PAD_H" rx="2"
-            :fill="padFill(i-1)" :stroke="padColors[i-1]?'none':btnStroke(padName(i-1),'#2a2a2e')" stroke-width="0.8"/>
+            :fill="padFill(i-1)" :stroke="padColors[i-1]?'none':btnStroke(padName(i-1),'#2a2a2e')" stroke-width="0.8"
+            :class="{ 'pad-playing': padPlaying(i-1) }"/>
     </g>
 
     <!-- Scene launch — right column, aligned with pad rows -->
@@ -799,4 +806,10 @@ const highlightOverlay = computed(()=>{
 
 <style scoped>
 .push3-svg { display:block; width:100%; max-width:880px; height:auto; }
+/* Running cue — pulse like the hardware pad */
+.pad-playing { animation: pad-pulse 1s ease-in-out infinite; }
+@keyframes pad-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
 </style>

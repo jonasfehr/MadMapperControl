@@ -84,6 +84,21 @@ def page():
     return get("/api/display")[1].get("page", "")
 
 
+def wait_for(pred, timeout=8.0, step=0.4):
+    """Poll until pred() is truthy. The app's main thread can be busy for
+    seconds during the post-startup MadMapper reload, so queued actions
+    (surface switch, injected MIDI) may apply late — never sleep-and-assert."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            if pred():
+                return True
+        except Exception:
+            pass
+        time.sleep(step)
+    return False
+
+
 # ── REST contract ────────────────────────────────────────────────────────────
 print("REST API")
 try:
@@ -190,19 +205,19 @@ try:
             post("/api/midi", midi_for(c, 127))
             time.sleep(0.15)
             post("/api/midi", midi_for(c, 0))
-            time.sleep(0.4)
 
         tap(bank_next)
-        after = page()
-        if after != before:
-            ok(f"nav.bankNext moved page '{before}' -> '{after}'")
+        if wait_for(lambda: page() != before, timeout=6):
+            ok(f"nav.bankNext moved page '{before}' -> '{page()}'")
             if bank_prev:
                 tap(bank_prev)  # restore
+                wait_for(lambda: page() == before, timeout=6)
         elif bank_prev:
             tap(bank_prev)
-            if page() != before:
+            if wait_for(lambda: page() != before, timeout=6):
                 ok("nav.bankPrev moved page (bankNext was at last bank)")
                 tap(bank_next)
+                wait_for(lambda: page() == before, timeout=6)
             else:
                 skip("page did not move (single bank / MadMapper not connected)")
         else:
@@ -221,11 +236,11 @@ try:
         names = [p["name"] for p in get("/api/profiles")[1]]
         for name in names:
             post("/api/emulator/surface", {"profile": name})
-            time.sleep(1.2)
+            done = wait_for(lambda: get("/api/display")[1].get("profile") == name, timeout=10)
             got = get("/api/display")[1].get("profile")
-            (ok if got == name else bad)(f"switch -> {name}" + ("" if got == name else f" (got {got})"))
+            (ok if done else bad)(f"switch -> {name}" + ("" if done else f" (got {got})"))
         post("/api/emulator/surface", {"profile": origin})  # restore
-        time.sleep(1.0)
+        wait_for(lambda: get("/api/display")[1].get("profile") == origin, timeout=10)
 except Exception as e:
     bad(f"surface switch — {e}")
 
