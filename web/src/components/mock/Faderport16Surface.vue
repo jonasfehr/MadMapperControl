@@ -452,9 +452,11 @@ function btnStroke(name, defaultStroke = '#3a3a3c') {
             :fill="TRANS_COLS[j]" pointer-events="none">{{ TRANS_ICONS[j] }}</text>
     </g>
 
-    <!-- label -->
-    <text :x="RIGHT_X + 40" y="340" text-anchor="middle" font-family="monospace"
-          font-size="8" font-weight="700" fill="#1e1e22" letter-spacing="2">FADERPORT 16</text>
+    <!-- wordmark — top of the right panel, like the hardware -->
+    <text :x="RIGHT_X + (W - RIGHT_X - 8) / 2" y="30" text-anchor="middle" font-family="monospace"
+          font-size="9" font-weight="700" fill="#3a3a40" letter-spacing="2">FADERPORT 16</text>
+    <text :x="RIGHT_X + (W - RIGHT_X - 8) / 2" y="42" text-anchor="middle" font-family="monospace"
+          font-size="5" fill="#2c2c32" letter-spacing="1.5">PRODUCTION CONTROLLER</text>
 
     <!-- Hover tooltip -->
     <g v-if="hoveredName"

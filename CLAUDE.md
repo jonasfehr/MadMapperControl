@@ -11,6 +11,7 @@ mapping, and a **device emulator** that can substitute the hardware controller.
 make -j8 Debug                 # build the app (binary in bin/…app/Contents/MacOS/)
 cd web && npm run build        # build the Vue UI  ->  bin/data/web  (do this after any web/ change)
 cd web && npm run dev          # Vite dev server on :5173, proxies /api to :8080
+node web/render_surfaces.mjs <outdir>  # SSR the emulator surface SVGs to files for visual layout review
 bash scripts/eval.sh           # ground-truth evaluator: build + launch + probe + crash-check
 bash scripts/eval.sh --web     # …also rebuild the web UI first
 ```

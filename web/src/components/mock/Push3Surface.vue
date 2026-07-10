@@ -271,7 +271,7 @@ const highlightOverlay = computed(()=>{
 </script>
 
 <template>
-  <svg ref="svgRef" viewBox="0 0 880 560" xmlns="http://www.w3.org/2000/svg" class="push3-svg"
+  <svg ref="svgRef" viewBox="0 0 880 524" xmlns="http://www.w3.org/2000/svg" class="push3-svg"
        :style="{userSelect:'none'}" @mousemove="onSVGMouseMove">
 
     <!-- ═══ ICON SYMBOLS ═══ -->
@@ -400,7 +400,7 @@ const highlightOverlay = computed(()=>{
     </defs>
 
     <!-- Device body -->
-    <rect x="4" y="4" width="872" height="552" rx="20" ry="20" fill="#111113" stroke="#2a2a2e" stroke-width="1.5"/>
+    <rect x="4" y="4" width="872" height="516" rx="20" ry="20" fill="#111113" stroke="#2a2a2e" stroke-width="1.5"/>
 
     <!-- ═══ ENCODERS ═══ -->
     <g v-for="i in 8" :key="'enc-'+i"
