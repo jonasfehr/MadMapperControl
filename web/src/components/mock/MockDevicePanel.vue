@@ -240,6 +240,13 @@ const controlGroups = computed(() => {
 })
 const mappedCount = computed(() => profileComponents.value.filter(c => c.role).length)
 
+// Collapsible side panel (state survives reloads)
+const mcCollapsed = ref(localStorage.getItem('mcCollapsed') === '1')
+function toggleMc() {
+  mcCollapsed.value = !mcCollapsed.value
+  localStorage.setItem('mcCollapsed', mcCollapsed.value ? '1' : '0')
+}
+
 // Momentary press → release so buttons re-trigger every click (a stuck value
 // never fires the change listener again on the C++ side).
 function triggerButton(c) {
@@ -310,52 +317,59 @@ function clearLog() { midiLog.value = [] }
       </template>
     </div>
 
-    <!-- surface -->
-    <div class="surface-wrap">
-      <component
-        :is="currentDev.component"
-        :channels="deviceChannels"
-        :components="profileComponents"
-        :bindings="bindingsMap"
-        :display="displayState"
-        mode="emulator"
-        @midi-input="onMidiInput"
-        @bank-change="onBankChange"
-      />
-    </div>
-
-    <!-- Mapped Controls — guaranteed-complete trigger list -->
-    <div v-if="mappedCount" class="mapped-controls">
-      <div class="mc-head">
-        <span class="mc-title">Mapped Controls</span>
-        <span class="mc-sub">{{ mappedCount }} bound — every mapped feature, guaranteed reachable</span>
+    <!-- surface + mapped controls side by side -->
+    <div class="mock-body">
+      <div class="surface-wrap">
+        <component
+          :is="currentDev.component"
+          :channels="deviceChannels"
+          :components="profileComponents"
+          :bindings="bindingsMap"
+          :display="displayState"
+          mode="emulator"
+          @midi-input="onMidiInput"
+          @bank-change="onBankChange"
+        />
       </div>
-      <div class="mc-groups">
-        <div v-for="[group, list] in controlGroups" :key="group" class="mc-group">
-          <div class="mc-group-label">{{ group }}</div>
-          <div class="mc-items">
+
+      <!-- Mapped Controls — guaranteed-complete trigger list (right side, collapsible) -->
+      <div v-if="mappedCount" class="mapped-controls" :class="{ collapsed: mcCollapsed }">
+        <div class="mc-head">
+          <button class="mc-toggle" @click="toggleMc"
+                  :title="mcCollapsed ? 'Expand mapped controls' : 'Collapse mapped controls'">
+            {{ mcCollapsed ? '‹' : '›' }}
+          </button>
+          <template v-if="!mcCollapsed">
+            <span class="mc-title">Mapped Controls</span>
+            <span class="mc-count">{{ mappedCount }}</span>
+          </template>
+        </div>
+        <div v-if="!mcCollapsed" class="mc-groups">
+          <div v-for="[group, list] in controlGroups" :key="group" class="mc-group">
+            <div class="mc-group-label">{{ group }}</div>
             <template v-for="c in list" :key="c.label">
               <button
                 v-if="c.kind === 'button'"
-                class="mc-btn"
+                class="mc-row mc-btn"
                 @mousedown="triggerButton(c)"
                 :title="c.label + '  →  ' + c.role"
               >
                 <span class="mc-role">{{ shortRole(c.role) }}</span>
                 <span class="mc-lbl">{{ c.label }}</span>
               </button>
-              <div v-else-if="c.kind === 'relative'" class="mc-enc" :title="c.label + '  →  ' + c.role">
-                <button class="mc-nudge" @click="nudge(c, -1)">−</button>
+              <div v-else-if="c.kind === 'relative'" class="mc-row mc-enc" :title="c.label + '  →  ' + c.role">
                 <span class="mc-role">{{ shortRole(c.role) }}</span>
+                <button class="mc-nudge" @click="nudge(c, -1)">−</button>
                 <button class="mc-nudge" @click="nudge(c, 1)">+</button>
               </div>
-              <div v-else class="mc-fader" :title="c.label + '  →  ' + c.role">
+              <div v-else class="mc-row mc-fader" :title="c.label + '  →  ' + c.role">
                 <span class="mc-role">{{ shortRole(c.role) }}</span>
                 <input type="range" min="0" max="100" value="0" @input="setControl(c, $event)" />
               </div>
             </template>
           </div>
         </div>
+        <div v-else class="mc-collapsed-label">MAPPED CONTROLS</div>
       </div>
     </div>
 
@@ -523,25 +537,50 @@ function clearLog() { midiLog.value = [] }
   color: var(--accent, #18c8da);
 }
 
-/* ── surface ─────────────────────────────────────────────────────── */
-.surface-wrap { overflow-x: auto; padding-bottom: 4px; }
+/* ── surface + mapped controls row ───────────────────────────────── */
+.mock-body {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  flex-wrap: wrap; /* panel drops below the surface on narrow screens */
+}
+.surface-wrap { flex: 1 1 560px; min-width: 0; overflow-x: auto; padding-bottom: 4px; }
 
-/* ── mapped controls ─────────────────────────────────────────────── */
+/* ── mapped controls (right-side list, collapsible) ──────────────── */
 .mapped-controls {
+  flex: 0 0 236px;
+  max-height: 72vh;
+  display: flex;
+  flex-direction: column;
   background: var(--bg-panel, #1e1e1e);
   border: 1px solid var(--border-strong, #333);
   border-radius: var(--radius-xs, 2px);
   overflow: hidden;
-  flex-shrink: 0;
 }
+.mapped-controls.collapsed { flex: 0 0 26px; }
 .mc-head {
   display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 5px 10px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
   background: var(--bg-shell, #111);
   border-bottom: 1px solid var(--border-strong, #333);
+  flex-shrink: 0;
 }
+.mc-toggle {
+  width: 16px; height: 16px;
+  padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-xs, 2px);
+  border: 1px solid var(--border-strong, #333);
+  background: var(--bg-panel, #1e1e1e);
+  color: var(--text-base, #aaa);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.mc-toggle:hover { color: var(--accent, #18c8da); border-color: var(--accent, #18c8da); }
 .mc-title {
   font-size: 9px;
   font-weight: 700;
@@ -549,67 +588,88 @@ function clearLog() { midiLog.value = [] }
   letter-spacing: 0.07em;
   color: var(--text-dim, #555);
 }
-.mc-sub { font-size: 9px; color: var(--text-dim, #444); }
-.mc-groups { display: flex; flex-direction: column; gap: 2px; padding: 8px; }
-.mc-group { display: flex; gap: 8px; align-items: flex-start; }
+.mc-count {
+  margin-left: auto;
+  font-size: 9px;
+  color: var(--text-dim, #444);
+  background: var(--bg-panel-soft, #222);
+  border-radius: 8px;
+  padding: 0 6px;
+}
+.mc-collapsed-label {
+  writing-mode: vertical-rl;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--text-dim, #444);
+  padding: 10px 0;
+  align-self: center;
+}
+.mc-groups {
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .mc-group-label {
-  flex: 0 0 74px;
   font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-dim, #555);
-  padding-top: 6px;
+  padding: 2px 2px 3px;
+  border-bottom: 1px solid var(--border-strong, #2a2a2c);
+  margin-bottom: 3px;
 }
-.mc-items { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; }
-.mc-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-  min-width: 62px;
-  padding: 4px 7px;
-  border-radius: var(--radius-xs, 2px);
-  border: 1px solid var(--border-strong, #333);
-  background: var(--bg-panel-soft, #252525);
-  cursor: pointer;
-  transition: background 60ms, border-color 60ms;
-}
-.mc-btn:hover { background: var(--bg-active, #1a3035); border-color: var(--accent, #18c8da); }
-.mc-btn:active { background: var(--accent, #18c8da); }
-.mc-role { font-size: 10px; color: var(--accent, #18c8da); font-weight: 600; }
-.mc-lbl { font-size: 8px; color: var(--text-dim, #666); font-family: var(--font-mono, monospace); }
-.mc-enc {
+.mc-row {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 5px;
-  border: 1px solid var(--border-strong, #333);
+  gap: 6px;
+  width: 100%;
+  padding: 3px 6px;
+  margin-bottom: 2px;
   border-radius: var(--radius-xs, 2px);
+  border: 1px solid var(--border-strong, #333);
   background: var(--bg-panel-soft, #252525);
+  box-sizing: border-box;
 }
-.mc-enc .mc-role { min-width: 54px; text-align: center; }
+.mc-btn { cursor: pointer; transition: background 60ms, border-color 60ms; }
+.mc-btn:hover { background: var(--bg-active, #1a3035); border-color: var(--accent, #18c8da); }
+.mc-btn:active { background: var(--accent, #18c8da); }
+.mc-role {
+  font-size: 10px;
+  color: var(--accent, #18c8da);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  text-align: left;
+}
+.mc-lbl {
+  font-size: 8px;
+  color: var(--text-dim, #666);
+  font-family: var(--font-mono, monospace);
+  white-space: nowrap;
+}
 .mc-nudge {
-  width: 20px; height: 20px;
+  width: 20px; height: 18px;
   border-radius: var(--radius-xs, 2px);
   border: 1px solid var(--border-strong, #333);
   background: var(--bg-panel, #1e1e1e);
   color: var(--text-base, #aaa);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1;
   cursor: pointer;
+  flex-shrink: 0;
 }
 .mc-nudge:hover { background: var(--bg-active, #1a3035); color: var(--accent, #18c8da); }
-.mc-fader {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 7px;
-  border: 1px solid var(--border-strong, #333);
-  border-radius: var(--radius-xs, 2px);
-  background: var(--bg-panel-soft, #252525);
+.mc-fader input[type="range"] {
+  width: 100px;
+  flex-shrink: 0;
+  accent-color: var(--accent, #18c8da);
 }
-.mc-fader input[type="range"] { width: 90px; accent-color: var(--accent, #18c8da); }
 
 /* ── midi log ────────────────────────────────────────────────────── */
 .midi-log {

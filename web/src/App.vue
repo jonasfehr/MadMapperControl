@@ -138,7 +138,7 @@
 </template>
 
 <script>
-import { reactive, ref, computed, onMounted } from 'vue'
+import { reactive, ref, computed, watch, onMounted } from 'vue'
 import { apiClient } from './api'
 import PageManager from './components/PageManager.vue'
 import EndpointConfig from './components/EndpointConfig.vue'
@@ -160,7 +160,11 @@ export default {
     const loading = ref(true)
     const error = ref(null)
     const parameterSearch = ref('')
-    const activeView = ref('pages')
+    // Tab is URL-addressable (e.g. http://…:8080/#emulator) for bookmarks.
+    const VIEWS = ['pages', 'endpoints', 'mapping', 'emulator']
+    const initialView = window.location.hash.slice(1)
+    const activeView = ref(VIEWS.includes(initialView) ? initialView : 'pages')
+    watch(activeView, v => { window.location.hash = v })
 
     function wildcardToRegExp(pattern) {
       const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&')

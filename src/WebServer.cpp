@@ -345,7 +345,13 @@ void WebServer::start() {
 	if (running) return;
 
 	try {
-		ServerSocket svs(port);
+		// Bind without SO_REUSEPORT: a second app instance (e.g. debug and
+		// release builds both running) must fail loudly instead of silently
+		// sharing port 8080 and splitting requests between two binaries.
+		ServerSocket svs;
+		svs.bind(Poco::Net::SocketAddress(static_cast<Poco::UInt16>(port)),
+		         /*reuseAddress*/ true, /*reusePort*/ false);
+		svs.listen(100);
 		WebServerFactory* factory = new WebServerFactory(this);
 		Poco::Net::HTTPServerParams* params = new Poco::Net::HTTPServerParams();
 		params->setMaxQueued(100);

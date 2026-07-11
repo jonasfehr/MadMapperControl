@@ -46,9 +46,13 @@ if [ "$DO_BUILD" = 1 ]; then
 fi
 [ -x "$BIN" ] || die "binary not found: $BIN"
 
-# Take over port 8080 from any existing instance of this app.
+# Take over port 8080 from any existing instance of this app — including the
+# release build, which shares the port and would split requests between two
+# binaries (debug and release must never run simultaneously).
 STOPPED_EXISTING=0
-if pkill -x "$BINNAME" 2>/dev/null; then STOPPED_EXISTING=1; sleep 1; fi
+pkill -x "$BINNAME" 2>/dev/null && STOPPED_EXISTING=1
+pkill -x "MadMapperControl_MM6_V2" 2>/dev/null && STOPPED_EXISTING=1
+[ "$STOPPED_EXISTING" = 1 ] && sleep 1
 
 say "Launching app"
 ( cd "$(dirname "$BIN")" && exec "./$BINNAME" ) > "$LOG" 2>&1 &
