@@ -37,7 +37,9 @@ source of truth for "does it still work".** (Or invoke the `evaluate` skill.)
   `settings.json` (servers, `emulatorProfile`), `custom_page.json`, `mappings.json`,
   `subpages.json`. **The running app writes these** (web UI saves, MIDI learn),
   so `git status` diffs there may be app-generated — review before committing,
-  never blind `git add -A`.
+  never blind `git add -A`. Not tracked: `bin/data/web/` (build output — run
+  `npm run build` after a fresh clone), `*.bak` save backups, `rawExample_*.json`
+  dumps, and `bin/data/_private/` (personal copies).
 - `web/src/` — Vue UI. `components/mock/` holds the per-device emulator surfaces.
 
 Two **custom addons live in separate git repos** and are often edited alongside

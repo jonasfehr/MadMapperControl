@@ -6,6 +6,12 @@
 /bin/*
 !/bin/data/
 
+# bin/data: build output, app-written backups, debug dumps, personal files
+bin/data/web/
+bin/data/*.bak
+bin/data/rawExample_*.json
+bin/data/_private/
+
 build/
 obj/
 *.o
@@ -184,7 +190,7 @@ $RECYCLE.BIN/
 x64/
 x86/
 bld/
-[Bb]in/
+# ([Bb]in/ removed: it overrode the !/bin/data/ rule at the top)
 [Oo]bj/
 [Ll]og/
 

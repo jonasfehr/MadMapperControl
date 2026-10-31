@@ -1,0 +1,55 @@
+{
+    "fixed": {
+        "engineSpeed": {
+            "mode": "absolute",
+            "path": "/master/engine_speed",
+            "serverId": 0
+        },
+        "globalBPM": {
+            "mode": "absolute",
+            "path": "/master/bpm",
+            "serverId": 0
+        },
+        "masterDMX": {
+            "mode": "absolute",
+            "path": "/master/master_dmx_level",
+            "serverId": 0
+        },
+        "masterVideo": {
+            "mode": "absolute",
+            "path": "/master/master_video_level",
+            "serverId": 0
+        },
+        "tdHoverEncoder": {
+            "mode": "delta",
+            "path": "/ParHoverMIDI_VSN1/knob_delta",
+            "serverId": 1
+        }
+    },
+    "nav": {
+        "back": {
+            "action": "back"
+        },
+        "bankNext": {
+            "action": "bankNext"
+        },
+        "bankPrev": {
+            "action": "bankPrev"
+        },
+        "pageGoto": [
+            "All Surfaces",
+            "Physarum",
+            "test",
+            "Waves"
+        ],
+        "pageNext": {
+            "action": "pageNext"
+        },
+        "pagePrev": {
+            "action": "pagePrev"
+        },
+        "reload": {
+            "action": "reload"
+        }
+    }
+}
