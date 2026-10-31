@@ -55,6 +55,13 @@ namespace {
 		return shaped;
 	}
 
+	// Content hash of a shaped pages document. The web UI echoes it back as
+	// baseRevision so a save from a stale tab is refused instead of silently
+	// overwriting newer changes.
+	std::string pagesRevision(const ofJson& shaped) {
+		return ofToString(std::hash<std::string>{}(shaped.dump()));
+	}
+
 	ofJson sanitizeServersArray(const ofJson& servers) {
 		ofJson sanitized = ofJson::array();
 		if (!servers.is_array()) return sanitized;
@@ -248,6 +255,7 @@ void ofApp::setup() {
 	oscServers.setupPrimary();
 	currentPage = madOscQuery.pages.end();
 	previousPage = madOscQuery.pages.end();
+	groupReturnStack.clear();
 	{
 		std::lock_guard<std::mutex> lock(activePageMutex);
 		activePageName.clear();
@@ -312,8 +320,9 @@ void ofApp::selectSubpageFromButton(const std::string& buttonName,
 		if (mit != dev->midiComponents.end() && mit->second.value.get() < 0.5f) return;
 	}
 
-	// If already on a subpage and button is pressed, go back to main page
-	if ((*currentPage).isSubpage()) {
+	// If already on a subpage and button is pressed, go back to main page.
+	// Group pages list member surfaces, so there the button opens the member.
+	if ((*currentPage).isSubpage() && !(*currentPage).isGroup()) {
 		float p = 1.f;
 		backToCurrent(p);
 		return;
@@ -327,6 +336,7 @@ void ofApp::selectSubpageFromButton(const std::string& buttonName,
 	const std::string subpageName = subpageNameFor(parameter);
 	if (subpageName.empty()) return;
 
+	if ((*currentPage).isGroup()) groupReturnStack.push_back(previousPage);
 	previousPage = currentPage;
 	if (auto* target = findSubPageByNameAndPrefix(madOscQuery.subPages, subpageName, oscPrefix)) {
 		MadParameterPage* prevPage = &(*currentPage);
@@ -356,6 +366,11 @@ void ofApp::selectMedia(string& name) {
 void ofApp::backToCurrent(float& p) {
 	MadParameterPage* prevPage = &(*currentPage);
 	currentPage = previousPage;
+	// Back on a group page: the next back leaves the group.
+	if ((*currentPage).isGroup() && !groupReturnStack.empty()) {
+		previousPage = groupReturnStack.back();
+		groupReturnStack.pop_back();
+	}
 	setActivePage(&(*currentPage), prevPage);
 
 	for (auto& midiComponent : selectGroup.midiComponents) {
@@ -364,6 +379,10 @@ void ofApp::backToCurrent(float& p) {
 		midiComponent.second->update();
 		midiComponent.second->value.enableEvents();
 	}
+}
+
+void ofApp::backButton(float& p) {
+	if (p >= 0.5f) backToCurrent(p);
 }
 
 // ======= CHANNEL CONTROL =======
@@ -419,7 +438,7 @@ void ofApp::removeListeners() {
 	if (auto c = ::getComponentByRole(dev, "nav.bankNext")) c->value.removeListener(this, &ofApp::bankForward);
 	if (auto c = ::getComponentByRole(dev, "nav.bankPrev")) c->value.removeListener(this, &ofApp::bankBackward);
 	if (auto c = ::getComponentByRole(dev, "nav.reload")) c->value.removeListener(this, &ofApp::updateValues);
-	if (auto c = ::getComponentByRole(dev, "action.back")) c->value.removeListener(this, &ofApp::backToCurrent);
+	if (auto c = ::getComponentByRole(dev, "action.back")) c->value.removeListener(this, &ofApp::backButton);
 
 	// Remove page shortcut listeners
 	for (auto& listener : pageGotoListeners) {
@@ -637,6 +656,7 @@ void ofApp::update() {
 void ofApp::setupPages(ofJson madmapperJson) {
 	currentPage = madOscQuery.pages.begin();
 	previousPage = currentPage;
+	groupReturnStack.clear();
 
 	setActivePage(&(*currentPage), nullptr);
 }
@@ -652,7 +672,7 @@ void ofApp::setupUI(ofJson madmapperJson) {
 	if (auto c = ::getComponentByRole(dev, "nav.bankNext")) c->value.addListener(this, &ofApp::bankForward);
 	if (auto c = ::getComponentByRole(dev, "nav.bankPrev")) c->value.addListener(this, &ofApp::bankBackward);
 	if (auto c = ::getComponentByRole(dev, "nav.reload")) c->value.addListener(this, &ofApp::updateValues);
-	if (auto c = ::getComponentByRole(dev, "action.back")) c->value.addListener(this, &ofApp::backToCurrent);
+	if (auto c = ::getComponentByRole(dev, "action.back")) c->value.addListener(this, &ofApp::backButton);
 
 	// Wire page shortcut buttons (nav.pageGoto.N → activatePageByName)
 	pageGotoListeners.clear();
@@ -881,7 +901,7 @@ void ofApp::updateSubpageMediaButtonFeedback() {
 	if (currentPage != madOscQuery.pages.end()) {
 		sourcePage = &(*currentPage);
 	}
-	if (sourcePage && sourcePage->isSubpage() && previousPage != madOscQuery.pages.end()) {
+	if (sourcePage && sourcePage->isSubpage() && !sourcePage->isGroup() && previousPage != madOscQuery.pages.end()) {
 		sourcePage = &(*previousPage);
 	}
 
@@ -955,7 +975,9 @@ bool ofApp::reloadFromServer(float& p) {
 			prevPageName = (*currentPage).getName();
 			prevLowerBound = (*currentPage).getRange().first;
 		}
+		const uint64_t tReloadStart = ofGetElapsedTimeMillis();
 		madOscQuery.receive();
+		const uint64_t tReceived = ofGetElapsedTimeMillis();
 
 		if (madOscQuery.madMapperJson == nullptr) {
 			ofLog(OF_LOG_WARNING) << "Reload unsuccessful!" << endl;
@@ -974,6 +996,7 @@ bool ofApp::reloadFromServer(float& p) {
 		madOscQuery.subPages.clear();
 		currentPage = madOscQuery.pages.end();
 		previousPage = madOscQuery.pages.end();
+		groupReturnStack.clear();
 		{
 			std::lock_guard<std::mutex> activePageLock(activePageMutex);
 			activePageName.clear();
@@ -983,6 +1006,7 @@ bool ofApp::reloadFromServer(float& p) {
 		const ofJson customPageJson = ofLoadJson("custom_page.json");
 		madOscQuery.createCustomPages(static_cast<ofxMidiDevice*>(surface.get()), customPageJson,
 									  madOscQuery.madMapperJson, 0);
+		const uint64_t tPagesBuilt = ofGetElapsedTimeMillis();
 		// Re-subscribe: the rebuild recreated parameterMap, and on late/re-connect
 		// the map was empty (or the socket fresh) when subscribeAllParameters last ran.
 		madOscQuery.subscribeAllParameters();
@@ -1011,6 +1035,9 @@ bool ofApp::reloadFromServer(float& p) {
 		}
 
 		setupUI(madOscQuery.madMapperJson);
+		ofLogNotice("ofApp") << "Rebuilt pages in " << (ofGetElapsedTimeMillis() - tReloadStart) << " ms"
+			<< " (fetch " << (tReceived - tReloadStart) << ", build " << (tPagesBuilt - tReceived)
+			<< ", subscribe+UI " << (ofGetElapsedTimeMillis() - tPagesBuilt) << ")";
 
 		// Try to restore previous page
 		for (auto pageIt = madOscQuery.pages.begin(); pageIt != madOscQuery.pages.end(); ++pageIt) {
@@ -1198,7 +1225,7 @@ void ofApp::setupWebServer() {
 	webServer = std::make_unique<WebServer>(8080);
 	// Bind API callbacks
 	webServer->pagesFetcher = [this]() { return getPages(); };
-	webServer->pagesSaver = [this](const ofJson& pages) { savePages(pages); };
+	webServer->pagesSaver = [this](const ofJson& pages) { return savePages(pages); };
 	webServer->pageActivator = [this](const std::string& pageName) { requestActivatePageByName(pageName); };
 	webServer->parametersFetcher = [this]() { return getParameters(); };
 	webServer->configFetcher = [this]() { return getConfig(); };
@@ -1330,8 +1357,9 @@ ofJson ofApp::getPages() {
 	// Load and return custom_page.json
 	try {
 		const std::string filepath = resolveCustomPagesPath();
-		ofJson data = ofLoadJson(filepath);
-		return ensurePagesShape(data);
+		ofJson shaped = ensurePagesShape(ofLoadJson(filepath));
+		shaped["revision"] = pagesRevision(shaped);
+		return shaped;
 	} catch (const std::exception& e) {
 		ofLogError() << "Failed to load custom_page.json: " << e.what();
 		return ensurePagesShape(ofJson::object());
@@ -1345,6 +1373,7 @@ bool ofApp::activatePageByName(const std::string& pageName) {
 		MadParameterPage* prevPage = currentPage != madOscQuery.pages.end() ? &(*currentPage) : nullptr;
 		currentPage = pageIt;
 		previousPage = currentPage;
+		groupReturnStack.clear();
 		setActivePage(&(*currentPage), prevPage);
 		return true;
 	}
@@ -1359,18 +1388,22 @@ void ofApp::requestActivatePageByName(const std::string& pageName) {
 	hasPendingPageActivation = true;
 }
 
-void ofApp::savePages(const ofJson& pages) {
+ofJson ofApp::savePages(const ofJson& pages) {
 	// Save custom_page.json (async, don't reload to avoid crashes)
+	// Runs on the web server thread; serialise so the revision check and the
+	// write can't interleave between two requests.
+	static std::mutex saveMutex;
+	std::lock_guard<std::mutex> saveLock(saveMutex);
 	try {
 		// Validate structure: pages should have "pages" array
 		if (!pages.is_object()) {
 			ofLogError() << "savePages: Invalid JSON structure (not an object)";
-			return;
+			return { {"status", "error"}, {"error", "not an object"} };
 		}
 		
 		if (!pages.contains("pages") || !pages["pages"].is_array()) {
 			ofLogError() << "savePages: Missing or invalid 'pages' array";
-			return;
+			return { {"status", "error"}, {"error", "missing pages array"} };
 		}
 		
 		// Create a safe copy with validated structure
@@ -1383,8 +1416,18 @@ void ofApp::savePages(const ofJson& pages) {
 		// Save the validated json
 		bool contentChanged = true;
 		try {
-			ofJson current = ofLoadJson(resolveCustomPagesPath());
-			ofJson currentNormalized = ensurePagesShape(current);
+			ofJson currentNormalized = ensurePagesShape(ofLoadJson(resolveCustomPagesPath()));
+			// Refuse a save based on an older version of the file (stale browser tab).
+			// Callers that send no baseRevision (scripts, old clients) are not checked.
+			if (pages.contains("baseRevision") && pages["baseRevision"].is_string()
+			    && pages["baseRevision"].get<std::string>() != pagesRevision(currentNormalized)) {
+				ofLogWarning() << "savePages: refused stale save (custom_page.json changed since it was loaded)";
+				ofJson current = currentNormalized;
+				current["revision"] = pagesRevision(currentNormalized);
+				return { {"status", "conflict"},
+				         {"error", "pages were changed elsewhere since they were loaded"},
+				         {"current", current} };
+			}
 			ofJson validatedNormalized = ensurePagesShape(validated);
 			contentChanged = (currentNormalized != validatedNormalized);
 		} catch (...) {
@@ -1402,10 +1445,13 @@ void ofApp::savePages(const ofJson& pages) {
 		if (pages.contains("currentPage") && pages["currentPage"].is_string()) {
 			requestActivatePageByName(pages["currentPage"].get<std::string>());
 		}
+		return { {"status", "saved"}, {"revision", pagesRevision(ensurePagesShape(validated))} };
 	} catch (const std::exception& e) {
 		ofLogError() << "Failed to save custom_page.json: " << e.what();
+		return { {"status", "error"}, {"error", e.what()} };
 	} catch (...) {
 		ofLogError() << "Unknown error saving custom_page.json";
+		return { {"status", "error"}, {"error", "unknown error"} };
 	}
 }
 

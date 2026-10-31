@@ -96,6 +96,10 @@
 
     <!-- ── Main content ── -->
     <main class="main-content">
+      <div v-if="pagesNotice" class="pages-notice">
+        <span>{{ pagesNotice }}</span>
+        <button @click="pagesNotice = null" title="Dismiss">×</button>
+      </div>
       <div v-if="loading" class="state-overlay">Loading…</div>
       <div v-else-if="error" class="state-overlay error">
         <p>{{ error }}</p>
@@ -159,6 +163,7 @@ export default {
     const config = ref(null)
     const loading = ref(true)
     const error = ref(null)
+    const pagesNotice = ref(null)
     const parameterSearch = ref('')
     // Tab is URL-addressable (e.g. http://…:8080/#emulator) for bookmarks.
     const VIEWS = ['pages', 'endpoints', 'mapping', 'emulator']
@@ -272,12 +277,29 @@ export default {
       }
     }
 
-    async function savePages(updatedPages) {
+    // Saves are chained so each one carries the revision returned by the
+    // previous save; the app refuses (409) a save based on an older file.
+    let saveChain = Promise.resolve()
+    function savePages(updatedPages) {
+      saveChain = saveChain.then(() => doSavePages(updatedPages))
+      return saveChain
+    }
+
+    async function doSavePages(updatedPages) {
       try {
-        await apiClient.savePages(updatedPages)
+        const result = await apiClient.savePages({ ...updatedPages, baseRevision: pages.revision })
         Object.assign(pages, updatedPages)
+        if (result?.revision) pages.revision = result.revision
         console.log('Pages saved successfully')
       } catch (err) {
+        if (err.response?.status === 409) {
+          // custom_page.json changed since this tab loaded it — take the newer version.
+          const latest = err.response.data?.current || await apiClient.fetchPages()
+          Object.assign(pages, latest)
+          pagesNotice.value = 'Pages were changed elsewhere since this tab loaded them. ' +
+            'Your last edit was not saved — the latest version is now shown, please redo it.'
+          return
+        }
         console.error('Failed to save pages:', err)
         error.value = err.message || 'Failed to save pages'
       }
@@ -326,6 +348,7 @@ export default {
       config,
       loading,
       error,
+      pagesNotice,
       activeView,
       parameterSearch,
       filteredParameters,
@@ -507,6 +530,27 @@ export default {
   overflow: auto;
   display: flex;
   flex-direction: column;
+}
+
+/* ── Save-conflict notice ── */
+.pages-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-strong);
+  background: var(--bg-panel-soft);
+  color: var(--error-text);
+  font-size: 11px;
+}
+
+.pages-notice button {
+  border: none;
+  background: none;
+  color: var(--text-main);
+  cursor: pointer;
+  font-size: 14px;
 }
 
 /* ── Loading / error states ── */

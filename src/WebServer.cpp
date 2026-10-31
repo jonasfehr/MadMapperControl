@@ -168,13 +168,23 @@ class APIRequestHandler : public HTTPRequestHandler {
 				sendJson(response, HTTPServerResponse::HTTP_BAD_REQUEST, errorBody("missing pages or currentPage"));
 				return;
 			}
+			ofJson result = { {"status", "saved"} };
 			if (webServer->pagesSaver && hasPages) {
-				webServer->pagesSaver(updated);
+				result = webServer->pagesSaver(updated);
+				const std::string status = result.value("status", "");
+				if (status == "conflict") {
+					sendJson(response, HTTPServerResponse::HTTP_CONFLICT, result.dump());
+					return;
+				}
+				if (status == "error") {
+					sendJson(response, HTTPServerResponse::HTTP_BAD_REQUEST, result.dump());
+					return;
+				}
 			}
 			if (webServer->pageActivator && hasCurrentPage) {
 				webServer->pageActivator(updated["currentPage"].get<std::string>());
 			}
-			sendJson(response, HTTPServerResponse::HTTP_OK, statusBody("saved"));
+			sendJson(response, HTTPServerResponse::HTTP_OK, result.dump());
 		} catch (const std::exception& e) {
 			sendJson(response, HTTPServerResponse::HTTP_BAD_REQUEST, errorBody(e.what()));
 		}

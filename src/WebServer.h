@@ -20,6 +20,7 @@ class WebServer {
 	using JsonFetcher = std::function<ofJson()>;
 	using JsonHandler = std::function<void(const ofJson&)>;
 	using PageActivator = std::function<void(const std::string&)>;
+	using PagesSaver = std::function<ofJson(const ofJson&)>; // returns {status: saved|conflict|error, ...}
 	using Action = std::function<void()>;
 
 	WebServer(int port = 8080);
@@ -36,7 +37,7 @@ class WebServer {
 	uint64_t clientGeneration() const { return wsGeneration.load(); }
 
 	JsonFetcher pagesFetcher;
-	JsonHandler pagesSaver;
+	PagesSaver pagesSaver;
 	PageActivator pageActivator;
 	JsonFetcher parametersFetcher;
 	JsonFetcher configFetcher;

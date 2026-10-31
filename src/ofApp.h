@@ -49,6 +49,8 @@ class ofApp : public ofBaseApp {
 
 	std::list<MadParameterPage>::iterator currentPage;
 	std::list<MadParameterPage>::iterator previousPage;
+	// Pages to return to when backing out of nested group pages (outermost first).
+	std::vector<std::list<MadParameterPage>::iterator> groupReturnStack;
 
 	void setActivePage(MadParameterPage* page, MadParameterPage* prevPage);
 	bool activatePageByName(const std::string& pageName);
@@ -85,6 +87,7 @@ class ofApp : public ofBaseApp {
 	void onWebSocketPathUpdate(std::string& path);
 	void subscribeTimelinePaths();
 	void backToCurrent(float& p);
+	void backButton(float& p); // press only — release must not step back a second level
 	bool reloadFromServer(float& p);
 	void updateValues(float& p);
 
@@ -266,7 +269,7 @@ class ofApp : public ofBaseApp {
 	// Web Server API methods
 	void setupWebServer();
 	ofJson getPages();
-	void savePages(const ofJson& pages);
+	ofJson savePages(const ofJson& pages); // {status: saved|conflict|error, ...}
 	ofJson getParameters();
 	ofJson getConfig();
 	void saveConfig(const ofJson& config);

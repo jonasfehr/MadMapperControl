@@ -2,7 +2,7 @@
   "opacity":  {
       "key": "/surfaces/*",
       "elements": [
-        "/fx/*",
+        "/FX/*",
         "/color/blue",
         "/color/green",
         "/color/red",
@@ -42,7 +42,9 @@
           "select",
           "select_by_name",
           "audio_level",
-          "audio_pan",
+          "audio_pan"
+        ],
+        "nestedSkipKeys":[
           "alpha",
           "red",
           "green",
