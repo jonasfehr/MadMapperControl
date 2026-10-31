@@ -1,3 +1,7 @@
 {
-    "makefile.extensionOutputFolder": "./.vscode"
+    "makefile.extensionOutputFolder": "./.vscode",
+  "cmake.configureOnOpen": false,
+  "cmake.configureOnEdit": false,
+  "cmake.automaticReconfigure": false
+
 }
